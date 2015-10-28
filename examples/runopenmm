@@ -1,0 +1,6 @@
+#!/bin/bash
+#export PYTHONPATH=/home/users/bfzhang/env-forio/bin/
+#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/users/bfzhang/openmm/test_plugin/openmm/lib:/home/users/bfzhang/openmm/test_plugin/openmm/lib/plugins
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.:.
+python $1
+

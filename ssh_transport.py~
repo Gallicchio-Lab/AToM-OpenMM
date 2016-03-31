@@ -371,15 +371,4 @@ class ssh_transport(Transport):
                 job['output_queue'].close()
                 job['error_queue'].close()
                 self.replica_to_job[replica] = None
-	    elif process:
-		time_interval = time.time() - job['start_time']
-		if time.time() - job['start_time'] > 18000:
-		    self.logger.info("time interval is %f for replica %d", time_interval, replica)
-		    self.logger.info("18000 seconds time limit is exceeded for replica %d", replica)
-		    job['output_queue'].close()
-		    job['error_queue'].close()
-		    self.cancel(replica)
-		    self._clear_resource(replica)
-		    self.replica_to_job[replica] = None
-		    done = True
             return done

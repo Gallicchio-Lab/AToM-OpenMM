@@ -38,7 +38,7 @@ class impact_job(async_re):
 	    rstfile_lig_p = "%s_lig_%d.dms" % (self.basename,cycle-1)  #edit 10.19
             local_working_directory = os.getcwd() + "/r" + str(replica)
             remote_replica_dir = "%s_r%d_c%d" % (self.basename, replica, cycle)
-            executable = "./runopenmm"+" "+ input_file #edit 10.20
+            executable = "./runopenmm" #edit 10.20
 
             job_info = {
                 "executable": executable,

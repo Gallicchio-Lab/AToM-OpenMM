@@ -121,7 +121,11 @@ class ssh_transport(Transport):
             self.logger.info( "Inputfile: %s Platform: %s Slot number:  %s", inputfile, job['platform'],job['nslots'])
 
             cfmod_command = "sed -i 's/@platform@/%s/g' %s ;" % (job['platform'],inputfile)
-            cf1mod_command = "sed -i 's/@pn@/%s/g' %s" % (job['nslots'],inputfile)
+            if job['nslots']:
+                cf1mod_command = "sed -i 's/@pn@/%s/g' %s" % (job['nslots'],inputfile)
+            else:
+                cf1mod_command = "sed -i 's/@pn@//g' %s" % (job['nslots'],inputfile)
+                
             cfmod_command = cfmod_command + cf1mod_command
             self.logger.info("%s",cfmod_command)
             stdin, stdout, stderr = ssh.exec_command(cfmod_command)
@@ -213,13 +217,7 @@ class ssh_transport(Transport):
         #new_command = add_to_command + cd_to_command + command
 
         #set up the python env environment 10.21.15
-	centos = 'centos'
-	if centos in architecture:
-            python_env_command = "source ~/env-forio/bin/activate ;" 
-	else:
-	    python_env_command = "source ~/env-cetraro/bin/activate ;" 
-	#python_env_command = "source ~/env-forio/bin/activate ;"
-	new_command = cd_to_command + python_env_command + command
+	new_command = cd_to_command + command
         self.logger.info(new_command) #can print new_command here to check the command
         return new_command
     #edit end on 10.20.15

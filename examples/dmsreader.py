@@ -130,7 +130,7 @@ class DesmondDMSFile(object):
         if self.bedam is not None:
             self.bedamId=0  #flag for BEDAM simulation and initial atom id for imaginary system #added on 02/26/15
             self.file1Id=0
-            self.bedamX=1000.0  #distance between the original system and the imaginary system along X axis #added on 02/26/15
+            self.bedamX=1000.0  #distance between the original system and the imaginary system along X axis in angstroms#added on 02/26/15
             self.bedam1X=2000.0
             
         self._open = False

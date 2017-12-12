@@ -2,7 +2,7 @@ from simtk.openmm.app import *
 from simtk.openmm import *
 from simtk.unit import *
 from sys import stdout
-import os, time, shutil
+import os, re,time, shutil
 from dmsreader import *
 from datetime import datetime
 from BEDAMplugin import *
@@ -14,18 +14,41 @@ binding_file = 'test_@n@.out'
 f = open(binding_file, 'w')
 
 print("lambda = %f" %(@lambda@))
-if @n@ > 1:
-    testDes = DesmondDMSFile('test_rcpt_@nm1@.dms','test_lig_@nm1@.dms',BEDAM=True) 
-else:
-    testDes = DesmondDMSFile('test_rcpt.dms','test_lig.dms',BEDAM=True)
-system = testDes.createSystem(nonbondedMethod=CutoffNonPeriodic,nonbondedCutoff=1.0*nanometer, OPLS = True,implicitSolvent=@implicitsolvent@)
-integrator = LangevinIntegratorBEDAM(@temperature@*kelvin, 1/picosecond, 0.001*picoseconds,12,@lambda@,109,154,1225.0,0.5)
+shutil.copyfile('test_rcpt_@nm1@.dms','test_rcpt_@n@.dms') 
+shutil.copyfile('test_lig_@nm1@.dms','test_lig_@n@.dms') 
+
+testDes = DesmondDMSFile('test_rcpt_@n@.dms','test_lig_@n@.dms',BEDAM=True) 
+
+system = testDes.createSystem(nonbondedMethod=CutoffNonPeriodic,nonbondedCutoff=2.0*nanometer, OPLS = True,implicitSolvent='@implicitsolvent@')
+
+temperature = @temperature@ * kelvin
+frictionCoeff = 0.5 / picosecond
+MDstepsize = 0.002 * picosecond
+natoms_ligand = 12
+rcpt_atom_restr = 109
+lig_atom_restr = 154
+kf = 1225.0
+r0 = 0.5
+
+
+integrator = LangevinIntegratorBEDAM(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond,natoms_ligand,@lambda@,rcpt_atom_restr,lig_atom_restr,kf, r0)
+
 platform = Platform.getPlatformByName('@platform@')
-if platform=='OpenCL':    
-    properties["OpenCLDeviceIndex"] = "@pn@"
-    simulation = Simulation(testDes.topology, system, integrator,platform,properties)
-else:
-    simulation = Simulation(testDes.topology, system, integrator,platform)
+
+properties = {}
+
+if '@platform@'=='OpenCL':
+    #expected "platformid:deviceid" or empty
+    device = "@pn@"
+    m = re.match("(\d+):(\d+)", device)
+    if m:
+        platformid = m.group(1)
+        deviceid = m.group(2)
+        properties["OpenCLPlatformIndex"] = platformid
+        properties["DeviceIndex"] = deviceid
+        print("Using platform id: %s, device id: %s" % ( platformid ,  deviceid) )
+
+simulation = Simulation(testDes.topology, system, integrator,platform, properties)
 simulation.context.setPositions(testDes.positions)
 simulation.context.setVelocities(testDes.velocities)
 testDes.get_orig_force_parameters(system)
@@ -49,10 +72,12 @@ state = simulation.context.getState(getEnergy = True,getForces=True)
 print "Using platform %s" % simulation.context.getPlatform().getName()
 print(state.getPotentialEnergy())
 simulation.minimizeEnergy()
-stepId = 1000000
+
+stepId = @stepgap@
 totalSteps = @totalsteps@
 loopStep = totalSteps/stepId
-#simulation.reporters.append(StateDataReporter(stdout, stepId, step=True, potentialEnergy=True))
+
+simulation.reporters.append(StateDataReporter(stdout, stepId, step=True, temperature=True))
 #simulation.reporters.append(DCDReporter('bcd_benzene.dcd', stepId))
 #simulation.step(totalStep)
 
@@ -66,8 +91,6 @@ for i in range(loopStep):
         U1=state.getPotentialEnergy()
 	Uk=state.getKineticEnergy() #kinect energy
 	Ut = (U1._value+Uk._value)/4.18 #total energy
-	if math.isnan(Ut):
-	    Ut=1000.0
         print(state.getPotentialEnergy())
         testDes.set_orig_force_parameters(system,context)
         testDes.binding_energy_calculation(system,context,True)
@@ -75,8 +98,6 @@ for i in range(loopStep):
         U0=state.getPotentialEnergy()
         print(state.getPotentialEnergy())
 	Ub = (U1._value-U0._value)/4.18 #kcal/mol instead of KJ/mol
-	if Ub>1000.0 or math.isnan(Ub):
-                Ub=1000.0
         print("binding energy="+str(U1-U0))
         #if i>10:	
         f.write("%i %f %f %f %f\n" % (simulation.currentStep, @temperature@,@lambda@, Ub, Ut))	
@@ -85,12 +106,8 @@ f.close()
 positions = simulation.context.getState(getPositions=True).getPositions()
 velocities = simulation.context.getState(getVelocities=True).getVelocities()
 print "Updating positions and velocities"
-shutil.copyfile('test_rcpt.dms','test_rcpt_@n@.dms') 
-shutil.copyfile('test_lig.dms','test_lig_@n@.dms') 
-output = DesmondDMSFile('test_rcpt_@n@.dms','test_lig_@n@.dms',BEDAM=True) 
-output.setPositions(positions)
-output.setVelocities(velocities)
-output.close()
+testDes.setPositions(positions)
+testDes.setVelocities(velocities)
 testDes.close()
 
 end=datetime.now()

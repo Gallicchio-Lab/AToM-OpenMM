@@ -6,13 +6,12 @@ import re
 import sys
 import time
 import random
-import paramiko
 import multiprocessing as mp
 import logging
+import subprocess
 import Queue
-import scp
 
-from transport import Transport # WFF - 2/18/15
+from transport import Transport
 
 class ssh_transport(Transport):
     """
@@ -24,7 +23,7 @@ class ssh_transport(Transport):
         # nreplicas: number of replicas, 0 ... nreplicas-1
         Transport.__init__(self) #WFF - 2/18/15
         self.logger = logging.getLogger("async_re.ssh_transport") #WFF - 3/2/15
-
+        
         # names of compute nodes (slots)
         self.compute_nodes = compute_nodes #changed on 12/1/14
         self.nprocs = len(self.compute_nodes)
@@ -55,7 +54,7 @@ class ssh_transport(Transport):
             job = self.replica_to_job[replica]
         except:
             self.logger.warning("clear_resource(): unknown replica id %d",
-                                replcica)
+                                replica)
 
         if job == None:
             return None
@@ -84,89 +83,57 @@ class ssh_transport(Transport):
         return available[0]
 
     def _launchCmd(self, command, job):
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-	#edit on 5/26/15
 	if job['username'] =="":
-	    ssh.connect(job['nodename'])
+	    ssh_command = "ssh %s" % job['nodename']
+            scp_remote = "%s:" % job['nodename']
 	else:
-	    ssh.connect(job['nodename'],username=job['username']) 
-   
-	#edit end on 5/26/15
-        self.logger.info("SSH connection established to %s",job['nodename'])
+	    ssh_command = "ssh %s@%s" % (job['nodename'],job['username'])
+            scp_remote = "%s@%s:" % (job['username'],job['username']) 
         
         if job["remote_working_directory"]:
-            mkdir_command = "mkdir -p %s" % job['remote_working_directory']
-            stdin, stdout, stderr = ssh.exec_command(mkdir_command)
-            output = stdout.read()
-            error = stderr.read()
-            stdin.close()
-            stdout.close()
-            stderr.close()
-            scpt = scp.SCPClient(ssh.get_transport(),socket_timeout=60.0)
-            #for filename in job["exec_files"]:
-            #    local_file = filename
-            #    remote_file = job["remote_working_directory"] + "/"
-            #    #self.logger.info("scp %s %s", local_file, remote_file) #can print out here to check the scp
-            #    scpt.put(local_file, remote_file)
+            mkdir_command = ssh_command + " mkdir -p %s" % job['remote_working_directory']
+            self.logger.info(mkdir_command)
+            subprocess.call(mkdir_command, shell=True)
             for filename in job["job_input_files"]:
                 local_file = job["working_directory"] + "/" + filename
                 remote_file = job["remote_working_directory"] + "/" + filename
-                scpt.put(local_file, remote_file)
+                send_file_command = "scp " + local_file + " " + scp_remote + remote_file
+                self.logger.info(send_file_command)
+                subprocess.call(send_file_command, shell=True)
 
-            chmod_command = "chmod -R 777 %s" % job['remote_working_directory']
-            stdin, stdout, stderr = ssh.exec_command(chmod_command)
-            #added on 10.22.15: Add the platform information and the GPU slot information to the input file on the fly
+
+            chmod_command = ssh_command + " chmod -R 777 %s" % job['remote_working_directory']
+            self.logger.info(chmod_command)
+            subprocess.call(chmod_command, shell=True)
+            
             inputfile = job["remote_working_directory"]+ "/" + job['input_file']
             self.logger.info( "Inputfile: %s Platform: %s Slot number:  %s", inputfile, job['platform'],job['nslots'])
-
-            cfmod_command = "sed -i 's/@platform@/%s/g' %s ;" % (job['platform'],inputfile)
+            cfmod_command = ssh_command + " sed -i 's/@platform@/%s/g' %s ;" % (job['platform'],inputfile)
             if job['nslots']:
-                cf1mod_command = "sed -i 's/@pn@/%s/g' %s" % (job['nslots'],inputfile)
+                cf1mod_command = ssh_command + " sed -i 's/@pn@/%s/g' %s" % (job['nslots'],inputfile)
             else:
-                cf1mod_command = "sed -i 's/@pn@//g' %s" % (job['nslots'],inputfile)
-                
+                cf1mod_command = ssh_command + " sed -i 's/@pn@//g' %s" % (job['nslots'],inputfile)                
             cfmod_command = cfmod_command + cf1mod_command
-            self.logger.info("%s",cfmod_command)
-            stdin, stdout, stderr = ssh.exec_command(cfmod_command)
-            #add ended on 10.22.15
+            self.logger.info(cfmod_command)
+            subprocess.call(cfmod_command, shell=True)
 
-            output = stdout.read()
-            error = stderr.read()
-            
+        launch_command = ssh_command + " " + '"%s"' % command
+        self.logger.info(launch_command)
+        subprocess.call(launch_command, shell=True)
 
-            stdin.close()
-            stdout.close()
-            stderr.close()
-
-        stdin, stdout, stderr = ssh.exec_command(command)
-        output = stdout.read()
-        error = stderr.read()
-        stdin.close()
-        stdout.close()
-        stderr.close()
-
-        
         if job["remote_working_directory"]:
             for filename in job["job_output_files"]:
                 local_file = job["working_directory"] + "/" + filename
                 remote_file = job["remote_working_directory"] + "/" + filename
                 try:
-		    #self.logger.info("Now starting to copy back the output files") #check the copy time on 10.21.15
-                    scpt.get(remote_file, local_file)
-		    
+                    receive_file_command = "scp " + scp_remote + remote_file + " " + local_file
+                    subprocess.call(receive_file_command, shell=True)
                 except:
                     self.logger.info("Warning: unable to copy back file %s" % local_file)
-            rmdir_command = "rm -rf %s" % job['remote_working_directory']
-            stdin, stdout, stderr = ssh.exec_command(rmdir_command)
-            stdin.close()
-            stdout.close()
-            stderr.close()
 
-        job['output_queue'].put(output)
-        job['error_queue'].put(error)
+            rmdir_command = ssh_command + " rm -rf %s" % job['remote_working_directory']
+            subprocess.call(rmdir_command, shell=True)
 
-        ssh.close()
 
     def launchJob(self, replica, job_info):
         """
@@ -179,13 +146,8 @@ class ssh_transport(Transport):
         
         command = "%s %s > %s 2> %s " % ( executable, input_file, output_file, error_file)
 
-        output_queue = mp.Queue()
-        error_queue = mp.Queue()
-
         job = job_info
         job['replica'] = replica
-        job['output_queue'] = output_queue
-        job['error_queue'] = error_queue
         job['command'] = command
         job['process_handle'] = None
 	job['start_time'] = 0
@@ -362,20 +324,12 @@ class ssh_transport(Transport):
             if done:
                 # disconnects replica from job and node
                 self._clear_resource(replica)
-
-                self.logger.info("%s", job['output_queue'].get())
-                self.logger.info("%s", job['error_queue'].get())
-
-                job['output_queue'].close()
-                job['error_queue'].close()
                 self.replica_to_job[replica] = None
 	    elif process:
 		time_interval = time.time() - job['start_time']
 		if time.time() - job['start_time'] > 18000:
 		    self.logger.info("time interval is %f for replica %d", time_interval, replica)
 		    self.logger.info("18000 seconds time limit is exceeded for replica %d", replica)
-		    job['output_queue'].close()
-		    job['error_queue'].close()
 		    self.cancel(replica)
 		    self._clear_resource(replica)
 		    self.replica_to_job[replica] = None

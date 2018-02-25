@@ -173,41 +173,28 @@ class impact_job(async_re):
         """
         output_file = "r%s/%s_%d.out" % (replica,self.basename,cycle)
         failed_file = "r%s/%s_%d.failed" % (replica,self.basename,cycle)
+        dmsfile_lig = "r%s/%s_lig_%d.dms" % (replica,self.basename,cycle)
+        dmsfile_rcpt = "r%s/%s_rcpt_%d.dms" % (replica,self.basename,cycle)
 
+        
         if os.path.exists(failed_file):
             return False
 
-        #try:
-        #    #check existence of rst file
-        #    if not (os.path.exists(rstfile_rcpt) and os.path.exists(rstfile_lig)): #
-        #        if self.verbose:
-        #            self.logger.warning("Cannot find file %s and %s", rstfile_rcpt, restfile_lig) #
-        #        return False
-        #except:
-        #    self.logger.error("Error accessing file %s and %s", rstfile_rcpt, rstfile_lig) #
-        #    return False
-
-        #try:
-        #    #check that rst file is of the correct size
-        #    if cycle > 1:
-        #        rstsize = os.path.getsize(rstfile_rcpt) #
-        #        rstsize_p = os.path.getsize(rstfile_rcpt_p) #
-        #        if not rstsize == rstsize_p:
-        #            if self.verbose:
-        #                self.logger.warning("Files %s and %s have different sizes", rstfile_rcpt, rstfile_rcpt_p)#
-        #            return False
-        #except:
-        #    self.logger.error("Error accessing file %s and %s", rstfile_rcpt, rstfile_rcpt_p)#
-        #    return False
-
+        #check existence of dms files
         try:
-            #check that we can read data from .out
-            datai = self._getOpenMMData(output_file) #edit on 10.21.15
+            if not (os.path.exists(dmsfile_rcpt) and os.path.exists(dmsfile_lig)):
+                self.logger.warning("Cannot find file %s and %s", dmsfile_rcpt, dmsfile_lig)
+                return False
+        except:
+            self.logger.error("Error accessing file %s and %s", dmsfile_rcpt, dmsfile_lig)
+            return False
+
+        #check that we can read data from .out
+        try:
+            datai = self._getOpenMMData(output_file)
             nf = len(datai[0])
             nr = len(datai)
         except:
-            #if self.verbose:
-            #    self.logger.warning("Unable to read/parse file %s", output_file)
 	    self.logger.warning("Unable to read/parse file %s", output_file)
             return False
 

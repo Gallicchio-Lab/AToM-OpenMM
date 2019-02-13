@@ -79,7 +79,10 @@ class impact_job(async_re):
                 dmsfile = "%s_%d.dms" % (self.basename, cycle)
             elif self.keywords.get('RE_TYPE') == 'BEDAMTEMPT':
                 rcptfile="%s_rcpt_%d.dms" % (self.basename,cycle)
-                ligfile="%s_lig_%d.dms" % (self.basename,cycle)    
+                ligfile="%s_lig_%d.dms" % (self.basename,cycle)
+                pdbfile="%s_%d.pdb" % (self.basename,cycle)
+                dcdfile="%s_%d.dcd" % (self.basename,cycle)
+                
             job_output_files.append(output_file)
 
             if self.keywords.get('RE_TYPE') == 'TEMPT':
@@ -87,7 +90,9 @@ class impact_job(async_re):
             elif self.keywords.get('RE_TYPE') == 'BEDAMTEMPT':
                 job_output_files.append(rcptfile)
                 job_output_files.append(ligfile)
-
+                job_output_files.append(pdbfile)
+                job_output_files.append(dcdfile)
+                
             job_info["job_input_files"] = job_input_files;
             job_info["job_output_files"] = job_output_files;
 
@@ -152,8 +157,6 @@ class impact_job(async_re):
             msg = 'File does not exists: %s' % file
             self._exit(msg)
         
-        #number_line = re.compile("(\s+-*\d\.\d+E[\+-]\d+\s*)+")
-        #nsamples = 0
         data = []
         f = self._openfile(file, "r")
         line = f.readline()
@@ -164,7 +167,6 @@ class impact_job(async_re):
             data.append(datablock)
             line = f.readline()
         f.close
-	#print data #check what it is on 10.21.15
         return data
 
     def _hasCompleted(self,replica,cycle):

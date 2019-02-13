@@ -524,14 +524,18 @@ class async_re(object):
             self.logger.debug('replicas to launch: %d', nlaunch)
         return nlaunch
 
+    def _cycle_of_replica(self,repl):
+        return self.status[repl]['cycle_current']
+    
     def launchJobs(self):
         """
         Scans the replicas in wait state and randomly launches them
         """
         jobs_to_launch = self._njobs_to_run()
         if jobs_to_launch > 0:
-            wait = self.replicas_waiting
-            random.shuffle(wait)
+            #prioritize replicas that are most behind
+            wait = sorted(self.replicas_waiting, key=self._cycle_of_replica)
+            #  random.shuffle(wait)
             n = min(jobs_to_launch,len(wait))
             for k in wait[0:n]:
                 self.logger.info('Launching replica %d cycle %d', k, self.status[k]['cycle_current'])

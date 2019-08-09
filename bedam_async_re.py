@@ -4,10 +4,10 @@ import math
 import random
 import logging
 from async_re import async_re
-from impact_async_re import impact_job
+from openmm_async_re import openmm_job
 
 
-class bedam_async_re_job(impact_job):
+class bedam_async_re_job(openmm_job):
     def _setLogger(self):
         self.logger = logging.getLogger("async_re.bedam_async_re")
 
@@ -127,7 +127,7 @@ class bedam_async_re_job(impact_job):
 
     def _extractLast_BindingEnergy(self,repl,cycle):
         """
-        Extracts binding energy from Impact output
+        Extracts binding energy from Openmm output
         """
         output_file = "r%s/%s_%d.out" % (repl,self.basename,cycle)
         datai = self._getOpenMMData(output_file)

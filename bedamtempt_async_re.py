@@ -115,6 +115,9 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         specified cycle.
         """
 
+        if self.transport_mechanism == "LOCAL_OPENMM":
+            return
+            
         basename = self.basename
         stateid = self.status[replica]['stateid_current']
         cycle = self.status[replica]['cycle_current']

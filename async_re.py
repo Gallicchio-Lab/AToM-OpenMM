@@ -147,12 +147,12 @@ class async_re(object):
         if self.transport_mechanism is None:
             self._exit('JOB_TRANSPORT needs to be specified')
         #only SSH and BOINC are supported for now
-        if self.transport_mechanism != "SSH" and self.transport_mechanism != "BOINC":
+        if self.transport_mechanism != "SSH" and self.transport_mechanism != "BOINC" and self.transport_mechanism != "LOCAL_OPENMM" :
             self._exit("unknown JOB_TRANSPORT %s" % self.transport_mechanism)
         # reset job transport
         self.transport = None
        # variables required for ssh-based transport
-        if self.transport_mechanism == "SSH":
+        if self.transport_mechanism == "SSH" or self.transport_mechanism == "LOCAL_OPENMM":
             if self.keywords.get('NODEFILE') is None:
                 self._exit("NODEFILE needs to be specified")
             nodefile = self.keywords.get('NODEFILE')
@@ -302,15 +302,22 @@ class async_re(object):
 
         if self.transport_mechanism == "SSH":
             from ssh_transport import ssh_transport
+            
             # creates SSH transport
             self.transport = ssh_transport(self.basename, self.compute_nodes, [ i for i in range(self.nreplicas)])
- 
-	    
+
         elif self.transport_mechanism == "BOINC":
             from boinc_transport import boinc_transport
 
             # creates BOINC transport
             self.transport = boinc_transport(self.basename, self.keywords, self.nreplicas, self.extfiles)
+            
+        elif self.transport_mechanism == "LOCAL_OPENMM":    
+            from local_openmm_transport import LocalOpenMMTransport
+
+            #creates local OpenMM transport
+            self.transport = LocalOpenMMTransport(self.basename, self.openmm_contexts, self.openmm_replicas)
+
         else:
             self._exit("Job transport is not specified.")
 
@@ -324,30 +331,38 @@ class async_re(object):
             setup = False
         else:
             setup = True
-
+            
+        if self.transport_mechanism == "LOCAL_OPENMM":
+            # restarting not supported yet
+            setup = True
+            
         if setup:
-            # create replicas directories r1, r2, etc.
-            for k in range(self.nreplicas):
-                repl_dir = 'r%d'%k
-                if os.path.exists(repl_dir):
-                    _exit('Inconsistent set of replica directories found.'
-                          ' Remove them to trigger setup.')
-                else:
-                    os.mkdir('r%d'%k)
-            # create links for external files
-            if self.extfiles is not None:
-                for file in self.extfiles:
-                    for k in range(self.nreplicas):
-                        self._linkReplicaFile(file,file,k)
             # create status table
             self.status = [{'stateid_current': k, 'running_status': 'W',
                             'cycle_current': 1} for k in range(self.nreplicas)]
+            
+            if not self.transport_mechanism == "LOCAL_OPENMM":
+                # create replicas directories r1, r2, etc.
+                for k in range(self.nreplicas):
+                    repl_dir = 'r%d'%k
+                    if os.path.exists(repl_dir):
+                        _exit('Inconsistent set of replica directories found.'
+                              ' Remove them to trigger setup.')
+                    else:
+                        os.mkdir('r%d'%k)
+                # create links for external files
+                if self.extfiles is not None:
+                    for file in self.extfiles:
+                        for k in range(self.nreplicas):
+                            self._linkReplicaFile(file,file,k)
+                # create input files no. 1
+                for k in range(self.nreplicas):
+                    self._buildInpFile(k)
+                           
             # save status tables
             self._write_status()
-            # create input files no. 1
-            for k in range(self.nreplicas):
-                self._buildInpFile(k)
             self.updateStatus()
+                    
         else:
             self._read_status()
             self.updateStatus(restart=True)
@@ -583,6 +598,7 @@ class async_re(object):
             mreps = self.nexchg_rounds
         else:
             mreps = nreplicas_to_exchange**(-self.nexchg_rounds)
+            
         for reps in range(mreps):
             if self.exchangeBySet:
                 for repl_i in replicas_to_exchange:
@@ -594,6 +610,7 @@ class async_re(object):
                                                         replicas_to_exchange,
                                                         curr_states,
                                                         swap_matrix)
+                        
                     elif self.exchangeMethod == 'pairwise_metropolis':
                         repl_j = pairwise_metropolis_sampling(repl_i,sid_i,
                                                         replicas_to_exchange,

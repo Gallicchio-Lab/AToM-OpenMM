@@ -399,8 +399,8 @@ class LocalOpenMMTransport(Transport):
         hasCompleted() elsewhere.
         """
         job = self.replica_to_job[replica]
-        print("DEBUG: isDone(): replica %d cycle %d" % (replica, cycle))
-        print(job)
+        #print("DEBUG: isDone(): replica %d cycle %d" % (replica, cycle))
+        #print(job)
         if job == None:
             # if job has been removed we assume that the replica is done
             return True

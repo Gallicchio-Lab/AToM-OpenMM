@@ -20,7 +20,7 @@ import os
 import sys
 import time
 import pickle
-import random
+import random, glob
 import shutil
 import logging, logging.config
 
@@ -146,7 +146,7 @@ class async_re(object):
         self.transport_mechanism = self.keywords.get('JOB_TRANSPORT')
         if self.transport_mechanism is None:
             self._exit('JOB_TRANSPORT needs to be specified')
-        #only SSH and BOINC are supported for now
+        #SSH, BOINC and LOCAL_OPENMM are supported for now
         if self.transport_mechanism != "SSH" and self.transport_mechanism != "BOINC" and self.transport_mechanism != "LOCAL_OPENMM" :
             self._exit("unknown JOB_TRANSPORT %s" % self.transport_mechanism)
         # reset job transport
@@ -326,16 +326,32 @@ class async_re(object):
             repl_dir = 'r%d'%k
             if not os.path.exists(repl_dir):
                 replica_dirs_exist = False
+            print('DEBUG replica_dirs_exist:',bool(replica_dirs_exist))
 
+                
+        # support for restart of the replicas implemented
+        # probably need to refine the logic **
+        # at present only restarts if all replica directories have at least one *.out file when transport_mechanism == 'LOCAL_OPENMM'
         if replica_dirs_exist:
             setup = False
+            print(setup)
+            if self.transport_mechanism == "LOCAL_OPENMM":
+                for k in range(self.nreplicas):
+                    repl_dir = 'r%d' %k
+                    all_files = os.listdir(repl_dir)
+                    for f in all_files:
+                        if f.endswith(".out"):
+                            setup = False
+                            break
+                        else:
+                            setup = True
+                        
         else:
             setup = True
-            
-        if self.transport_mechanism == "LOCAL_OPENMM":
-            # restarting not supported yet
-            setup = True
-            
+            print(setup)
+                    
+        print("DEBUG: no output files:", bool(setup))
+                
         if setup:
             # create status table
             self.status = [{'stateid_current': k, 'running_status': 'W',
@@ -360,10 +376,13 @@ class async_re(object):
                     self._buildInpFile(k)
                            
             # save status tables
+            print("DEBUG: writing the status file")
             self._write_status()
+            print("DEBUG: updating the status file")
             self.updateStatus()
                     
         else:
+            print("DEBUG: reading the status file")
             self._read_status()
             self.updateStatus(restart=True)
             if self.transport_mechanism == "BOINC":

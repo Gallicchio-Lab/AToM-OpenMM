@@ -13,7 +13,7 @@ from simtk.openmm.app.desmonddmsfile import *
 from SDMplugin import *
 from local_openmm_transport import OpenCLContext
 
-def CreateOpenCLContext(basename, platform_id = None, device_id = None):
+"""def CreateOpenCLContext(basename, platform_id = None, device_id = None):
     rcptfile_input  = '%s_rcpt_0.dms' % basename 
     ligfile_input   = '%s_lig_0.dms'  % basename
 
@@ -25,13 +25,17 @@ def CreateOpenCLContext(basename, platform_id = None, device_id = None):
     #    system = dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent= 'AGBNP')
     system = dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent= None)
 
-    natoms_ligand = 12
+    natoms_ligand = self.keywords.get('NATOMS_LIGAND')
     lig_atoms = range(natoms_ligand)
     # atom indexes here refer to indexes in either lig or rcpt dms file, rather than in the complex 
-    lig_atom_restr = [0, 1, 2, 3, 4, 5]   #indexes of ligand atoms for CM-CM Vsite restraint
-    rcpt_atom_restr = [121, 210, 281, 325, 406, 527, 640, 650, 795, 976, 1276]   #indexes of rcpt atoms for CM-CM Vsite restraint
-    kf = 25.0 * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint 
-    r0 = 2.5 * angstrom #radius of Vsite sphere
+    #lig_atom_restr = [0, 1, 2, 3, 4, 5]   #indexes of ligand atoms for CM-CM Vsite restraint
+    lig_atom_restr = self.keywords.get('REST_LIGAND_CMLIG_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
+    #rcpt_atom_restr = [121, 210, 281, 325, 406, 527, 640, 650, 795, 976, 1276]   #indexes of rcpt atoms for CM-CM Vsite restraint
+    rcpt_atom_restr = self.keywords.get('REST_LIGAND_CMREC_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
+    cmkf = self.keywords.get('CM_KF')
+    kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
+    cmtol = self.keywords.get('CM-TOL')
+    r0 = cmtol * angstrom #radius of Vsite sphere
     
     #these can be 'None" if not using orientational restraints
     lig_ref_atoms = None # the 3 atoms of the ligand that define the coordinate system of the ligand
@@ -71,11 +75,11 @@ def CreateOpenCLContext(basename, platform_id = None, device_id = None):
                                 dihedral2tol = dihedral2tol)
     
     # the integrator object is context-specific
-    temperature = 300 * kelvin
-    frictionCoeff = 0.5 / picosecond
-    MDstepsize = 0.001 * picosecond
-    umsc = 50.0 * kilocalorie_per_mole
-    acore = 0.0625
+    temperature = self.keywords.get('TEMPERATURES') * kelvin
+    frictionCoeff = self.keywords.get('FRICTION_COEFF') / picosecond
+    MDstepsize = self.keywords.get('TIME_STEP') * picosecond
+    umsc = self.keywords.get('UMAX') * kilocalorie_per_mole
+    acore = self.keywords.get('ACORE')
     integrator = LangevinIntegratorSDM(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, lig_atoms)
     integrator.setBiasMethod(sdm_utils.ILogisticMethod)
     integrator.setSoftCoreMethod(sdm_utils.RationalSoftCoreMethod)
@@ -88,7 +92,7 @@ def CreateOpenCLContext(basename, platform_id = None, device_id = None):
     deviceId = device_id
 
     return OpenCLContext(topology, system, integrator, platform, platformId, deviceId, platform_properties)
-
+"""
 class openmm_job(async_re):
     def __init__(self, command_file, options):
         async_re.__init__(self, command_file, options)
@@ -104,12 +108,109 @@ class openmm_job(async_re):
                 matches = pattern.search(slot_id)
                 platform_id = int(matches.group(1))
                 device_id = int(matches.group(2))
-                self.openmm_contexts.append(CreateOpenCLContext(self.basename, platform_id, device_id))
+                self.openmm_contexts.append(self.CreateOpenCLContext(self.basename, platform_id, device_id))
 
             #creates openmm replica objects
             self.openmm_replicas = []
             for i in range(self.nreplicas):
                 self.openmm_replicas.append(SDMReplica(i, self.basename))
+
+
+    def CreateOpenCLContext(self,basename, platform_id = None, device_id = None):
+        rcptfile_input  = '%s_rcpt_0.dms' % basename 
+        ligfile_input   = '%s_lig_0.dms'  % basename
+        
+        # the dms object is replica-specific
+        dms = DesmondDMSFile([ligfile_input, rcptfile_input]) 
+        topology = dms.topology
+    
+        # the system object is context-specific
+        #    system = dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent= 'AGBNP')
+
+        #implicit solvent literal not working
+        if self.keywords.get('IMPLICITSOLVENT') is not None:
+            implicitsolvent = self.keywords.get('IMPLICITSOLVENT')
+            #print type(implicitsolvent)
+        
+        system = dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent= None)
+
+        natoms_ligand = int(self.keywords.get('NATOMS_LIGAND'))
+        lig_atoms = range(natoms_ligand)
+        # atom indexes here refer to indexes in either lig or rcpt dms file, rather than in the complex 
+        #lig_atom_restr = [0, 1, 2, 3, 4, 5]   #indexes of ligand atoms for CM-CM Vsite restraint
+
+        cm_lig_atoms = self.keywords.get('REST_LIGAND_CMLIG_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
+        #convert the string of lig atoms to integer
+        lig_atom_restr = [int(i) for i in cm_lig_atoms]
+        #rcpt_atom_restr = [121, 210, 281, 325, 406, 527, 640, 650, 795, 976, 1276]   #indexes of rcpt atoms for CM-CM Vsite restraint
+        
+        cm_rcpt_atoms = self.keywords.get('REST_LIGAND_CMREC_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
+        #convert the string of receptor rcpt atoms to integer
+        rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
+
+        cmkf = float(self.keywords.get('CM_KF'))
+        kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
+        cmtol = float(self.keywords.get('CM_TOL'))
+        r0 = cmtol * angstrom #radius of Vsite sphere
+    
+        #these can be 'None" if not using orientational restraints
+        lig_ref_atoms = None # the 3 atoms of the ligand that define the coordinate system of the ligand
+        rcpt_ref_atoms = None # the 3 atoms of the receptor that define the coordinate system of the receptor
+        angle_center = None * degrees
+        kfangle = None * kilocalorie_per_mole/degrees**2
+        angletol = None * degrees
+        dihedral1center = None * degrees
+        kfdihedral1 = None * kilocalorie_per_mole/degrees**2
+        dihedral1tol = None * degrees
+        dihedral2center = None * degrees
+        kfdihedral2 = None * kilocalorie_per_mole/degrees**2
+        dihedral2tol = None * degrees
+
+        #transform indexes of receptor atoms
+        for i in range(len(rcpt_atom_restr)):
+            rcpt_atom_restr[i] += natoms_ligand
+            if rcpt_ref_atoms:
+                for i in range(len(rcpt_ref_atoms)):
+                    rcpt_ref_atoms[i] += natoms_ligand
+
+        sdm_utils = SDMUtils(system, lig_atoms)
+        sdm_utils.addRestraintForce(lig_cm_particles = lig_atom_restr,
+                                rcpt_cm_particles = rcpt_atom_restr,
+                                kfcm = kf,
+                                tolcm = r0,
+                                lig_ref_particles = lig_ref_atoms,
+                                rcpt_ref_particles = rcpt_ref_atoms,
+                                angle_center = angle_center,
+                                kfangle = kfangle,
+                                angletol = angletol,
+                                dihedral1center = dihedral1center,
+                                kfdihedral1 = kfdihedral1,
+                                dihedral1tol = dihedral1tol,
+                                dihedral2center = dihedral2center,
+                                kfdihedral2 = kfdihedral2,
+                                dihedral2tol = dihedral2tol)
+    
+        # the integrator object is context-specific
+        #temperature = int(self.keywords.get('TEMPERATURES')) * kelvin
+        temperature = 300 * kelvin
+        frictionCoeff = float(self.keywords.get('FRICTION_COEFF')) / picosecond
+        MDstepsize = float(self.keywords.get('TIME_STEP')) * picosecond
+        umsc = float(self.keywords.get('UMAX')) * kilocalorie_per_mole
+        acore = float(self.keywords.get('ACORE'))
+        integrator = LangevinIntegratorSDM(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, lig_atoms)
+        integrator.setBiasMethod(sdm_utils.ILogisticMethod)
+        integrator.setSoftCoreMethod(sdm_utils.RationalSoftCoreMethod)
+        integrator.setUmax(umsc / kilojoule_per_mole)
+        integrator.setAcore(acore)
+
+        platform_properties = {}                                 
+        platform = Platform.getPlatformByName('OpenCL')
+        platformId = platform_id
+        deviceId = device_id
+
+        return OpenCLContext(topology, system, integrator, platform, platformId, deviceId, platform_properties)
+
+    
                 
     def _setLogger(self):
         self.logger = logging.getLogger("async_re.openmm_async_re")

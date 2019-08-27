@@ -238,6 +238,22 @@ class bedamtempt_async_re_job(bedam_async_re_job):
     """
     
     def _extractLast_lambda_BindingEnergy_TotalEnergy(self,repl,cycle):
+        if self.transport_mechanism == "LOCAL_OPENMM":
+            """
+            Extracts binding energy etc. from replica objects
+            works only for iLog potential
+            """
+            replica = self.openmm_replicas[repl]
+            (bind_energy, pot_energy, stateid, lmbd, lambda1, lambda2, alpha, u0, w0 ) = replica.get_state()
+            if bind_energy == None:
+                msg = "Error retrieving state for replica %d" % repl
+                self._exit(msg)
+            parameters = [lmbd, lambda1, lambda2, alpha, u0, w0]
+            return (parameters, bind_energy, pot_energy)
+        else:
+            return self._extractLast_lambda_BindingEnergy_TotalEnergy_fromFile(repl,cycle)
+
+    def _extractLast_lambda_BindingEnergy_TotalEnergy_fromFile(self,repl,cycle):
         """
         Extracts binding energy from Impact output
         """
@@ -284,7 +300,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
             parameters = [lmbd, lambda1, lambda2, alpha, u0, w0]
             pot_energy = datai[nr-1][6] #needs to be changed to total energy
             binding_energy = datai[nr-1][7]
-            return (parameters, binding_energy, pot_energy)
+        return (parameters, binding_energy, pot_energy)
 
     def print_status(self):
         """

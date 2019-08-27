@@ -23,6 +23,7 @@ import pickle
 import random, glob
 import shutil
 import logging, logging.config
+import signal
 
 from configobj import ConfigObj
 
@@ -79,10 +80,24 @@ class async_re(object):
         self._setLogger()
         self._checkInput()
         self._printStatus()
-	
+
+        #catch ctrl-C to terminate threads gracefully
+        signal.signal(signal.SIGINT, self._signal_handler)
+
+    def _cleanup(self):
+        if self.transport_mechanism == "LOCAL_OPENMM":
+            for ommcontext in self.openmm_contexts:
+                ommcontext.finish()
+            for replica in self.openmm_replicas:
+                replica.dms.close()
 
     def _exit(self, message):
+        self._cleanup()
         _exit(message)
+
+    def _signal_handler(self, sig, frame):
+        msg = "SIGINT detected ... cleaning up."
+        self._exit(msg)
 
     def _openfile(self, name, mode, max_attempts = 100):
         f = _open(name,mode,max_attempts)
@@ -326,8 +341,6 @@ class async_re(object):
             repl_dir = 'r%d'%k
             if not os.path.exists(repl_dir):
                 replica_dirs_exist = False
-            print('DEBUG replica_dirs_exist:',bool(replica_dirs_exist))
-
                 
         # support for restart of the replicas implemented
         # probably need to refine the logic **
@@ -345,13 +358,9 @@ class async_re(object):
                             break
                         else:
                             setup = True
-                        
         else:
             setup = True
-            print(setup)
-                    
-        print("DEBUG: no output files:", bool(setup))
-                
+            
         if setup:
             # create status table
             self.status = [{'stateid_current': k, 'running_status': 'W',
@@ -376,20 +385,24 @@ class async_re(object):
                     self._buildInpFile(k)
                            
             # save status tables
-            print("DEBUG: writing the status file")
             self._write_status()
-            print("DEBUG: updating the status file")
             self.updateStatus()
                     
         else:
-            print("DEBUG: reading the status file")
+            #this is a restart
             self._read_status()
+            if self.transport_mechanism == "LOCAL_OPENMM":
+                for replica in self.openmm_replicas:
+                    self.status[replica._id]['cycle_current'] = replica.get_cycle()
+                    self.status[replica._id]['stateid_current'] = replica.stateid
             self.updateStatus(restart=True)
             if self.transport_mechanism == "BOINC":
                 # restart BOINC workunit id list
                 self.transport.restart()
 
+        self._write_status()
         self.print_status()
+
         #at this point all replicas should be in wait state
         for k in range(self.nreplicas):
             if self.status[k]['running_status'] != 'W':

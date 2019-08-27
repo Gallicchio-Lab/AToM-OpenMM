@@ -33,8 +33,8 @@ class openmm_job(async_re):
             #creates openmm replica objects
             self.openmm_replicas = []
             for i in range(self.nreplicas):
-                self.openmm_replicas.append(SDMReplica(i, self.basename))
-
+                replica = SDMReplica(i, self.basename)
+                self.openmm_replicas.append(replica)
 
     def CreateOpenCLContext(self,basename, platform_id = None, device_id = None):
         rcptfile_input  = '%s_rcpt_0.dms' % basename 
@@ -44,15 +44,14 @@ class openmm_job(async_re):
         dms = DesmondDMSFile([ligfile_input, rcptfile_input]) 
         topology = dms.topology
     
-        # the system object is context-specific
-        #    system = dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent= 'AGBNP')
-
-        #implicit solvent literal not working
-        if self.keywords.get('IMPLICITSOLVENT') is not None:
-            implicitsolvent = self.keywords.get('IMPLICITSOLVENT')
-            #print type(implicitsolvent)
-        
-        system = dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent= None)
+        implicitsolvent = str(self.keywords.get('IMPLICITSOLVENT'))
+        if implicitsolvent is None:
+            system = dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = None)
+        elif implicitsolvent == 'AGBNP':
+            system = dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = 'AGBNP')
+        else:
+            msg = 'Unknown implicit solvent q%sq' % implicitsolvent
+            self._exit(msg)
 
         natoms_ligand = int(self.keywords.get('NATOMS_LIGAND'))
         lig_atoms = range(natoms_ligand)
@@ -217,12 +216,15 @@ class openmm_job(async_re):
             alpha = self.stateparams[stateid]['alpha']
             u0 = self.stateparams[stateid]['u0']
             w0 = self.stateparams[stateid]['w0coeff']
-            self.openmm_replicas[replica].set_state(lambd, lambda1, lambda2, alpha, u0, w0)
+            self.openmm_replicas[replica].set_state(stateid, lambd, lambda1, lambda2, alpha, u0, w0)
             nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
-            print("DEBUG: setting replica state for replica %d, steps = %d" % (replica, nsteps))
+            nprnt = int(self.keywords.get('PRNT_FREQUENCY'))
+            ntrj = int(self.keywords.get('TRJ_FREQUENCY'))
             job_info = {
                 "cycle": cycle,
-                "nsteps": nsteps
+                "nsteps": nsteps,
+                "nprnt": nprnt,
+                "ntrj": ntrj
             }
             
         else: #local with runopenmm?
@@ -275,6 +277,10 @@ class openmm_job(async_re):
         """
         Returns true if an OpenMM replica has successfully completed a cycle.
         """
+        if self.transport_mechanism == "LOCAL_OPENMM":
+            #safeguards are off for local transport
+            return True
+
         output_file = "r%s/%s_%d.out" % (replica,self.basename,cycle)
         failed_file = "r%s/%s_%d.failed" % (replica,self.basename,cycle)
         dmsfile_lig = "r%s/%s_lig_%d.dms" % (replica,self.basename,cycle)

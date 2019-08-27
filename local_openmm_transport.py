@@ -117,11 +117,15 @@ class OpenCLContext(Thread):
             self.finish()
         else:
             self.ntrj = ntrj
-        self.simulation.reporters = [StateDataReporter(logfile, nprnt, step=True, temperature=True)]
-        self.simulation.reporters.append(DCDReporter(dcdfile, ntrj))
-        if self.outfile_p:
-            self.outfile_p.close()
-        self.outfile_p = open(outfile, 'w')       
+        self.simulation.reporters = []
+        last_step = self.nsteps_current + self.nsteps
+        if last_step % self.nprnt == 0:
+            self.simulation.reporters.append(StateDataReporter(logfile, nprnt, step=True, temperature=True))
+            if self.outfile_p:
+                self.outfile_p.close()
+            self.outfile_p = open(outfile, 'w')
+        if last_step % self.ntrj == 0:
+            self.simulation.reporters.append(DCDReporter(dcdfile, ntrj))
         
     def outreport(self):
         (bind_energy, pot_energy, lmbd, lambda1, lambda2, alpha, u0, w0 ) = self.get_state()
@@ -144,7 +148,6 @@ class OpenCLContext(Thread):
                 self.finish()
         self.nsteps = nsteps   
         
-            
     def restart(self):
         """make sure to always call join() before restarting"""
         self._startSignal.set()
@@ -220,29 +223,92 @@ class SDMReplica(object):
 
         self.positions = copy.deepcopy(self.dms.positions)
         self.velocities = copy.deepcopy(self.dms.velocities)
-        
+
+        self.sql_conn_lig = self.dms._conn[0]
+        self.sql_conn_rcpt = self.dms._conn[1]
+
+        self.bind_energy = None
+        self.pot_energy = None
+        self.temperature = None
         self.lmbd =  None
         self.lambda1 =  None
         self.lambda2 =  None
         self.alpha = None
         self.u0 = None
         self.w0coeff = None
+        self.cycle = 0
+        self.stateid = None
+        self.mdsteps = 0
         
-    def set_state(self, lmbd, lmbd1, lmbd2, alpha, u0, w0):
+        # check for sdm_data table in lig dms
+        tables = self.dms._tables[0]
+        conn = self.sql_conn_lig
+        if 'sdm_data' in tables:
+            # read sdm_data table
+            print("reading checkpoint for replica %d" % replica_id)
+            q = """SELECT binde,epot,temperature,lambda,lambda1,lambda2,alpha,u0,w0,cycle,stateid,mdsteps FROM sdm_data WHERE id = 1"""
+            ans = conn.execute(q)
+            print(ans)
+            for (binde,epot,temperature,lmbd,lambda1,lambda2,alpha,u0,w0,cycle,stateid,mdsteps) in conn.execute(q):
+                self.bind_energy = binde
+                self.pot_energy = epot
+                self.temperature = temperature
+                self.lmbd =  lmbd
+                self.lambda1 =  lambda1
+                self.lambda2 =  lambda2
+                self.alpha = alpha
+                self.u0 = u0
+                self.w0coeff = w0
+                self.cycle = cycle
+                self.stateid = stateid
+                self.mdsteps = mdsteps
+        else:
+            #create sdm_data table with dummy values
+            conn.execute("CREATE TABLE IF NOT EXISTS sdm_data (id INTEGER PRIMARY KEY, binde REAL, epot REAL, temperature REAL, lambda REAL, lambda1 REAL, lambda2 REAL, alpha REAL, u0 REAL, w0 REAL, cycle INTEGER, stateid INTEGER, mdsteps INTEGER )")
+            conn.execute("INSERT INTO sdm_data (binde,epot,temperature,lambda,lambda1,lambda2,alpha,u0,w0,cycle,stateid,mdsteps) VALUES (0,0,0,0,0,0,0,0,0,0,0,0)")
+            conn.commit()
+            self.dms._tables[0] = self.dms._readSchemas(conn)
+
+    def set_state(self, stateid, lmbd, lmbd1, lmbd2, alpha, u0, w0):
+        self.stateid = int(stateid)
         self.lmbd = float(lmbd)
         self.lambda1 = float(lmbd1)
         self.lambda2 = float(lmbd2)
         self.alpha = float(alpha)
         self.u0 = float(u0)
         self.w0coeff = float(w0)
-        
-    def save_dms(self, positions, velocities):
+        self.temperature = 300. #not implemented
+
+    def get_state(self):
+        return (self.bind_energy, self.pot_energy, self.stateid, self.lmbd, self.lambda1, self.lambda2, self.alpha, self.u0, self.w0coeff )
+
+    def set_energy(self, bind_energy, pot_energy):
+        self.bind_energy = bind_energy
+        self.pot_energy = pot_energy
+
+    def set_posvel(self, positions, velocities):
         self.positions = positions
         self.velocities = velocities
+
+    def save_dms(self):
+        conn = self.sql_conn_lig
+        conn.execute("UPDATE sdm_data SET binde = %f, epot = %f, temperature = %f, lambda = %f, lambda1 = %f, lambda2 = %f, alpha = %f, u0 = %f, w0 = %f, cycle = %d, stateid = %d, mdsteps = %d WHERE id = 1" % (self.bind_energy, self.pot_energy, self.temperature, self.lmbd, self.lambda1, self.lambda2, self.alpha, self.u0, self.w0coeff, self.cycle, self.stateid, self.mdsteps))
+        conn.commit()
         self.dms.setPositions(self.positions)
         self.dms.setVelocities(self.velocities)
 
-            
+    def set_mdsteps(self, mdsteps):
+        self.mdsteps = mdsteps
+
+    def get_mdsteps(self):
+        return self.mdsteps
+
+    def set_cycle(self, cycle):
+        self.cycle = cycle
+
+    def get_cycle(self):
+        return self.cycle
+
 class LocalOpenMMTransport(Transport):
     """
     Class to launch and monitor jobs on a set of local GPUs
@@ -312,9 +378,7 @@ class LocalOpenMMTransport(Transport):
         return available[0]
 
     def launchJob(self, replica, job_info):
-        """
-        Enqueues a replica for running based on provided job info.
-        """
+        #Enqueues a replica for running based on provided job info.
         job = job_info
         job['replica'] = replica
 	job['start_time'] = 0
@@ -322,10 +386,7 @@ class LocalOpenMMTransport(Transport):
         self.jobqueue.put(replica)
         return self.jobqueue.qsize()
 
-    def LaunchReplica(self, sdm_context, replica, cycle, nsteps):
-        nprnt = nsteps
-        ntrj = nsteps
-
+    def LaunchReplica(self, sdm_context, replica, cycle, nsteps, nprnt, ntrj):
         sdm_context.set_state(replica.lmbd, replica.lambda1, replica.lambda2, replica.alpha, replica.u0, replica.w0coeff)
         sdm_context.set_posvel(replica.positions, replica.velocities)
         
@@ -339,13 +400,11 @@ class LocalOpenMMTransport(Transport):
             sdm_context.restart()
         else:
             sdm_context.start()
-    
+
     def ProcessJobQueue(self, mintime, maxtime):
-        """
-        Launches jobs waiting in the queue.
-        It will scan free devices and job queue up to maxtime.
-        If the queue becomes empty, it will still block until maxtime is elapsed.
-        """
+        #Launches jobs waiting in the queue.
+        #It will scan free devices and job queue up to maxtime.
+        #If the queue becomes empty, it will still block until maxtime is elapsed.
         njobs_launched = 0
         usetime = 0
         nreplicas = len(self.replica_to_job)
@@ -372,7 +431,7 @@ class LocalOpenMMTransport(Transport):
                 self.node_status[node] = replica
 
                 print("DEBUG: Launching replica %d:" % replica)
-                self.LaunchReplica(job['openmm_context'], job['openmm_replica'], job['cycle'], job['nsteps'])
+                self.LaunchReplica(job['openmm_context'], job['openmm_replica'], job['cycle'], job['nsteps'], job['nprnt'], job['ntrj'])
                 
                 # updates number of jobs launched
                 njobs_launched += 1
@@ -410,19 +469,34 @@ class LocalOpenMMTransport(Transport):
                 print(job['openmm_context'])
             except:
                 return False
+
             if  openmm_context == None:
                 done = False
             else:
                 if not openmm_context.is_started():
                     return False
                 done = not openmm_context.is_running()
+
             if done:
+                print("Replica %d completed cycle %d" % (replica, cycle))
                 # disconnects replica from job and node
                 self._clear_resource(replica)
-                #update positions and velocities of openmm replica
                 openmm_context.join()
+                #update cycle and mdsteps of replica
+                ommreplica = job['openmm_replica']
+                cycle = ommreplica.get_cycle() + 1
+                ommreplica.set_cycle(cycle)
+                mdsteps = ommreplica.get_mdsteps() + job['nsteps']
+                ommreplica.set_mdsteps(mdsteps)
+                #update positions and velocities of openmm replica
                 (pos,vel) = job['openmm_context'].get_posvel()
-                job['openmm_replica'].save_dms(pos,vel)
+                ommreplica.set_posvel(pos,vel)
+                #update energies of openmm replica
+                (bind_energy, pot_energy, lmbd, lambda1, lambda2, alpha, u0, w0 ) = job['openmm_context'].get_state()
+                ommreplica.set_energy(bind_energy, pot_energy)
+                #update checkpoint
+                ommreplica.save_dms()
+                #flag replica as not linked to a job
                 self.replica_to_job[replica] = None
 
             return done

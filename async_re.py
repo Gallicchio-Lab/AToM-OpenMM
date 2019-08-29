@@ -29,7 +29,8 @@ from configobj import ConfigObj
 
 from gibbs_sampling import *
 
-
+from local_openmm_transport import SDMReplica
+from local_openmm_transport import OpenCLContext
 
 
 __version__ = '1.0.0'
@@ -433,13 +434,18 @@ class async_re(object):
         else:
             min_time = float(self.keywords.get('MIN_TIME'))
 
+        if self.keywords.get('CHECKPOINT_TIME') is None:
+            checkpoint_time = cycle_time
+        else:
+            checkpoint_time = float(self.keywords.get('CHECKPOINT_TIME'))
 
         start_time = time.time()
         end_time = (start_time + 60*(self.walltime - replica_run_time) -
                     cycle_time - 10)
+        last_checkpoint_time = None
+
         while time.time() < end_time:
-            # comment out by Junchao to set the minimum time
-            # time.sleep(1)
+            current_time = time.time()
 
             self.updateStatus()
             self.print_status()
@@ -453,10 +459,18 @@ class async_re(object):
             self.print_status()
             if self.exchange:
                 self.doExchanges()
+            self._write_status()
+            self.print_status()
+                
+            if last_checkpoint_time == None or current_time - last_checkpoint_time > checkpoint_time:
+                self.checkpointJob()
+                last_checkpoint_time = current_time
+                
         self.updateStatus()
         self.print_status()
         self.waitJob()
         self.cleanJob()
+        self.checkpointJob()
 
     def waitJob(self):
         # wait until all jobs are complete
@@ -470,17 +484,43 @@ class async_re(object):
             time.sleep(1)
 
     def cleanJob(self):
+        self._cleanup()
         return
 
+    def checkpointJob(self):
+        if self.transport_mechanism == "LOCAL_OPENMM":
+            #disable ctrl-c
+            s = signal.signal(signal.SIGINT, signal.SIG_IGN)
+            # update replica objects of waiting replicas
+            for repl in [k for k in range(self.nreplicas)
+                    if self.status[k]['running_status'] == 'W']:
+                stateid = self.status[repl]['stateid_current']
+                lambd = self.stateparams[stateid]['lambda']
+                temperature = self.stateparams[stateid]['temperature']
+                lambda1 = self.stateparams[stateid]['lambda1']
+                lambda2 = self.stateparams[stateid]['lambda2']
+                alpha = self.stateparams[stateid]['alpha']
+                u0 = self.stateparams[stateid]['u0']
+                w0 = self.stateparams[stateid]['w0coeff']
+                self.openmm_replicas[repl].set_state(stateid, lambd, lambda1, lambda2, alpha, u0, w0)
+            for replica in self.openmm_replicas:
+                replica.save_dms()
+            signal.signal(signal.SIGINT, s)
+    
     def _write_status(self):
         """
         Pickle the current state of the RE job and write to in BASENAME.stat.
         """
+        #disable ctrl-c
+        s = signal.signal(signal.SIGINT, signal.SIG_IGN)
+
         status_file = '%s.stat'%self.basename
         f = _open(status_file,'w')
         pickle.dump(self.status,f)
         f.close()
-
+        
+        signal.signal(signal.SIGINT, s)
+        
     def _read_status(self):
         """
         Unpickle and load the current state of the RE job from BASENAME.stat.

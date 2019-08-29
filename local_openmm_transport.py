@@ -3,9 +3,8 @@ from __future__ import print_function
 Multiprocessing job transport for AsyncRE/OpenMM
 """
 import os, re, sys, time, shutil, copy, random
-from threading import Thread, Event
+from multiprocessing import Process, Queue, Event
 import logging
-import Queue
 
 from simtk import openmm as mm
 from simtk.openmm.app import *
@@ -17,63 +16,239 @@ from SDMplugin import *
 
 from transport import Transport
 
+# routine being multi-processed
+def openmm_worker(cmdq, outq, inq, startedSignal, readySignal, runningSignal,
+                  basename, platform_id, device_id, keywords):
+    startedSignal.clear()
+    readySignal.clear()
+    runningSignal.clear()
 
-class OpenCLContext(Thread):
-    #
-    # Context to run a SDM replica on one OpenCL device (reference platform also okay)
-    #
-    # based on reusable thread code from:
-    # https://www.codeproject.com/Tips/1271787/Python-Reusable-Thread-Class
-    def __init__(self, topology, system, integrator, platform,
-                 platformId = None, deviceId = None , properties = None):
-        self._startSignal = Event()
-        self._oneRunFinished = Event()
-        self._finishIndicator = False
-        self.started = False
-        self.running = False
+    rcptfile_input  = '%s_rcpt_0.dms' % basename 
+    ligfile_input   = '%s_lig_0.dms'  % basename
         
-        Thread.__init__(self)
-        
-        self.platform = platform
+    dms = DesmondDMSFile([ligfile_input, rcptfile_input]) 
+    topology = dms.topology
+    
+    implicitsolvent = str(keywords.get('IMPLICITSOLVENT'))
+    system = None
+    if implicitsolvent is None:
+        system = dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = None)
+    elif implicitsolvent == 'AGBNP':
+        system = dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = 'AGBNP')
+    else:
+        print('Unknown implicit solvent %s' % implicitsolvent)
+        return
 
-        if properties:
-            self.platform_properties = properties
-        else:
-            self.platform_properties = {}
+    natoms_ligand = int(keywords.get('NATOMS_LIGAND'))
+    lig_atoms = range(natoms_ligand)
+    # atom indexes here refer to indexes in either lig or rcpt dms file, rather than in the complex 
+    #lig_atom_restr = [0, 1, 2, 3, 4, 5]   #indexes of ligand atoms for CM-CM Vsite restraint
+
+    cm_lig_atoms = keywords.get('REST_LIGAND_CMLIG_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
+    #convert the string of lig atoms to integer
+    lig_atom_restr = [int(i) for i in cm_lig_atoms]
+    #rcpt_atom_restr = [121, 210, 281, 325, 406, 527, 640, 650, 795, 976, 1276]   #indexes of rcpt atoms for CM-CM Vsite restraint
+        
+    cm_rcpt_atoms = keywords.get('REST_LIGAND_CMREC_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
+    #convert the string of receptor rcpt atoms to integer
+    rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
+
+    cmkf = float(keywords.get('CM_KF'))
+    kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
+    cmtol = float(keywords.get('CM_TOL'))
+    r0 = cmtol * angstrom #radius of Vsite sphere
+    
+    #these can be 'None" if not using orientational restraints
+    lig_ref_atoms = None # the 3 atoms of the ligand that define the coordinate system of the ligand
+    rcpt_ref_atoms = None # the 3 atoms of the receptor that define the coordinate system of the receptor
+    angle_center = None * degrees
+    kfangle = None * kilocalorie_per_mole/degrees**2
+    angletol = None * degrees
+    dihedral1center = None * degrees
+    kfdihedral1 = None * kilocalorie_per_mole/degrees**2
+    dihedral1tol = None * degrees
+    dihedral2center = None * degrees
+    kfdihedral2 = None * kilocalorie_per_mole/degrees**2
+    dihedral2tol = None * degrees
+    
+    #transform indexes of receptor atoms
+    for i in range(len(rcpt_atom_restr)):
+        rcpt_atom_restr[i] += natoms_ligand
+        if rcpt_ref_atoms:
+            for i in range(len(rcpt_ref_atoms)):
+                rcpt_ref_atoms[i] += natoms_ligand
+
+    sdm_utils = SDMUtils(system, lig_atoms)
+    sdm_utils.addRestraintForce(lig_cm_particles = lig_atom_restr,
+                                rcpt_cm_particles = rcpt_atom_restr,
+                                kfcm = kf,
+                                tolcm = r0,
+                                lig_ref_particles = lig_ref_atoms,
+                                rcpt_ref_particles = rcpt_ref_atoms,
+                                angle_center = angle_center,
+                                kfangle = kfangle,
+                                angletol = angletol,
+                                dihedral1center = dihedral1center,
+                                kfdihedral1 = kfdihedral1,
+                                dihedral1tol = dihedral1tol,
+                                dihedral2center = dihedral2center,
+                                kfdihedral2 = kfdihedral2,
+                                dihedral2tol = dihedral2tol)
+    
+    # the integrator object is context-specific
+    #temperature = int(self.keywords.get('TEMPERATURES')) * kelvin
+    temperature = 300 * kelvin
+    frictionCoeff = float(keywords.get('FRICTION_COEFF')) / picosecond
+    MDstepsize = float(keywords.get('TIME_STEP')) * picosecond
+    umsc = float(keywords.get('UMAX')) * kilocalorie_per_mole
+    acore = float(keywords.get('ACORE'))
+    integrator = LangevinIntegratorSDM(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, lig_atoms)
+    integrator.setBiasMethod(sdm_utils.ILogisticMethod)
+    integrator.setSoftCoreMethod(sdm_utils.RationalSoftCoreMethod)
+    integrator.setUmax(umsc / kilojoule_per_mole)
+    integrator.setAcore(acore)
+    
+    platform_properties = {}                                 
+    platform = Platform.getPlatformByName('OpenCL')
+    platform_properties["OpenCLPlatformIndex"] = str(platform_id)
+    platform_properties["DeviceIndex"] = str(device_id)
+    
+    simulation = Simulation(topology, system, integrator, platform, platform_properties)
+    context = simulation.context
+    nsteps = int(keywords.get('PRODUCTION_STEPS'))
+    nprnt = int(keywords.get('PRNT_FREQUENCY'))
+    ntrj = int(keywords.get('TRJ_FREQUENCY'))
+    if not nprnt % nsteps == 0:
+        print("nprnt must be an integer multiple of nsteps.")
+        return
+    if not ntrj % nsteps == 0:
+        print("ntrj must be an integer multiple of nsteps.")
+        return
+    simulation.reporters = []
+
+    nsteps_current = 0
+    outfile = None
+    logfile = None
+    dcdfile = None
+    outfile_p = None
+    logfile_p = None
+    
+    lmbd = None
+    lmbd1 = None
+    lmbd2 = None
+    alpha = None
+    u0 = None
+    w0 = None
+
+    pot_energy = None
+    bind_energy = None
+    
+    positions = None
+    velocities = None
+
+    command = None
+
+    write_out_flag = False
+    write_trj_flag = False
+    
+    #start event loop
+    startedSignal.set()
+    readySignal.set()
+    while(True):
+        while(cmdq.empty()):
+            time.sleep(0.1)
+        command = cmdq.get()
+        if command == "SETSTATE":
+            lmbd = inq.get()
+            lmbd1 = inq.get()
+            lmbd2 = inq.get()
+            alpha = inq.get()
+            u0 = inq.get()
+            w0 = inq.get()
+            integrator.setLambda(lmbd)
+            integrator.setLambda1(lmbd1)
+            integrator.setLambda2(lmbd2)
+            integrator.setAlpha(alpha*kilojoule_per_mole)
+            integrator.setU0(u0/ kilojoule_per_mole)
+            integrator.setW0coeff(w0 / kilojoule_per_mole)
+        elif command == "SETPOSVEL":
+            positions = inq.get()
+            velocities = inq.get()
+            context.setPositions(positions)
+            context.setVelocities(velocities)
+        elif command == "SETREPORTERS":
+            replica_steps = inq.get()
+            last_step = replica_steps + nsteps
+            outfile = inq.get()
+            logfile = inq.get()
+            dcdfile = inq.get()
+            simulation.reporters = []
+            write_out_flag = ( last_step % nprnt == 0 )
+            if last_step % nprnt == 0:
+                if outfile_p != None:
+                    outfile_p.close()
+                outfile_p = open(outfile, 'a+')
+                if logfile_p != None:
+                    logfile_p.close()
+                logfile_p = open(logfile, 'a+')
+                simulation.reporters.append(StateDataReporter(logfile_p, nsteps, step=True, temperature=True))
+
+            write_trj_flag = ( last_step % ntrj == 0 )
+            if write_trj_flag :
+                do_append = os.path.exists(dcdfile)
+                simulation.reporters.append(DCDReporter(dcdfile, nsteps, append = do_append))
+        elif command == "RUN":
+            readySignal.clear()
+            runningSignal.set()
+
+            simulation.step(nsteps)
+
+            nsteps_current += nsteps
             
-        if platformId:
-            self.platformId = int(platformId)
-            self.platform_properties["OpenCLPlatformIndex"] = str(platformId)
+            if write_out_flag:
+                pot_energy = (integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
+                bind_energy = (integrator.getBindE()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
+                if outfile_p:
+                    outfile_p.write("%f %f %f %f %f %f %f %f\n" % (lmbd, lmbd1, lmbd2, alpha*kilocalorie_per_mole, u0/kilocalorie_per_mole, w0/kilocalorie_per_mole, pot_energy, bind_energy))
+                    outfile_p.close()
+                    outfile_p = None
+                if logfile_p:
+                    logfile_p.flush()
+
+            simulation.reporters = [] #reset reporters
+            
+            runningSignal.clear()
+            readySignal.set()
+        elif command == "GETENERGY":
+            bind_energy = (integrator.getBindE()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
+            pot_energy = (integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
+            outq.put(bind_energy)
+            outq.put(pot_energy)
+        elif command == "GETPOSVEL":
+            state = context.getState(getPositions=True, getVelocities=True)
+            positions = state.getPositions()
+            velocities = state.getVelocities()
+            outq.put(positions)
+            outq.put(velocities)
+        elif command == "FINISH":
+            startedSignal.clear()
+            break
         else:
-            self.platformId = None
-
-        if deviceId:
-            self.deviceId = int(deviceId)
-            self.platform_properties["DeviceIndex"] = str(deviceId)
-        else:
-            self.deviceId = None
-
-
-        #
-        # I tried to make deep-copies of integrator, system,
-        # etc. however it deepcopy() fails on the SDM and AGBNP plugin
-        # modules complaining about "lack of proxy serialization". It
-        # is probably due to some intricancy with swig. So, the
-        # objects passed to this initializer should be created anew
-        # for each opencl context, for example from the master .dms
-        # files, otherwise they probably clobber each other.
-        #
-        self.topology = topology
-        self.integrator = integrator
-        self.system = system
-        self.simulation = Simulation(self.topology, self.system, self.integrator, self.platform, self.platform_properties)
-        self.context = self.simulation.context
-        self.nsteps = None
-        self.nprnt = None
-        self.ntrj = None
-        self.nsteps_current = 0
-        self.outfile = None
-        self.outfile_p = None
+            pass
+        
+class OpenCLContext(object):
+    # Context to run a SDM replica in a process controlling one OpenCL device
+    def __init__(self, basename, platform_id, device_id, keywords):
+        self._startedSignal = Event()
+        self._readySignal = Event()
+        self._runningSignal = Event()
+        self._cmdq = Queue()
+        self._inq = Queue()
+        self._outq = Queue()
+        self.platformId = platform_id
+        self.deviceId = device_id
+        self._p = Process(target=openmm_worker, args=(self._cmdq,self._outq,self._inq, self._startedSignal, self._readySignal, self._runningSignal, basename, platform_id, device_id, keywords))
+        self._p.start()
         
     def set_state(self, lmbd, lmbd1, lmbd2, alpha, u0, w0):
         self.lmbd = float(lmbd)
@@ -82,120 +257,65 @@ class OpenCLContext(Thread):
         self.alpha = float(alpha)/kilocalorie_per_mole
         self.u0 = float(u0) * kilocalorie_per_mole
         self.w0 = float(w0) * kilocalorie_per_mole
-        self.integrator.setLambda(self.lmbd)
-        self.integrator.setLambda1(self.lmbd1)
-        self.integrator.setLambda2(self.lmbd2)
-        self.integrator.setAlpha(self.alpha*kilojoule_per_mole)
-        self.integrator.setU0(self.u0/ kilojoule_per_mole)
-        self.integrator.setW0coeff(self.w0 / kilojoule_per_mole)
+        self._startedSignal.wait()
+        self._readySignal.wait()
+        self._cmdq.put("SETSTATE")
+        self._inq.put(self.lmbd)
+        self._inq.put(self.lmbd1)
+        self._inq.put(self.lmbd2)
+        self._inq.put(self.alpha)
+        self._inq.put(self.u0)
+        self._inq.put(self.w0)
 
-    def get_state(self):
-        pot_energy = (self.integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
-        bind_energy = (self.integrator.getBindE()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
-        return (bind_energy, pot_energy, self.lmbd, self.lmbd1, self.lmbd2, self.alpha, self.u0, self.w0 )
+    def get_energy(self):
+        self._startedSignal.wait()
+        self._readySignal.wait()
+        self._cmdq.put("GETENERGY")
+        bind_energy = self._outq.get()
+        pot_energy = self._outq.get()
+        return (bind_energy, pot_energy)
         
     def set_posvel(self, positions, velocities):
-        self.context.setPositions(positions)
-        self.context.setVelocities(velocities)
+        self._startedSignal.wait()
+        self._readySignal.wait()
+        self._cmdq.put("SETPOSVEL")
+        self._inq.put(positions)
+        self._inq.put(velocities)
 
     def get_posvel(self):
-        state = self.context.getState(getPositions=True, getVelocities=True)
-        self.positions = state.getPositions()
-        self.velocities = state.getVelocities()
+        self._startedSignal.wait()
+        self._readySignal.wait()
+        self._cmdq.put("GETPOSVEL")
+        self.positions = self._outq.get()
+        self.velocities = self._outq.get()
         return (self.positions, self.velocities)
 
-    def set_reporters(self, nprnt, outfile, logfile, ntrj, dcdfile):
-        if not self.nsteps:
-            self.nsteps = nprnt
-        if not nprnt % self.nsteps == 0:
-            print("nprnt must be an integer multiple of nsteps.")
-            self.finish()
-        else:
-            self.nprnt = nprnt
-        if not ntrj % self.nsteps == 0:
-            print("ntrj must be an integer multiple of nsteps.")
-            self.finish()
-        else:
-            self.ntrj = ntrj
-        self.simulation.reporters = []
-        last_step = self.nsteps_current + self.nsteps
-        if last_step % self.nprnt == 0:
-            self.simulation.reporters.append(StateDataReporter(logfile, nprnt, step=True, temperature=True))
-            if self.outfile_p:
-                self.outfile_p.close()
-            self.outfile_p = open(outfile, 'w')
-        if last_step % self.ntrj == 0:
-            self.simulation.reporters.append(DCDReporter(dcdfile, ntrj))
-        
-    def outreport(self):
-        (bind_energy, pot_energy, lmbd, lambda1, lambda2, alpha, u0, w0 ) = self.get_state()
-        if self.outfile_p:
-            self.outfile_p.write("%f %f %f %f %f %f %f %f\n" % (lmbd, lambda1, lambda2, alpha*kilocalorie_per_mole, u0/kilocalorie_per_mole, w0/kilocalorie_per_mole, pot_energy, bind_energy))
-            self.outfile_p.flush()
-
-    def set_nsteps(self, nsteps):
-        if not self.nprnt:
-            self.nprnt = nsteps
-        else:
-            if not self.nprnt % nsteps == 0:
-                print("nprnt must be an integer multiple of nsteps.")
-                self.finish()
-        if not self.ntrj:
-            self.ntrj = nsteps
-        else:
-            if not self.ntrj % nsteps == 0:
-                print("ntrj must be an integer multiple of nsteps.")
-                self.finish()
-        self.nsteps = nsteps   
-        
-    def restart(self):
-        """make sure to always call join() before restarting"""
-        self._startSignal.set()
-
-    def join(self):
-        """ This join will only wait for one single run (target functioncall) to be finished"""
-        self._oneRunFinished.wait()
-        self._oneRunFinished.clear()
-
+    def set_reporters(self, current_steps, outfile, logfile, dcdfile):
+        self._startedSignal.wait()
+        self._readySignal.wait()
+        self._cmdq.put("SETREPORTERS")
+        self._inq.put(current_steps)
+        self._inq.put(outfile)
+        self._inq.put(logfile)
+        self._inq.put(dcdfile)
+    
     def finish(self):
-        self._finishIndicator = True
-        self.restart()
-        self.join()     
+        self._startedSignal.wait()
+        self._readySignal.wait()
+        self._cmdq.put("FINISH")
+        self._p.join()     
 
     def is_running(self):
-        return self.running
+        return self._runningSignal.is_set()
 
     def is_started(self):
-        return self.started
+        return self._startedSignal.is_set()
     
     def run(self):
-        """ This class will reprocess the object "processObject" forever.
-        Through the change of data inside processObject and start signals
-        we can reuse the thread's resources"""
-
-        self.started = True
-        self.restart()
-        while(True):    
-            # wait until we should process
-            self._startSignal.wait()
-
-            self._startSignal.clear()
-
-            if(self._finishIndicator):# check, if we want to stop
-                self._oneRunFinished.set()
-                return
-            
-            # call the threaded function
-            self.running = True
-            self.simulation.step(self.nsteps)
-            self.nsteps_current += self.nsteps
-            print("DEBUG nsteps_current: %d %d %d" % (self.nsteps, self.nsteps_current, self.nprnt))
-            if self.nsteps_current % self.nprnt == 0:
-                self.outreport()
-            self.running = False
-
-            # notify about the run's end
-            self._oneRunFinished.set()
+        self._startedSignal.wait()
+        self._readySignal.wait()
+        self._cmdq.put("RUN")
+        
 
 class SDMReplica(object):
     #
@@ -229,6 +349,7 @@ class SDMReplica(object):
 
         self.bind_energy = None
         self.pot_energy = None
+        self.is_energy_assigned = False
         self.temperature = None
         self.lmbd =  None
         self.lambda1 =  None
@@ -239,16 +360,15 @@ class SDMReplica(object):
         self.cycle = 0
         self.stateid = None
         self.mdsteps = 0
+        self.is_state_assigned = False
         
         # check for sdm_data table in lig dms
         tables = self.dms._tables[0]
         conn = self.sql_conn_lig
         if 'sdm_data' in tables:
             # read sdm_data table
-            print("reading checkpoint for replica %d" % replica_id)
             q = """SELECT binde,epot,temperature,lambda,lambda1,lambda2,alpha,u0,w0,cycle,stateid,mdsteps FROM sdm_data WHERE id = 1"""
             ans = conn.execute(q)
-            print(ans)
             for (binde,epot,temperature,lmbd,lambda1,lambda2,alpha,u0,w0,cycle,stateid,mdsteps) in conn.execute(q):
                 self.bind_energy = binde
                 self.pot_energy = epot
@@ -278,24 +398,27 @@ class SDMReplica(object):
         self.u0 = float(u0)
         self.w0coeff = float(w0)
         self.temperature = 300. #not implemented
-
+        self.is_state_assigned = True
+        
     def get_state(self):
         return (self.bind_energy, self.pot_energy, self.stateid, self.lmbd, self.lambda1, self.lambda2, self.alpha, self.u0, self.w0coeff )
 
     def set_energy(self, bind_energy, pot_energy):
         self.bind_energy = bind_energy
         self.pot_energy = pot_energy
-
+        self.is_energy_assigned = True
+        
     def set_posvel(self, positions, velocities):
         self.positions = positions
         self.velocities = velocities
 
     def save_dms(self):
-        conn = self.sql_conn_lig
-        conn.execute("UPDATE sdm_data SET binde = %f, epot = %f, temperature = %f, lambda = %f, lambda1 = %f, lambda2 = %f, alpha = %f, u0 = %f, w0 = %f, cycle = %d, stateid = %d, mdsteps = %d WHERE id = 1" % (self.bind_energy, self.pot_energy, self.temperature, self.lmbd, self.lambda1, self.lambda2, self.alpha, self.u0, self.w0coeff, self.cycle, self.stateid, self.mdsteps))
-        conn.commit()
-        self.dms.setPositions(self.positions)
-        self.dms.setVelocities(self.velocities)
+        if self.is_state_assigned and self.is_energy_assigned:
+            conn = self.sql_conn_lig
+            conn.execute("UPDATE sdm_data SET binde = %f, epot = %f, temperature = %f, lambda = %f, lambda1 = %f, lambda2 = %f, alpha = %f, u0 = %f, w0 = %f, cycle = %d, stateid = %d, mdsteps = %d WHERE id = 1" % (self.bind_energy, self.pot_energy, self.temperature, self.lmbd, self.lambda1, self.lambda2, self.alpha, self.u0, self.w0coeff, self.cycle, self.stateid, self.mdsteps))
+            conn.commit()
+            self.dms.setPositions(self.positions)
+            self.dms.setVelocities(self.velocities)
 
     def set_mdsteps(self, mdsteps):
         self.mdsteps = mdsteps
@@ -340,7 +463,7 @@ class LocalOpenMMTransport(Transport):
 
         # implements a queue of jobs from which to draw the next job
         # to launch
-        self.jobqueue = Queue.Queue()
+        self.jobqueue = Queue()
 
     def _clear_resource(self, replica):
         # frees up the node running a replica identified by replica id
@@ -372,9 +495,11 @@ class LocalOpenMMTransport(Transport):
         #returns a node at random among available nodes
         available = [node for node in range(self.nprocs)
                      if self.node_status[node] == None]
+
         if available == None or len(available) == 0:
             return None
         random.shuffle(available)
+
         return available[0]
 
     def launchJob(self, replica, job_info):
@@ -386,20 +511,19 @@ class LocalOpenMMTransport(Transport):
         self.jobqueue.put(replica)
         return self.jobqueue.qsize()
 
-    def LaunchReplica(self, sdm_context, replica, cycle, nsteps, nprnt, ntrj):
+    def LaunchReplica(self, sdm_context, replica, cycle):
         sdm_context.set_state(replica.lmbd, replica.lambda1, replica.lambda2, replica.alpha, replica.u0, replica.w0coeff)
         sdm_context.set_posvel(replica.positions, replica.velocities)
         
-        out_file     = 'r%d/%s_%d.out' % (replica._id,replica.basename,cycle)
-        log_file     = 'r%d/%s_%d.log' % (replica._id,replica.basename,cycle)
-        dcd_file     = 'r%d/%s_%d.dcd' % (replica._id,replica.basename,cycle)
-        sdm_context.set_nsteps(nsteps)
-        sdm_context.set_reporters(nprnt, out_file, log_file, ntrj, dcd_file)
+        #out_file     = 'r%d/%s_%d.out' % (replica._id,replica.basename,cycle)
+        #log_file     = 'r%d/%s_%d.log' % (replica._id,replica.basename,cycle)
+        #dcd_file     = 'r%d/%s_%d.dcd' % (replica._id,replica.basename,cycle)
+        out_file     = 'r%d/%s.out' % (replica._id,replica.basename)
+        log_file     = 'r%d/%s.log' % (replica._id,replica.basename)
+        dcd_file     = 'r%d/%s.dcd' % (replica._id,replica.basename)
+        sdm_context.set_reporters(replica.mdsteps,out_file, log_file, dcd_file)
         
-        if sdm_context.started:
-            sdm_context.restart()
-        else:
-            sdm_context.start()
+        sdm_context.run()
 
     def ProcessJobQueue(self, mintime, maxtime):
         #Launches jobs waiting in the queue.
@@ -410,7 +534,6 @@ class LocalOpenMMTransport(Transport):
         nreplicas = len(self.replica_to_job)
 
         while usetime < maxtime:
-
             # find an available node
             node = self._availableNode()
 
@@ -430,11 +553,11 @@ class LocalOpenMMTransport(Transport):
                 self.replica_to_job[replica] = job
                 self.node_status[node] = replica
 
-                print("DEBUG: Launching replica %d:" % replica)
-                self.LaunchReplica(job['openmm_context'], job['openmm_replica'], job['cycle'], job['nsteps'], job['nprnt'], job['ntrj'])
+                self.LaunchReplica(job['openmm_context'], job['openmm_replica'], job['cycle'])
                 
                 # updates number of jobs launched
                 njobs_launched += 1
+
                 node = self._availableNode()
 
             # waits mintime second and rescans job queue
@@ -458,30 +581,24 @@ class LocalOpenMMTransport(Transport):
         hasCompleted() elsewhere.
         """
         job = self.replica_to_job[replica]
-        #print("DEBUG: isDone(): replica %d cycle %d" % (replica, cycle))
-        #print(job)
         if job == None:
             # if job has been removed we assume that the replica is done
             return True
         else:
             try:
                 openmm_context = job['openmm_context']
-                print(job['openmm_context'])
             except:
+                #job is in the queue but not yet launched
                 return False
 
-            if  openmm_context == None:
+            if not openmm_context.is_started():
                 done = False
             else:
-                if not openmm_context.is_started():
-                    return False
                 done = not openmm_context.is_running()
 
             if done:
-                print("Replica %d completed cycle %d" % (replica, cycle))
                 # disconnects replica from job and node
                 self._clear_resource(replica)
-                openmm_context.join()
                 #update cycle and mdsteps of replica
                 ommreplica = job['openmm_replica']
                 cycle = ommreplica.get_cycle() + 1
@@ -492,10 +609,8 @@ class LocalOpenMMTransport(Transport):
                 (pos,vel) = job['openmm_context'].get_posvel()
                 ommreplica.set_posvel(pos,vel)
                 #update energies of openmm replica
-                (bind_energy, pot_energy, lmbd, lambda1, lambda2, alpha, u0, w0 ) = job['openmm_context'].get_state()
+                (bind_energy, pot_energy ) = job['openmm_context'].get_energy()
                 ommreplica.set_energy(bind_energy, pot_energy)
-                #update checkpoint
-                ommreplica.save_dms()
                 #flag replica as not linked to a job
                 self.replica_to_job[replica] = None
 

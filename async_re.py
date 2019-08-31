@@ -89,8 +89,8 @@ class async_re(object):
         if self.transport_mechanism == "LOCAL_OPENMM":
             for ommcontext in self.openmm_contexts:
                 ommcontext.finish()
-            for replica in self.openmm_replicas:
-                replica.dms.close()
+            #for replica in self.openmm_replicas:
+            #    replica.dms.close()
 
     def _exit(self, message):
         self._cleanup()
@@ -469,8 +469,8 @@ class async_re(object):
         self.updateStatus()
         self.print_status()
         self.waitJob()
-        self.cleanJob()
         self.checkpointJob()
+        self.cleanJob()
 
     def waitJob(self):
         # wait until all jobs are complete

@@ -2,7 +2,7 @@ from __future__ import print_function
 """
 Multiprocessing job transport for AsyncRE/OpenMM
 """
-import os, re, sys, time, shutil, copy, random
+import os, re, sys, time, shutil, copy, random, signal
 from multiprocessing import Process, Queue, Event
 import logging
 
@@ -232,6 +232,9 @@ def openmm_worker(cmdq, outq, inq, startedSignal, readySignal, runningSignal,
             outq.put(velocities)
         elif command == "FINISH":
             startedSignal.clear()
+            readySignal.clear()
+            if outfile_p:
+                outfile_p.close()
             break
         else:
             pass
@@ -239,6 +242,7 @@ def openmm_worker(cmdq, outq, inq, startedSignal, readySignal, runningSignal,
 class OpenCLContext(object):
     # Context to run a SDM replica in a process controlling one OpenCL device
     def __init__(self, basename, platform_id, device_id, keywords):
+        s = signal.signal(signal.SIGINT, signal.SIG_IGN) #so that children do not respond to ctrl-c
         self._startedSignal = Event()
         self._readySignal = Event()
         self._runningSignal = Event()
@@ -248,8 +252,8 @@ class OpenCLContext(object):
         self.platformId = platform_id
         self.deviceId = device_id
         self._p = Process(target=openmm_worker, args=(self._cmdq,self._outq,self._inq, self._startedSignal, self._readySignal, self._runningSignal, basename, platform_id, device_id, keywords))
+        signal.signal(signal.SIGINT, s) #restore signal before start() of children
         self._p.start()
-        
     def set_state(self, lmbd, lmbd1, lmbd2, alpha, u0, w0):
         self.lmbd = float(lmbd)
         self.lmbd1 = float(lmbd1)
@@ -300,10 +304,8 @@ class OpenCLContext(object):
         self._inq.put(dcdfile)
     
     def finish(self):
-        self._startedSignal.wait()
-        self._readySignal.wait()
         self._cmdq.put("FINISH")
-        self._p.join()     
+        self._p.join()
 
     def is_running(self):
         return self._runningSignal.is_set()

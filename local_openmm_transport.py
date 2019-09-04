@@ -251,7 +251,7 @@ class OpenCLContext(object):
         self._outq = Queue()
         self.platformId = platform_id
         self.deviceId = device_id
-        self._p = Process(target=openmm_worker, args=(self._cmdq,self._outq,self._inq, self._startedSignal, self._readySignal, self._runningSignal, basename, platform_id, device_id, keywords))
+        self._p = Process(target=openmm_worker, args=(self._cmdq,self._outq,self._inq, self._startedSignal, self._readySignal, self._runningSignal, basename, platform_id, device_id, keywords), daemon = True)
         signal.signal(signal.SIGINT, s) #restore signal before start() of children
         self._p.start()
     def set_state(self, lmbd, lmbd1, lmbd2, alpha, u0, w0):
@@ -302,9 +302,10 @@ class OpenCLContext(object):
         self._inq.put(outfile)
         self._inq.put(logfile)
         self._inq.put(dcdfile)
-    
+
     def finish(self):
         self._cmdq.put("FINISH")
+        self._p.terminate()
         self._p.join()
 
     def is_running(self):
@@ -312,7 +313,7 @@ class OpenCLContext(object):
 
     def is_started(self):
         return self._startedSignal.is_set()
-    
+
     def run(self):
         self._startedSignal.wait()
         self._readySignal.wait()

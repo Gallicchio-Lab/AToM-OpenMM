@@ -231,13 +231,25 @@ def openmm_worker(cmdq, outq, inq, startedSignal, readySignal, runningSignal,
             outq.put(positions)
             outq.put(velocities)
         elif command == "FINISH":
-            startedSignal.clear()
-            readySignal.clear()
             if outfile_p:
                 outfile_p.close()
+            while not self.inq.empty():
+                self.inq.get()
+            while not self.cmdq.empty():
+                self.cmdq.get()
+            self.outq.close()
+            self._cmdq.close()
             break
         else:
-            pass
+            #unknown command, do nothing, clear queues
+            while not self.inq.empty():
+                self.inq.get()
+            while not self.cmdq.empty():
+                self.cmdq.get()
+
+    startedSignal.clear()
+    readySignal.clear()
+
         
 class OpenCLContext(object):
     # Context to run a SDM replica in a process controlling one OpenCL device
@@ -305,9 +317,15 @@ class OpenCLContext(object):
         self._inq.put(dcdfile)
 
     def finish(self):
+        self._startedSignal.wait()
+        self._readySignal.wait()
         self._cmdq.put("FINISH")
+        while not self._outq.empty():
+            self._outq.get()
+        self._inq.close()
+        self._cmdq.close()
         self._p.terminate()
-        self._p.join()
+        self._p.join(10) #10s time-out
 
     def is_running(self):
         return self._runningSignal.is_set()
@@ -574,6 +592,14 @@ class LocalOpenMMTransport(Transport):
             usetime += mintime
 
         return njobs_launched
+
+    def DrainJobQueue(self):
+        #clear the job queue
+        while not self.jobqueue.empty():
+            # grabs job on top of the queue
+            replica = self.jobqueue.get()
+            self._clear_resource(replica)
+            self.replica_to_job[replica] = None
 
     def isDone(self,replica,cycle):
         """

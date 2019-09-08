@@ -184,6 +184,9 @@ class ssh_transport(Transport):
         return new_command
     #edit end on 10.20.15
     
+    def DrainJobQueue(self):
+        # not needed for ssh transport (?)
+        pass
     
     def ProcessJobQueue(self, mintime, maxtime):
         """

@@ -465,7 +465,8 @@ class async_re(object):
             if last_checkpoint_time == None or current_time - last_checkpoint_time > checkpoint_time:
                 self.checkpointJob()
                 last_checkpoint_time = current_time
-                
+
+        self.transport.DrainJobQueue()
         self.updateStatus()
         self.print_status()
         self.waitJob()

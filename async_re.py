@@ -29,9 +29,10 @@ from configobj import ConfigObj
 
 from gibbs_sampling import *
 
-from local_openmm_transport import SDMReplica
+from local_openmm_transport import OMMReplica
 from local_openmm_transport import OpenCLContext
 
+import multiprocessing as mp
 
 __version__ = '1.0.0'
 
@@ -39,7 +40,12 @@ def _exit(message):
     """Print and flush a message to stdout and then exit."""
     print message
     sys.stdout.flush()
-    print 'exiting...'
+    print 'Waiting for children to complete ...'
+    while True:
+        time.sleep(1)
+        if not mp.active_children():
+            break
+    time.sleep(20)
     sys.exit(1)
 
 def _open(name, mode, max_attempts = 100, wait_time = 1):
@@ -89,8 +95,6 @@ class async_re(object):
         if self.transport_mechanism == "LOCAL_OPENMM":
             for ommcontext in self.openmm_contexts:
                 ommcontext.finish()
-            #for replica in self.openmm_replicas:
-            #    replica.dms.close()
 
     def _exit(self, message):
         self._cleanup()
@@ -348,7 +352,6 @@ class async_re(object):
         # at present only restarts if all replica directories have at least one *.out file when transport_mechanism == 'LOCAL_OPENMM'
         if replica_dirs_exist:
             setup = False
-            print(setup)
             if self.transport_mechanism == "LOCAL_OPENMM":
                 for k in range(self.nreplicas):
                     repl_dir = 'r%d' %k
@@ -395,7 +398,7 @@ class async_re(object):
             if self.transport_mechanism == "LOCAL_OPENMM":
                 for replica in self.openmm_replicas:
                     self.status[replica._id]['cycle_current'] = replica.get_cycle()
-                    self.status[replica._id]['stateid_current'] = replica.stateid
+                    self.status[replica._id]['stateid_current'] = replica.get_stateid()
             self.updateStatus(restart=True)
             if self.transport_mechanism == "BOINC":
                 # restart BOINC workunit id list
@@ -489,24 +492,7 @@ class async_re(object):
         return
 
     def checkpointJob(self):
-        if self.transport_mechanism == "LOCAL_OPENMM":
-            #disable ctrl-c
-            s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-            # update replica objects of waiting replicas
-            for repl in [k for k in range(self.nreplicas)
-                    if self.status[k]['running_status'] == 'W']:
-                stateid = self.status[repl]['stateid_current']
-                lambd = self.stateparams[stateid]['lambda']
-                temperature = self.stateparams[stateid]['temperature']
-                lambda1 = self.stateparams[stateid]['lambda1']
-                lambda2 = self.stateparams[stateid]['lambda2']
-                alpha = self.stateparams[stateid]['alpha']
-                u0 = self.stateparams[stateid]['u0']
-                w0 = self.stateparams[stateid]['w0coeff']
-                self.openmm_replicas[repl].set_state(stateid, lambd, lambda1, lambda2, alpha, u0, w0)
-            for replica in self.openmm_replicas:
-                replica.save_dms()
-            signal.signal(signal.SIGINT, s)
+        pass
     
     def _write_status(self):
         """

@@ -12,13 +12,13 @@ from simtk.unit import *
 from simtk.openmm.app.desmonddmsfile import *
 from SDMplugin import *
 from local_openmm_transport import OpenCLContext
+from local_openmm_transport import OMMReplica
 
 class openmm_job(async_re):
     def __init__(self, command_file, options):
         async_re.__init__(self, command_file, options)
         
         if self.transport_mechanism == "LOCAL_OPENMM":
-            from local_openmm_transport import SDMReplica
             
             # creates openmm context objects
             self.openmm_contexts = []
@@ -33,29 +33,35 @@ class openmm_job(async_re):
             #creates openmm replica objects
             self.openmm_replicas = []
             for i in range(self.nreplicas):
-                replica = SDMReplica(i, self.basename)
+                replica = self.CreateReplica(i, self.basename)
                 self.openmm_replicas.append(replica)
 
     def CreateOpenCLContext(self,basename, platform_id = None, device_id = None):
         return OpenCLContext(basename, platform_id, device_id, self.keywords)
-                
+
+    def CreateReplica(self, repl_id, basename):
+        return OMMReplica(repl_id, basename)
+    
     def _setLogger(self):
         self.logger = logging.getLogger("async_re.openmm_async_re")
 
-    def _launchReplica(self,replica,cycle): 
+    # default for temperature replica exchange
+    def _launchReplica(self,replica,cycle):
         """
-        Launches a OpenMM sub-job
+        Launches a T-RE OpenMM sub-job
         """
         input_file = "%s_%d.py" % (self.basename, cycle)
         log_file = "%s_%d.log" % (self.basename, cycle)
         err_file = "%s_%d.err" % (self.basename, cycle)
-        
+
         if self.transport_mechanism == "SSH":
-	    rstfile_rcpt_p = "%s_rcpt_%d.dms" % (self.basename,cycle-1)
-	    rstfile_lig_p = "%s_lig_%d.dms" % (self.basename,cycle-1)
+
+            # WORK IN PROGRESS
+            
+            rstfile_p = "%s_%d.dms" % (self.basename,cycle-1)
             local_working_directory = os.getcwd() + "/r" + str(replica)
             remote_replica_dir = "%s_r%d_c%d" % (self.basename, replica, cycle)
-            executable = "./runopenmm" #edit 10.20
+            executable = "./runopenmm"
 
             job_info = {
                 "executable": executable,
@@ -66,11 +72,9 @@ class openmm_job(async_re):
                 "remote_replica_dir": remote_replica_dir,
                 "job_input_files": None,
                 "job_output_files": None,
-                "exec_directory": None}
+                "exec_directory": None
+            }
 
-            # detect which kind of architecture the node use, then choosing
-            # different library files and binary files in different lib and bin
-            # folders
             if self.keywords.get('EXEC_DIRECTORY'):
                 exec_directory = self.keywords.get('EXEC_DIRECTORY')
             else:
@@ -79,52 +83,33 @@ class openmm_job(async_re):
             job_info["exec_directory"]=exec_directory
 
             job_input_files = []
+            
             job_input_files.append(input_file)
-            if rstfile_rcpt_p and rstfile_lig_p:
-                job_input_files.append(rstfile_rcpt_p) #edit 10.16
-	    	job_input_files.append(rstfile_lig_p) #edit 10.16
+            job_input_files.append(rstfile_p)
             for filename in self.extfiles:
                 job_input_files.append(filename)
-
 
             job_output_files = []
             job_output_files.append(log_file)
             job_output_files.append(err_file)
             output_file = "%s_%d.out" % (self.basename, cycle)
 
-            if self.keywords.get('RE_TYPE') == 'TEMPT':
-                dmsfile = "%s_%d.dms" % (self.basename, cycle)
-            elif self.keywords.get('RE_TYPE') == 'BEDAMTEMPT':
-                rcptfile="%s_rcpt_%d.dms" % (self.basename,cycle)
-                ligfile="%s_lig_%d.dms" % (self.basename,cycle)
-                pdbfile="%s_%d.pdb" % (self.basename,cycle)
-                dcdfile="%s_%d.dcd" % (self.basename,cycle)
-                
+            dmsfile = "%s_%d.dms" % (self.basename, cycle)
+            pdbfile = "%s_%d.pdb" % (self.basename,cycle)
+            dcdfile = "%s_%d.dcd" % (self.basename,cycle)
+            
             job_output_files.append(output_file)
 
-            if self.keywords.get('RE_TYPE') == 'TEMPT':
-                job_output_files.append(dmsfile)
-            elif self.keywords.get('RE_TYPE') == 'BEDAMTEMPT':
-                job_output_files.append(rcptfile)
-                job_output_files.append(ligfile)
-                job_output_files.append(pdbfile)
-                job_output_files.append(dcdfile)
-                
-            job_info["job_input_files"] = job_input_files;
-            job_info["job_output_files"] = job_output_files;
-
+            job_output_files.append(dmsfile)
+            job_output_files.append(pdbfile)
+            job_output_files.append(dcdfile)
+            
         elif self.transport_mechanism == "LOCAL_OPENMM":
-            from local_openmm_transport import SDMReplica
             
             stateid = self.status[replica]['stateid_current']
-            lambd = self.stateparams[stateid]['lambda']
             temperature = self.stateparams[stateid]['temperature']
-            lambda1 = self.stateparams[stateid]['lambda1']
-            lambda2 = self.stateparams[stateid]['lambda2']
-            alpha = self.stateparams[stateid]['alpha']
-            u0 = self.stateparams[stateid]['u0']
-            w0 = self.stateparams[stateid]['w0coeff']
-            self.openmm_replicas[replica].set_state(stateid, lambd, lambda1, lambda2, alpha, u0, w0)
+            par = (temperature)
+            self.openmm_replicas[replica].set_state(stateid, par)
             nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
             job_info = {
                 "cycle": cycle,
@@ -132,30 +117,8 @@ class openmm_job(async_re):
             }
             
         else: #local with runopenmm?
-            executable = os.getcwd() + "/runopenmm" #edit on 10.19
-            working_directory = os.getcwd() + "/r" + str(replica)
-            job_info = {"executable": executable,
-                        "input_file": input_file,
-                        "output_file": log_file,
-                        "error_file": err_file,
-                        "working_directory": working_directory,
-                        "cycle": cycle}
-            #delete failed file if present
-            failed_file = "r%s/%s_%d.failed" % (str(replica),self.basename,cycle)
-            if os.path.exists(failed_file):
-                os.remove(failed_file)
+            self._exit("Unknown job transport")
             
-        if self.keywords.get('VERBOSE') == "yes":
-            msg = "_launchReplica(): Launching %s %s in directory %s cycle %d"
-            if self.transport_mechanism is 'SSH':
-                self.logger.info(msg, executable, input_file, local_working_directory, cycle)
-            elif not self.transport_mechanism is 'LOCAL_OPENMM':
-                self.logger.info(msg, executable, input_file, working_directory, cycle)
-
-        status = self.transport.launchJob(replica, job_info)
-        
-        return status
-
     def _getOpenMMData(self,file):
         """
         Reads all of the Openmm simulation data values temperature, energies,

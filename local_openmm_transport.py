@@ -16,241 +16,6 @@ from SDMplugin import *
 
 from transport import Transport
 
-# routine being multi-processed
-def openmm_worker(cmdq, outq, inq, startedSignal, readySignal, runningSignal,
-                  basename, platform_id, device_id, keywords):
-    startedSignal.clear()
-    readySignal.clear()
-    runningSignal.clear()
-
-    rcptfile_input  = '%s_rcpt_0.dms' % basename 
-    ligfile_input   = '%s_lig_0.dms'  % basename
-        
-    dms = DesmondDMSFile([ligfile_input, rcptfile_input]) 
-    topology = dms.topology
-    
-    implicitsolvent = str(keywords.get('IMPLICITSOLVENT'))
-    system = None
-    if implicitsolvent is None:
-        system = dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = None)
-    elif implicitsolvent == 'AGBNP':
-        system = dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = 'AGBNP')
-    else:
-        print('Unknown implicit solvent %s' % implicitsolvent)
-        return
-
-    natoms_ligand = int(keywords.get('NATOMS_LIGAND'))
-    lig_atoms = range(natoms_ligand)
-    # atom indexes here refer to indexes in either lig or rcpt dms file, rather than in the complex 
-    #lig_atom_restr = [0, 1, 2, 3, 4, 5]   #indexes of ligand atoms for CM-CM Vsite restraint
-
-    cm_lig_atoms = keywords.get('REST_LIGAND_CMLIG_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
-    #convert the string of lig atoms to integer
-    lig_atom_restr = [int(i) for i in cm_lig_atoms]
-    #rcpt_atom_restr = [121, 210, 281, 325, 406, 527, 640, 650, 795, 976, 1276]   #indexes of rcpt atoms for CM-CM Vsite restraint
-        
-    cm_rcpt_atoms = keywords.get('REST_LIGAND_CMREC_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
-    #convert the string of receptor rcpt atoms to integer
-    rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
-
-    cmkf = float(keywords.get('CM_KF'))
-    kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
-    cmtol = float(keywords.get('CM_TOL'))
-    r0 = cmtol * angstrom #radius of Vsite sphere
-    
-    #these can be 'None" if not using orientational restraints
-    lig_ref_atoms = None # the 3 atoms of the ligand that define the coordinate system of the ligand
-    rcpt_ref_atoms = None # the 3 atoms of the receptor that define the coordinate system of the receptor
-    angle_center = None * degrees
-    kfangle = None * kilocalorie_per_mole/degrees**2
-    angletol = None * degrees
-    dihedral1center = None * degrees
-    kfdihedral1 = None * kilocalorie_per_mole/degrees**2
-    dihedral1tol = None * degrees
-    dihedral2center = None * degrees
-    kfdihedral2 = None * kilocalorie_per_mole/degrees**2
-    dihedral2tol = None * degrees
-    
-    #transform indexes of receptor atoms
-    for i in range(len(rcpt_atom_restr)):
-        rcpt_atom_restr[i] += natoms_ligand
-        if rcpt_ref_atoms:
-            for i in range(len(rcpt_ref_atoms)):
-                rcpt_ref_atoms[i] += natoms_ligand
-
-    sdm_utils = SDMUtils(system, lig_atoms)
-    sdm_utils.addRestraintForce(lig_cm_particles = lig_atom_restr,
-                                rcpt_cm_particles = rcpt_atom_restr,
-                                kfcm = kf,
-                                tolcm = r0,
-                                lig_ref_particles = lig_ref_atoms,
-                                rcpt_ref_particles = rcpt_ref_atoms,
-                                angle_center = angle_center,
-                                kfangle = kfangle,
-                                angletol = angletol,
-                                dihedral1center = dihedral1center,
-                                kfdihedral1 = kfdihedral1,
-                                dihedral1tol = dihedral1tol,
-                                dihedral2center = dihedral2center,
-                                kfdihedral2 = kfdihedral2,
-                                dihedral2tol = dihedral2tol)
-    
-    # the integrator object is context-specific
-    #temperature = int(self.keywords.get('TEMPERATURES')) * kelvin
-    temperature = 300 * kelvin
-    frictionCoeff = float(keywords.get('FRICTION_COEFF')) / picosecond
-    MDstepsize = float(keywords.get('TIME_STEP')) * picosecond
-    umsc = float(keywords.get('UMAX')) * kilocalorie_per_mole
-    acore = float(keywords.get('ACORE'))
-    integrator = LangevinIntegratorSDM(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, lig_atoms)
-    integrator.setBiasMethod(sdm_utils.ILogisticMethod)
-    integrator.setSoftCoreMethod(sdm_utils.RationalSoftCoreMethod)
-    integrator.setUmax(umsc / kilojoule_per_mole)
-    integrator.setAcore(acore)
-    
-    platform_properties = {}                                 
-    platform = Platform.getPlatformByName('OpenCL')
-    platform_properties["OpenCLPlatformIndex"] = str(platform_id)
-    platform_properties["DeviceIndex"] = str(device_id)
-    
-    simulation = Simulation(topology, system, integrator, platform, platform_properties)
-    context = simulation.context
-    nsteps = int(keywords.get('PRODUCTION_STEPS'))
-    nprnt = int(keywords.get('PRNT_FREQUENCY'))
-    ntrj = int(keywords.get('TRJ_FREQUENCY'))
-    if not nprnt % nsteps == 0:
-        print("nprnt must be an integer multiple of nsteps.")
-        return
-    if not ntrj % nsteps == 0:
-        print("ntrj must be an integer multiple of nsteps.")
-        return
-    simulation.reporters = []
-
-    nsteps_current = 0
-    outfile = None
-    logfile = None
-    dcdfile = None
-    outfile_p = None
-    logfile_p = None
-    
-    lmbd = None
-    lmbd1 = None
-    lmbd2 = None
-    alpha = None
-    u0 = None
-    w0 = None
-
-    pot_energy = None
-    bind_energy = None
-    
-    positions = None
-    velocities = None
-
-    command = None
-
-    write_out_flag = False
-    write_trj_flag = False
-    
-    #start event loop
-    startedSignal.set()
-    readySignal.set()
-    while(True):
-        while(cmdq.empty()):
-            time.sleep(0.1)
-        command = cmdq.get()
-        if command == "SETSTATE":
-            lmbd = inq.get()
-            lmbd1 = inq.get()
-            lmbd2 = inq.get()
-            alpha = inq.get()
-            u0 = inq.get()
-            w0 = inq.get()
-            integrator.setLambda(lmbd)
-            integrator.setLambda1(lmbd1)
-            integrator.setLambda2(lmbd2)
-            integrator.setAlpha(alpha*kilojoule_per_mole)
-            integrator.setU0(u0/ kilojoule_per_mole)
-            integrator.setW0coeff(w0 / kilojoule_per_mole)
-        elif command == "SETPOSVEL":
-            positions = inq.get()
-            velocities = inq.get()
-            context.setPositions(positions)
-            context.setVelocities(velocities)
-        elif command == "SETREPORTERS":
-            replica_steps = inq.get()
-            last_step = replica_steps + nsteps
-            outfile = inq.get()
-            logfile = inq.get()
-            dcdfile = inq.get()
-            simulation.reporters = []
-            write_out_flag = ( last_step % nprnt == 0 )
-            if last_step % nprnt == 0:
-                if outfile_p != None:
-                    outfile_p.close()
-                outfile_p = open(outfile, 'a+')
-                if logfile_p != None:
-                    logfile_p.close()
-                logfile_p = open(logfile, 'a+')
-                simulation.reporters.append(StateDataReporter(logfile_p, nsteps, step=True, temperature=True))
-
-            write_trj_flag = ( last_step % ntrj == 0 )
-            if write_trj_flag :
-                do_append = os.path.exists(dcdfile)
-                simulation.reporters.append(DCDReporter(dcdfile, nsteps, append = do_append))
-        elif command == "RUN":
-            readySignal.clear()
-            runningSignal.set()
-
-            simulation.step(nsteps)
-
-            nsteps_current += nsteps
-            
-            if write_out_flag:
-                pot_energy = (integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
-                bind_energy = (integrator.getBindE()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
-                if outfile_p:
-                    outfile_p.write("%f %f %f %f %f %f %f %f\n" % (lmbd, lmbd1, lmbd2, alpha*kilocalorie_per_mole, u0/kilocalorie_per_mole, w0/kilocalorie_per_mole, pot_energy, bind_energy))
-                    outfile_p.close()
-                    outfile_p = None
-                if logfile_p:
-                    logfile_p.flush()
-
-            simulation.reporters = [] #reset reporters
-            
-            runningSignal.clear()
-            readySignal.set()
-        elif command == "GETENERGY":
-            bind_energy = (integrator.getBindE()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
-            pot_energy = (integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
-            outq.put(bind_energy)
-            outq.put(pot_energy)
-        elif command == "GETPOSVEL":
-            state = context.getState(getPositions=True, getVelocities=True)
-            positions = state.getPositions()
-            velocities = state.getVelocities()
-            outq.put(positions)
-            outq.put(velocities)
-        elif command == "FINISH":
-            if outfile_p:
-                outfile_p.close()
-            while not self.inq.empty():
-                self.inq.get()
-            while not self.cmdq.empty():
-                self.cmdq.get()
-            self.outq.close()
-            self._cmdq.close()
-            break
-        else:
-            #unknown command, do nothing, clear queues
-            while not self.inq.empty():
-                self.inq.get()
-            while not self.cmdq.empty():
-                self.cmdq.get()
-
-    startedSignal.clear()
-    readySignal.clear()
-
-        
 class OpenCLContext(object):
     # Context to run a SDM replica in a process controlling one OpenCL device
     def __init__(self, basename, platform_id, device_id, keywords):
@@ -263,35 +28,37 @@ class OpenCLContext(object):
         self._outq = Queue()
         self.platformId = platform_id
         self.deviceId = device_id
-        self._p = Process(target=openmm_worker, args=(self._cmdq,self._outq,self._inq, self._startedSignal, self._readySignal, self._runningSignal, basename, platform_id, device_id, keywords))
+        self.basename = basename
+        self.keywords = keywords
+        self._p = Process(target=self.openmm_worker)
+        #, args=(self._cmdq,self._outq,self._inq, self._startedSignal, self._readySignal, self._runningSignal, basename, platform_id, device_id, keywords))
         self._p.daemon = True
         signal.signal(signal.SIGINT, s) #restore signal before start() of children
         self._p.start()
-    def set_state(self, lmbd, lmbd1, lmbd2, alpha, u0, w0):
-        self.lmbd = float(lmbd)
-        self.lmbd1 = float(lmbd1)
-        self.lmbd2 = float(lmbd2)
-        self.alpha = float(alpha)/kilocalorie_per_mole
-        self.u0 = float(u0) * kilocalorie_per_mole
-        self.w0 = float(w0) * kilocalorie_per_mole
-        self._startedSignal.wait()
+
+    # set the state of the worker
+    def set_state_values(self, par):
+        # can override in child class
+        self.temperature = float(par[0])
+        self._inq.put(self.temperature)
+    def set_state(self, par):
         self._readySignal.wait()
         self._cmdq.put("SETSTATE")
-        self._inq.put(self.lmbd)
-        self._inq.put(self.lmbd1)
-        self._inq.put(self.lmbd2)
-        self._inq.put(self.alpha)
-        self._inq.put(self.u0)
-        self._inq.put(self.w0)
+        self.set_state_values(par)
 
+    # get energies from the worker
+    def get_energy_values(self):
+        # can override in child class
+        pot_energy = self._outq.get()
+        return (pot_energy)
     def get_energy(self):
         self._startedSignal.wait()
         self._readySignal.wait()
         self._cmdq.put("GETENERGY")
-        bind_energy = self._outq.get()
-        pot_energy = self._outq.get()
-        return (bind_energy, pot_energy)
-        
+        pot = self.get_energy_values()
+        return pot
+    
+    # set positions and velocities of worker
     def set_posvel(self, positions, velocities):
         self._startedSignal.wait()
         self._readySignal.wait()
@@ -299,6 +66,7 @@ class OpenCLContext(object):
         self._inq.put(positions)
         self._inq.put(velocities)
 
+    # get positions and velocities from worker
     def get_posvel(self):
         self._startedSignal.wait()
         self._readySignal.wait()
@@ -307,6 +75,7 @@ class OpenCLContext(object):
         self.velocities = self._outq.get()
         return (self.positions, self.velocities)
 
+    # sets the reporters of the worker
     def set_reporters(self, current_steps, outfile, logfile, dcdfile):
         self._startedSignal.wait()
         self._readySignal.wait()
@@ -316,6 +85,7 @@ class OpenCLContext(object):
         self._inq.put(logfile)
         self._inq.put(dcdfile)
 
+    # kills worker
     def finish(self):
         self._startedSignal.wait()
         self._readySignal.wait()
@@ -326,118 +96,269 @@ class OpenCLContext(object):
         self._cmdq.close()
         self._p.terminate()
         self._p.join(10) #10s time-out
-
+        self._p.exitcode
+        
+    # is worker running?
     def is_running(self):
         return self._runningSignal.is_set()
 
+    # is worker started?
     def is_started(self):
         return self._startedSignal.is_set()
 
+    # starts execution loop if the worker
     def run(self):
         self._startedSignal.wait()
         self._readySignal.wait()
         self._cmdq.put("RUN")
-        
 
-class SDMReplica(object):
+    #
+    # routine being multi-processed (worker)
+    # default is temperature replica exchange (MD at constant temperature)
+    #
+    
+    def _worker_setstate_fromqueue(self):
+        # can override in child class
+        temperature = self._inq.get()
+        self.integrator.setTemperature(temperature)
+        self.par = [temperature]
+    
+    def _worker_writeoutfile(self):
+        pot_energy = (self.integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
+        temperature = self.par[0]
+        if self.outfile_p:
+            self.outfile_p.write("%f %f\n" % (temperature, pot_energy))
+
+    def _worker_getenergy(self):                       
+        pot_energy = (self.integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
+        self._outq.put(pot_energy)
+        self.pot = [pot_energy]
+
+    def _openmm_worker_body(self):    
+        input_dms_file  = '%s_0.dms' % self.basename 
+        self.dms = DesmondDMSFile([input_dms_file]) 
+        self.topology = self.dms.topology
+        implicitsolvent = str(self.keywords.get('IMPLICITSOLVENT'))
+        if implicitsolvent is None:
+            self.system = self.dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = None)
+        elif implicitsolvent == 'AGBNP':
+            self.system = self.dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = 'AGBNP')
+        else:
+            print('Unknown implicit solvent %s' % implicitsolvent)
+            sys.exit(1)
+
+        temperature = 300 * kelvin #will be overridden by set_state()
+        frictionCoeff = float(self.keywords.get('FRICTION_COEFF')) / picosecond
+        MDstepsize = float(self.keywords.get('TIME_STEP')) * picosecond
+        self.integrator = LangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond)
+
+    def openmm_worker(self):
+        self._startedSignal.clear()
+        self._readySignal.clear()
+        self._runningSignal.clear()
+
+        self._openmm_worker_body()
+
+        self.platform_properties = {}
+        self.platform = Platform.getPlatformByName('OpenCL')
+        self.platform_properties["OpenCLPlatformIndex"] = str(self.platformId)
+        self.platform_properties["DeviceIndex"] = str(self.deviceId)
+    
+        self.simulation = Simulation(self.topology, self.system, self.integrator, self.platform, self.platform_properties)
+        self.context = self.simulation.context
+        self.nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
+        self.nprnt = int(self.keywords.get('PRNT_FREQUENCY'))
+        self.ntrj = int(self.keywords.get('TRJ_FREQUENCY'))
+        if not self.nprnt % self.nsteps == 0:
+            print("nprnt must be an integer multiple of nsteps.")
+            return
+        if not self.ntrj % self.nsteps == 0:
+            print("ntrj must be an integer multiple of nsteps.")
+            return
+        self.simulation.reporters = []
+
+        self.nsteps_current = 0
+        self.outfile = None
+        self.logfile = None
+        self.dcdfile = None
+        self.outfile_p = None
+        self.logfile_p = None
+
+        self.par = None
+        self.pot = None
+    
+        self.positions = None
+        self.velocities = None
+
+        self.command = None
+
+        write_out_flag = False
+        write_trj_flag = False
+    
+        #start event loop
+        self._startedSignal.set()
+        self._readySignal.set()
+        while(True):
+            while(self._cmdq.empty()):
+                time.sleep(0.1)
+            command = self._cmdq.get()
+            if command == "SETSTATE":
+                self._worker_setstate_fromqueue()
+            elif command == "SETPOSVEL":
+                self.positions = self._inq.get()
+                self.velocities = self._inq.get()
+                self.context.setPositions(self.positions)
+                self.context.setVelocities(self.velocities)
+            elif command == "SETREPORTERS":
+                replica_steps = self._inq.get()
+                last_step = replica_steps + self.nsteps
+                outfile = self._inq.get()
+                logfile = self._inq.get()
+                dcdfile = self._inq.get()
+                self.simulation.reporters = []
+                write_out_flag = ( last_step % self.nprnt == 0 )
+                if last_step % self.nprnt == 0:
+                    if self.outfile_p != None:
+                        self.outfile_p.close()
+                    self.outfile_p = open(outfile, 'a+')
+                    if self.logfile_p != None:
+                        self.logfile_p.close()
+                    self.logfile_p = open(logfile, 'a+')
+                    self.simulation.reporters.append(StateDataReporter(self.logfile_p, self.nsteps, step=True, temperature=True))
+
+                    write_trj_flag = ( last_step % self.ntrj == 0 )
+                    if write_trj_flag :
+                        do_append = os.path.exists(dcdfile)
+                        self.simulation.reporters.append(DCDReporter(dcdfile, self.nsteps, append = do_append))
+            elif command == "RUN":
+                self._readySignal.clear()
+                self._runningSignal.set()
+
+                self.simulation.step(self.nsteps)
+
+                self.nsteps_current += self.nsteps
+            
+                if write_out_flag:
+                    self._worker_writeoutfile()
+                    if self.outfile_p:
+                        self.outfile_p.close()
+                        self.outfile_p = None
+                    if self.logfile_p:
+                        self.logfile_p.flush()
+
+                self.simulation.reporters = [] #reset reporters
+            
+                self._runningSignal.clear()
+                self._readySignal.set()
+            elif command == "GETENERGY":
+                pot = self._worker_getenergy()
+            elif command == "GETPOSVEL":
+                state = self.context.getState(getPositions=True, getVelocities=True)
+                self.positions = state.getPositions()
+                self.velocities = state.getVelocities()
+                self._outq.put(self.positions)
+                self._outq.put(self.velocities)
+            elif command == "FINISH":
+                if self.outfile_p:
+                    self.outfile_p.close()
+                while not self._inq.empty():
+                    self._inq.get()
+                while not self._cmdq.empty():
+                    self._cmdq.get()
+                self._outq.close()
+                self._cmdq.close()
+                break
+            else:
+                #unknown command, do nothing, clear queues
+                while not self.inq.empty():
+                    self._inq.get()
+                while not self.cmdq.empty():
+                    self._cmdq.get()
+
+        startedSignal.clear()
+        readySignal.clear()
+        
+class OMMReplica(object):
     #
     # Holds and manages OpenMM system for a replica
     #
     def __init__(self, replica_id, basename):
         self._id = replica_id
         self.basename = basename
-        
-        rcptfile_input  = '%s_rcpt_0.dms' % basename 
-        ligfile_input   = '%s_lig_0.dms'  % basename
 
-        if not os.path.isdir('r%d' % replica_id):
-            os.mkdir('r%d' % replica_id)
-
-        ligfile_output  = 'r%d/%s_lig_ckp.dms' % (replica_id,basename)
-        if not os.path.isfile(ligfile_output):
-            shutil.copyfile(ligfile_input, ligfile_output)
-
-        rcptfile_output = 'r%d/%s_rcpt_ckp.dms' % (replica_id,basename)
-        if not os.path.isfile(rcptfile_output):
-            shutil.copyfile(rcptfile_input, rcptfile_output)
-
-        self.dms = DesmondDMSFile([ligfile_output, rcptfile_output]) 
-
-        self.positions = copy.deepcopy(self.dms.positions)
-        self.velocities = copy.deepcopy(self.dms.velocities)
-
-        self.sql_conn_lig = self.dms._conn[0]
-        self.sql_conn_rcpt = self.dms._conn[1]
-
-        self.bind_energy = None
-        self.pot_energy = None
+        self.pot = None
+        self.par = None
         self.is_energy_assigned = False
-        self.temperature = None
-        self.lmbd =  None
-        self.lambda1 =  None
-        self.lambda2 =  None
-        self.alpha = None
-        self.u0 = None
-        self.w0coeff = None
+        self.is_state_assigned = False
         self.cycle = 0
         self.stateid = None
         self.mdsteps = 0
-        self.is_state_assigned = False
         
-        # check for sdm_data table in lig dms
-        tables = self.dms._tables[0]
-        conn = self.sql_conn_lig
-        if 'sdm_data' in tables:
-            # read sdm_data table
-            q = """SELECT binde,epot,temperature,lambda,lambda1,lambda2,alpha,u0,w0,cycle,stateid,mdsteps FROM sdm_data WHERE id = 1"""
-            ans = conn.execute(q)
-            for (binde,epot,temperature,lmbd,lambda1,lambda2,alpha,u0,w0,cycle,stateid,mdsteps) in conn.execute(q):
-                self.bind_energy = binde
-                self.pot_energy = epot
-                self.temperature = temperature
-                self.lmbd =  lmbd
-                self.lambda1 =  lambda1
-                self.lambda2 =  lambda2
-                self.alpha = alpha
-                self.u0 = u0
-                self.w0coeff = w0
-                self.cycle = cycle
-                self.stateid = stateid
-                self.mdsteps = mdsteps
-        else:
-            #create sdm_data table with dummy values
-            conn.execute("CREATE TABLE IF NOT EXISTS sdm_data (id INTEGER PRIMARY KEY, binde REAL, epot REAL, temperature REAL, lambda REAL, lambda1 REAL, lambda2 REAL, alpha REAL, u0 REAL, w0 REAL, cycle INTEGER, stateid INTEGER, mdsteps INTEGER )")
-            conn.execute("INSERT INTO sdm_data (binde,epot,temperature,lambda,lambda1,lambda2,alpha,u0,w0,cycle,stateid,mdsteps) VALUES (0,0,0,0,0,0,0,0,0,0,0,0)")
-            conn.commit()
-            self.dms._tables[0] = self.dms._readSchemas(conn)
+        self.open_dms()
+        
+        self.positions = copy.deepcopy(self.dms.positions)
+        self.velocities = copy.deepcopy(self.dms.velocities)        
 
-    def set_state(self, stateid, lmbd, lmbd1, lmbd2, alpha, u0, w0):
+
+    def set_state(self, stateid, par):
         self.stateid = int(stateid)
-        self.lmbd = float(lmbd)
-        self.lambda1 = float(lmbd1)
-        self.lambda2 = float(lmbd2)
-        self.alpha = float(alpha)
-        self.u0 = float(u0)
-        self.w0coeff = float(w0)
-        self.temperature = 300. #not implemented
+        self.par = par
         self.is_state_assigned = True
         
     def get_state(self):
-        return (self.bind_energy, self.pot_energy, self.stateid, self.lmbd, self.lambda1, self.lambda2, self.alpha, self.u0, self.w0coeff )
+        return (self.stateid, self.par)
 
-    def set_energy(self, bind_energy, pot_energy):
-        self.bind_energy = bind_energy
-        self.pot_energy = pot_energy
+    def get_energy(self):
+        return self.pot
+
+    def set_energy(self, pot):
+        self.pot = pot
         self.is_energy_assigned = True
         
     def set_posvel(self, positions, velocities):
         self.positions = positions
         self.velocities = velocities
 
+    def open_dms(self):
+        input_file  = '%s_0.dms' % self.basename 
+
+        if not os.path.isdir('r%d' % self._id):
+            os.mkdir('r%d' % self._id)
+
+        output_file  = 'r%d/%s_ckp.dms' % (self._id,self.basename)
+        if not os.path.isfile(output_file):
+            shutil.copyfile(input_file, output_file)
+
+        self.dms = DesmondDMSFile([output_file]) 
+
+        self.sql_conn = self.dms._conn[0]
+                
+        # check for tre_data table in dms file
+        tables = self.dms._tables[0]
+        conn = self.sql_conn
+        if 'tre_data' in tables:
+            # read tre_data table
+            q = """SELECT epot,temperature,cycle,stateid,mdsteps FROM tre_data WHERE id = 1"""
+            ans = conn.execute(q)
+            for (epot,temperature,cycle,stateid,mdsteps) in conn.execute(q):
+                self.pot = (epot)
+                self.par = (temperature)
+                self.cycle = cycle
+                self.stateid = stateid
+                self.mdsteps = mdsteps
+        else:
+            #create tre_data table with dummy values
+            conn.execute("CREATE TABLE IF NOT EXISTS tre_data (id INTEGER PRIMARY KEY, epot REAL, temperature REAL, cycle INTEGER, stateid INTEGER, mdsteps INTEGER )")
+            conn.execute("INSERT INTO tre_data (epot,temperature,cycle,stateid,mdsteps) VALUES (0,0,0,0,0)")
+            conn.commit()
+            self.dms._tables[0] = self.dms._readSchemas(conn)
+
     def save_dms(self):
         if self.is_state_assigned and self.is_energy_assigned:
-            conn = self.sql_conn_lig
-            conn.execute("UPDATE sdm_data SET binde = %f, epot = %f, temperature = %f, lambda = %f, lambda1 = %f, lambda2 = %f, alpha = %f, u0 = %f, w0 = %f, cycle = %d, stateid = %d, mdsteps = %d WHERE id = 1" % (self.bind_energy, self.pot_energy, self.temperature, self.lmbd, self.lambda1, self.lambda2, self.alpha, self.u0, self.w0coeff, self.cycle, self.stateid, self.mdsteps))
+            conn = self.sql_conn
+            pot_energy =  float(self.pot[0])            
+            temperature = float(self.par[0])
+            conn.execute("UPDATE tre_data SET epot = %f, temperature = %f, cycle = %d, stateid = %d, mdsteps = %d WHERE id = 1" % (pot_energy, temperature, self.cycle, self.stateid, self.mdsteps))
             conn.commit()
             self.dms.setPositions(self.positions)
             self.dms.setVelocities(self.velocities)
@@ -450,9 +371,13 @@ class SDMReplica(object):
 
     def set_cycle(self, cycle):
         self.cycle = cycle
-
+        
     def get_cycle(self):
         return self.cycle
+
+    def get_stateid(self):
+        print(self.stateid)
+        return self.stateid
 
 class LocalOpenMMTransport(Transport):
     """
@@ -534,7 +459,8 @@ class LocalOpenMMTransport(Transport):
         return self.jobqueue.qsize()
 
     def LaunchReplica(self, sdm_context, replica, cycle):
-        sdm_context.set_state(replica.lmbd, replica.lambda1, replica.lambda2, replica.alpha, replica.u0, replica.w0coeff)
+        (stateid, par) = replica.get_state()
+        sdm_context.set_state(par)
         sdm_context.set_posvel(replica.positions, replica.velocities)
         
         #out_file     = 'r%d/%s_%d.out' % (replica._id,replica.basename,cycle)
@@ -639,8 +565,8 @@ class LocalOpenMMTransport(Transport):
                 (pos,vel) = job['openmm_context'].get_posvel()
                 ommreplica.set_posvel(pos,vel)
                 #update energies of openmm replica
-                (bind_energy, pot_energy ) = job['openmm_context'].get_energy()
-                ommreplica.set_energy(bind_energy, pot_energy)
+                pot = job['openmm_context'].get_energy()
+                ommreplica.set_energy(pot)
                 #flag replica as not linked to a job
                 self.replica_to_job[replica] = None
 

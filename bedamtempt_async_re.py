@@ -3,10 +3,229 @@ import time
 import math
 import random
 import logging
+import signal
+import shutil
+
+from simtk import openmm as mm
+from simtk.openmm.app import *
+from simtk.openmm import *
+from simtk.unit import *
+from simtk.openmm.app.desmonddmsfile import *
+from datetime import datetime
+from SDMplugin import *
+
 from async_re import async_re
 from bedam_async_re import bedam_async_re_job
+from local_openmm_transport import OpenCLContext
+from local_openmm_transport import OMMReplica
 
+# OpenMM context overrides for alchemical SDM
+class OpenCLContextSDM(OpenCLContext):
+    def set_state_values(self, par):
+        self.temperature = float(par[0])
+        self.lmbd = float(par[1])
+        self.lmbd1 = float(par[2])
+        self.lmbd2 = float(par[3])
+        self.alpha = float(par[4])/kilocalorie_per_mole
+        self.u0 = float(par[5]) * kilocalorie_per_mole
+        self.w0 = float(par[6]) * kilocalorie_per_mole
+        self._inq.put(self.temperature)
+        self._inq.put(self.lmbd)
+        self._inq.put(self.lmbd1)
+        self._inq.put(self.lmbd2)
+        self._inq.put(self.alpha)
+        self._inq.put(self.u0)
+        self._inq.put(self.w0)
 
+    def get_energy_values(self):
+        pot_energy = self._outq.get()
+        bind_energy = self._outq.get()
+        return (pot_energy, bind_energy)
+
+    def _worker_setstate_fromqueue(self):
+        temperature = self._inq.get()
+        lmbd =  self._inq.get()
+        lmbd1 = self._inq.get()
+        lmbd2 = self._inq.get()
+        alpha = self._inq.get()
+        u0 = self._inq.get()
+        w0 = self._inq.get()
+        self.integrator.setTemperature(temperature)
+        self.integrator.setLambda(lmbd)
+        self.integrator.setLambda1(lmbd1)
+        self.integrator.setLambda2(lmbd2)
+        self.integrator.setAlpha(alpha*kilojoule_per_mole)
+        self.integrator.setU0(u0/ kilojoule_per_mole)
+        self.integrator.setW0coeff(w0 / kilojoule_per_mole)
+        self.par = [temperature, lmbd, lmbd1, lmbd2, alpha, u0, w0]
+
+    def _worker_writeoutfile(self):
+        pot_energy = (self.integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
+        bind_energy = (self.integrator.getBindE()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
+        temperature = self.par[0]
+        lmbd = self.par[1]
+        lmbd1 = self.par[2]
+        lmbd2 = self.par[3]
+        alpha = self.par[4]
+        u0 = self.par[5]
+        w0 = self.par[6]
+        if self.outfile_p:
+            self.outfile_p.write("%f %f %f %f %f %f %f %f\n" % (lmbd, lmbd1, lmbd2, alpha*kilocalorie_per_mole, u0/kilocalorie_per_mole, w0/kilocalorie_per_mole, pot_energy, bind_energy))
+
+    def _worker_getenergy(self):                       
+        bind_energy = (self.integrator.getBindE()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
+        pot_energy = (self.integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
+        self._outq.put(pot_energy)
+        self._outq.put(bind_energy)
+        self.pot = (pot_energy, bind_energy)
+
+    def  _openmm_worker_body(self):
+        
+        rcptfile_input  = '%s_rcpt_0.dms' % self.basename 
+        ligfile_input   = '%s_lig_0.dms'  % self.basename
+        
+        self.dms = DesmondDMSFile([ligfile_input, rcptfile_input]) 
+        self.topology = self.dms.topology
+    
+        implicitsolvent = str(self.keywords.get('IMPLICITSOLVENT'))
+        if implicitsolvent is None:
+            self.system = self.dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = None)
+        elif implicitsolvent == 'AGBNP':
+            self.system = self.dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = 'AGBNP')
+        else:
+            print('Unknown implicit solvent %s' % implicitsolvent)
+            sys.exit(1)
+
+        natoms_ligand = int(self.keywords.get('NATOMS_LIGAND'))
+        lig_atoms = range(natoms_ligand)
+        # atom indexes here refer to indexes in either lig or rcpt dms file, rather than in the complex 
+        #lig_atom_restr = [0, 1, 2, 3, 4, 5]   #indexes of ligand atoms for CM-CM Vsite restraint
+
+        cm_lig_atoms = self.keywords.get('REST_LIGAND_CMLIG_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
+        #convert the string of lig atoms to integer
+        lig_atom_restr = [int(i) for i in cm_lig_atoms]
+        #rcpt_atom_restr = [121, 210, 281, 325, 406, 527, 640, 650, 795, 976, 1276]   #indexes of rcpt atoms for CM-CM Vsite restraint
+        
+        cm_rcpt_atoms = self.keywords.get('REST_LIGAND_CMREC_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
+        #convert the string of receptor rcpt atoms to integer
+        rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
+
+        cmkf = float(self.keywords.get('CM_KF'))
+        kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
+        cmtol = float(self.keywords.get('CM_TOL'))
+        r0 = cmtol * angstrom #radius of Vsite sphere
+    
+        #these can be 'None" if not using orientational restraints
+        lig_ref_atoms = None # the 3 atoms of the ligand that define the coordinate system of the ligand
+        rcpt_ref_atoms = None # the 3 atoms of the receptor that define the coordinate system of the receptor
+        angle_center = None * degrees
+        kfangle = None * kilocalorie_per_mole/degrees**2
+        angletol = None * degrees
+        dihedral1center = None * degrees
+        kfdihedral1 = None * kilocalorie_per_mole/degrees**2
+        dihedral1tol = None * degrees
+        dihedral2center = None * degrees
+        kfdihedral2 = None * kilocalorie_per_mole/degrees**2
+        dihedral2tol = None * degrees
+    
+        #transform indexes of receptor atoms
+        for i in range(len(rcpt_atom_restr)):
+            rcpt_atom_restr[i] += natoms_ligand
+            if rcpt_ref_atoms:
+                for i in range(len(rcpt_ref_atoms)):
+                    rcpt_ref_atoms[i] += natoms_ligand
+
+        sdm_utils = SDMUtils(self.system, lig_atoms)
+        sdm_utils.addRestraintForce(lig_cm_particles = lig_atom_restr,
+                                    rcpt_cm_particles = rcpt_atom_restr,
+                                    kfcm = kf,
+                                    tolcm = r0,
+                                    lig_ref_particles = lig_ref_atoms,
+                                    rcpt_ref_particles = rcpt_ref_atoms,
+                                    angle_center = angle_center,
+                                    kfangle = kfangle,
+                                    angletol = angletol,
+                                    dihedral1center = dihedral1center,
+                                    kfdihedral1 = kfdihedral1,
+                                    dihedral1tol = dihedral1tol,
+                                    dihedral2center = dihedral2center,
+                                    kfdihedral2 = kfdihedral2,
+                                    dihedral2tol = dihedral2tol)
+    
+        # the integrator object is context-specific
+        #temperature = int(self.keywords.get('TEMPERATURES')) * kelvin
+        temperature = 300 * kelvin #will be overriden in set_state()
+        frictionCoeff = float(self.keywords.get('FRICTION_COEFF')) / picosecond
+        MDstepsize = float(self.keywords.get('TIME_STEP')) * picosecond
+        umsc = float(self.keywords.get('UMAX')) * kilocalorie_per_mole
+        acore = float(self.keywords.get('ACORE'))
+        self.integrator = LangevinIntegratorSDM(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, lig_atoms)
+        self.integrator.setBiasMethod(sdm_utils.ILogisticMethod)
+        self.integrator.setSoftCoreMethod(sdm_utils.RationalSoftCoreMethod)
+        self.integrator.setUmax(umsc / kilojoule_per_mole)
+        self.integrator.setAcore(acore)
+
+class SDMReplica(OMMReplica):
+    #overrides to open dms file for SDM-RE
+    def open_dms(self):
+        rcptfile_input  = '%s_rcpt_0.dms' % self.basename 
+        ligfile_input   = '%s_lig_0.dms'  % self.basename
+
+        if not os.path.isdir('r%d' % self._id):
+            os.mkdir('r%d' % self._id)
+
+        ligfile_output  = 'r%d/%s_lig_ckp.dms' % (self._id,self.basename)
+        if not os.path.isfile(ligfile_output):
+            shutil.copyfile(ligfile_input, ligfile_output)
+
+        rcptfile_output = 'r%d/%s_rcpt_ckp.dms' % (self._id,self.basename)
+        if not os.path.isfile(rcptfile_output):
+            shutil.copyfile(rcptfile_input, rcptfile_output)
+
+        self.dms = DesmondDMSFile([ligfile_output, rcptfile_output]) 
+
+        self.sql_conn_lig = self.dms._conn[0]
+        self.sql_conn_rcpt = self.dms._conn[1]
+                
+        # check for sdm_data table in lig dms
+        tables = self.dms._tables[0]
+        conn = self.sql_conn_lig
+        if 'sdm_data' in tables:
+            # read sdm_data table
+            q = """SELECT binde,epot,temperature,lambda,lambda1,lambda2,alpha,u0,w0,cycle,stateid,mdsteps FROM sdm_data WHERE id = 1"""
+            ans = conn.execute(q)
+            for (binde,epot,temperature,lmbd,lambda1,lambda2,alpha,u0,w0,cycle,stateid,mdsteps) in conn.execute(q):
+                self.pot = (epot, binde)
+                self.par = (temperature, lmbd, lambda1, lambda2, alpha, u0, w0)
+                self.cycle = cycle
+                self.stateid = stateid
+                self.mdsteps = mdsteps
+        else:
+            #create sdm_data table with dummy values
+            conn.execute("CREATE TABLE IF NOT EXISTS sdm_data (id INTEGER PRIMARY KEY, binde REAL, epot REAL, temperature REAL, lambda REAL, lambda1 REAL, lambda2 REAL, alpha REAL, u0 REAL, w0 REAL, cycle INTEGER, stateid INTEGER, mdsteps INTEGER )")
+            conn.execute("INSERT INTO sdm_data (binde,epot,temperature,lambda,lambda1,lambda2,alpha,u0,w0,cycle,stateid,mdsteps) VALUES (0,0,0,0,0,0,0,0,0,0,0,0)")
+            conn.commit()
+            self.dms._tables[0] = self.dms._readSchemas(conn)
+
+    def save_dms(self):
+        if self.is_state_assigned and self.is_energy_assigned:
+            conn = self.sql_conn_lig
+
+            pot_energy =  float(self.pot[0])
+            bind_energy = float(self.pot[1])
+            
+            temperature = float(self.par[0])
+            lmbd =        float(self.par[1])
+            lambda1 =     float(self.par[2])
+            lambda2 =     float(self.par[3])
+            alpha =       float(self.par[4])
+            u0 =          float(self.par[5])
+            w0coeff =     float(self.par[6])
+            
+            conn.execute("UPDATE sdm_data SET binde = %f, epot = %f, temperature = %f, lambda = %f, lambda1 = %f, lambda2 = %f, alpha = %f, u0 = %f, w0 = %f, cycle = %d, stateid = %d, mdsteps = %d WHERE id = 1" % (bind_energy, pot_energy, temperature, lmbd, lambda1, lambda2, alpha, u0, w0coeff, self.cycle, self.stateid, self.mdsteps))
+            conn.commit()
+            self.dms.setPositions(self.positions)
+            self.dms.setVelocities(self.velocities)
 
 class bedamtempt_async_re_job(bedam_async_re_job):
     def _setLogger(self):
@@ -244,7 +463,20 @@ class bedamtempt_async_re_job(bedam_async_re_job):
             works only for iLog potential
             """
             replica = self.openmm_replicas[repl]
-            (bind_energy, pot_energy, stateid, lmbd, lambda1, lambda2, alpha, u0, w0 ) = replica.get_state()
+            (stateid, par) = replica.get_state()
+            pot = replica.get_energy()
+
+            pot_energy =  pot[0]
+            bind_energy = pot[1]
+            
+            temperature = par[0]
+            lmbd =        par[1]
+            lambda1 =     par[2]
+            lambda2 =     par[3]
+            alpha =       par[4]
+            u0 =          par[5]
+            w0 =          par[6]
+
             if bind_energy == None:
                 msg = "Error retrieving state for replica %d" % repl
                 self._exit(msg)
@@ -434,6 +666,153 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         else:
             return None
 
+    def checkpointJob(self):
+        if self.transport_mechanism == "LOCAL_OPENMM":
+            #disable ctrl-c
+            s = signal.signal(signal.SIGINT, signal.SIG_IGN)
+            # update replica objects of waiting replicas
+            for repl in [k for k in range(self.nreplicas)
+                    if self.status[k]['running_status'] == 'W']:
+                stateid = self.status[repl]['stateid_current']
+                lambd = self.stateparams[stateid]['lambda']
+                temperature = self.stateparams[stateid]['temperature']
+                lambda1 = self.stateparams[stateid]['lambda1']
+                lambda2 = self.stateparams[stateid]['lambda2']
+                alpha = self.stateparams[stateid]['alpha']
+                u0 = self.stateparams[stateid]['u0']
+                w0 = self.stateparams[stateid]['w0coeff']
+                par = [temperature, lambd, lambda1, lambda2, alpha, u0, w0]
+                self.openmm_replicas[repl].set_state(stateid, par)
+            for replica in self.openmm_replicas:
+                replica.save_dms()
+            signal.signal(signal.SIGINT, s)
+
+    #override for creating SDM versions of the contexts
+    def CreateOpenCLContext(self,basename, platform_id = None, device_id = None):
+        return OpenCLContextSDM(basename, platform_id, device_id, self.keywords)
+
+    #override for creating SDM versions of the replicas
+    def CreateReplica(self, repl_id, basename):
+        return SDMReplica(repl_id, basename)
+    
+    #override for launching an SDM replica
+    def _launchReplica(self,replica,cycle): 
+        """
+        Launches a SDM OpenMM sub-job
+        """
+        input_file = "%s_%d.py" % (self.basename, cycle)
+        log_file = "%s_%d.log" % (self.basename, cycle)
+        err_file = "%s_%d.err" % (self.basename, cycle)
+        
+        if self.transport_mechanism == "SSH":
+	    rstfile_rcpt_p = "%s_rcpt_%d.dms" % (self.basename,cycle-1)
+	    rstfile_lig_p = "%s_lig_%d.dms" % (self.basename,cycle-1)
+            local_working_directory = os.getcwd() + "/r" + str(replica)
+            remote_replica_dir = "%s_r%d_c%d" % (self.basename, replica, cycle)
+            executable = "./runopenmm" #edit 10.20
+
+            job_info = {
+                "executable": executable,
+                "input_file": input_file,
+                "output_file": log_file,
+                "error_file": err_file,
+                "working_directory": local_working_directory,
+                "remote_replica_dir": remote_replica_dir,
+                "job_input_files": None,
+                "job_output_files": None,
+                "exec_directory": None}
+
+            # detect which kind of architecture the node use, then choosing
+            # different library files and binary files in different lib and bin
+            # folders
+            if self.keywords.get('EXEC_DIRECTORY'):
+                exec_directory = self.keywords.get('EXEC_DIRECTORY')
+            else:
+                exec_directory = os.getcwd()
+
+            job_info["exec_directory"]=exec_directory
+
+            job_input_files = []
+            job_input_files.append(input_file)
+            if rstfile_rcpt_p and rstfile_lig_p:
+                job_input_files.append(rstfile_rcpt_p) #edit 10.16
+	    	job_input_files.append(rstfile_lig_p) #edit 10.16
+            for filename in self.extfiles:
+                job_input_files.append(filename)
+
+
+            job_output_files = []
+            job_output_files.append(log_file)
+            job_output_files.append(err_file)
+            output_file = "%s_%d.out" % (self.basename, cycle)
+
+            if self.keywords.get('RE_TYPE') == 'TEMPT':
+                dmsfile = "%s_%d.dms" % (self.basename, cycle)
+            elif self.keywords.get('RE_TYPE') == 'BEDAMTEMPT':
+                rcptfile="%s_rcpt_%d.dms" % (self.basename,cycle)
+                ligfile="%s_lig_%d.dms" % (self.basename,cycle)
+                pdbfile="%s_%d.pdb" % (self.basename,cycle)
+                dcdfile="%s_%d.dcd" % (self.basename,cycle)
+                
+            job_output_files.append(output_file)
+
+            if self.keywords.get('RE_TYPE') == 'TEMPT':
+                job_output_files.append(dmsfile)
+            elif self.keywords.get('RE_TYPE') == 'BEDAMTEMPT':
+                job_output_files.append(rcptfile)
+                job_output_files.append(ligfile)
+                job_output_files.append(pdbfile)
+                job_output_files.append(dcdfile)
+                
+            job_info["job_input_files"] = job_input_files;
+            job_info["job_output_files"] = job_output_files;
+
+        elif self.transport_mechanism == "LOCAL_OPENMM":
+            
+            stateid = self.status[replica]['stateid_current']
+            lambd = self.stateparams[stateid]['lambda']
+            temperature = self.stateparams[stateid]['temperature']
+            lambda1 = self.stateparams[stateid]['lambda1']
+            lambda2 = self.stateparams[stateid]['lambda2']
+            alpha = self.stateparams[stateid]['alpha']
+            u0 = self.stateparams[stateid]['u0']
+            w0 = self.stateparams[stateid]['w0coeff']
+            par = [temperature, lambd, lambda1, lambda2, alpha, u0, w0]
+            self.openmm_replicas[replica].set_state(stateid, par)
+            nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
+            job_info = {
+                "cycle": cycle,
+                "nsteps": nsteps
+            }
+            
+        else: #local with runopenmm?
+            executable = os.getcwd() + "/runopenmm" #edit on 10.19
+            working_directory = os.getcwd() + "/r" + str(replica)
+            job_info = {"executable": executable,
+                        "input_file": input_file,
+                        "output_file": log_file,
+                        "error_file": err_file,
+                        "working_directory": working_directory,
+                        "cycle": cycle}
+            #delete failed file if present
+            failed_file = "r%s/%s_%d.failed" % (str(replica),self.basename,cycle)
+            if os.path.exists(failed_file):
+                os.remove(failed_file)
+            
+        if self.keywords.get('VERBOSE') == "yes":
+            msg = "_launchReplica(): Launching %s %s in directory %s cycle %d"
+            if self.transport_mechanism is 'SSH':
+                self.logger.info(msg, executable, input_file, local_working_directory, cycle)
+            elif not self.transport_mechanism is 'LOCAL_OPENMM':
+                self.logger.info(msg, executable, input_file, working_directory, cycle)
+
+        status = self.transport.launchJob(replica, job_info)
+        
+        return status
+
+
+    
+    
 if __name__ == '__main__':
 
     # Parse arguments:

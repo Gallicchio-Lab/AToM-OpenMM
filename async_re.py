@@ -573,6 +573,7 @@ class async_re(object):
                                             replica, this_cycle)
                     self._buildInpFile(replica)
                     self.status[replica]['running_status'] = 'W'
+        self.update_state_of_replica(replica)
 
     def _njobs_to_run(self):
         # size of subjob buffer as a percentage of job slots
@@ -678,6 +679,7 @@ class async_re(object):
                     else :
                         self._exit("unknown exchange method %s" % self.exchangeMethod)
                     if repl_j != repl_i:
+                        # exchange successfull
                         sid_i = self.status[repl_i]['stateid_current']
                         sid_j = self.status[repl_j]['stateid_current']
                         self.status[repl_i]['stateid_current'] = sid_j
@@ -705,7 +707,6 @@ class async_re(object):
                     self.status[repl_i]['stateid_current'] = sid_j
                     self.status[repl_j]['stateid_current'] = sid_i
 
-
         # Uncomment to debug Gibbs sampling:
         # Actual and observed populations of state permutations should match.
         #
@@ -732,7 +733,11 @@ class async_re(object):
             self.logger.debug(line)
             self.logger.debug(fmt, 'Total exchange time', total_time)
 
+    # see tempt and bedamtempt child classes for specific implementations
+    def update_state_of_replica(self, repl):
+        pass
 
+            
 #     def _check_remote_resource(self, resource_url):
 #         """
 #         check if it's a remote resource. Basically see if 'ssh' is present

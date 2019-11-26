@@ -3,6 +3,7 @@ import re
 import random
 import math
 import logging
+import signal
 from async_re import async_re
 
 from simtk import openmm as mm
@@ -35,7 +36,22 @@ class openmm_job(async_re):
             for i in range(self.nreplicas):
                 replica = self.CreateReplica(i, self.basename)
                 self.openmm_replicas.append(replica)
-
+                
+    def checkpointJob(self):
+        if self.transport_mechanism == "LOCAL_OPENMM":
+            #disable ctrl-c
+            s = signal.signal(signal.SIGINT, signal.SIG_IGN)
+            # update replica objects of waiting replicas
+            for repl in [k for k in range(self.nreplicas)
+                    if self.status[k]['running_status'] == 'W']:
+                stateid = self.status[repl]['stateid_current']
+                temperature = self.stateparams[stateid]['temperature']
+                par = [temperature]
+                self.openmm_replicas[repl].set_state(stateid, par)
+            for replica in self.openmm_replicas:
+                replica.save_dms()
+            signal.signal(signal.SIGINT, s)
+            
     def CreateOpenCLContext(self,basename, platform_id = None, device_id = None):
         return OpenCLContext(basename, platform_id, device_id, self.keywords)
 
@@ -105,11 +121,7 @@ class openmm_job(async_re):
             job_output_files.append(dcdfile)
             
         elif self.transport_mechanism == "LOCAL_OPENMM":
-            
-            stateid = self.status[replica]['stateid_current']
-            temperature = self.stateparams[stateid]['temperature']
-            par = (temperature)
-            self.openmm_replicas[replica].set_state(stateid, par)
+
             nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
             job_info = {
                 "cycle": cycle,
@@ -118,6 +130,34 @@ class openmm_job(async_re):
             
         else: #local with runopenmm?
             self._exit("Unknown job transport")
+
+        status = self.transport.launchJob(replica, job_info)
+        
+        return status
+
+    # default behavior for temperature replica exchange
+    def update_state_of_replica(self, repl):
+        if self.transport_mechanism == "LOCAL_OPENMM":
+
+            replica = self.openmm_replicas[repl]
+
+            #retrieve previous state if set
+            (old_stateid, old_par) =  replica.get_state()
+            if old_stateid != None:
+                old_temperature = old_par[0]
+
+            #sets new state
+            stateid = self.status[repl]['stateid_current']
+            temperature = self.stateparams[stateid]['temperature']
+            par = [temperature]
+            replica.set_state(stateid, par)
+
+            #rescale velocities (relevant only if state has changed)
+            if old_stateid != None:
+                if stateid != old_stateid:
+                    scale = math.sqrt(float(temperature)/float(old_temperature))
+                    for i in range(0,len(replica.velocities)):
+                        replica.velocities[i] = scale*replica.velocities[i] 
             
     def _getOpenMMData(self,file):
         """

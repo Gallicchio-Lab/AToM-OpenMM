@@ -17,7 +17,16 @@ from SDMplugin import *
 from transport import Transport
 
 class OpenCLContext(object):
-    # Context to run a SDM replica in a process controlling one OpenCL device
+    # Context to run a T-RE replica in a process controlling one OpenCL device
+    #
+    # The following methods can be overriden to support other replica exchange protocols.
+    # See bedamtempt for an example
+    #  set_state_values()
+    #  get_energy_values()
+    #  _worker_setstate_fromqueue()
+    #  _worker_writeoutfile)
+    #  _worker_getenergy()                       
+    #  _openmm_worker_body()
     def __init__(self, basename, platform_id, device_id, keywords):
         s = signal.signal(signal.SIGINT, signal.SIG_IGN) #so that children do not respond to ctrl-c
         self._startedSignal = Event()
@@ -50,7 +59,7 @@ class OpenCLContext(object):
     def get_energy_values(self):
         # can override in child class
         pot_energy = self._outq.get()
-        return (pot_energy)
+        return [pot_energy]
     def get_energy(self):
         self._startedSignal.wait()
         self._readySignal.wait()
@@ -124,15 +133,15 @@ class OpenCLContext(object):
         self.par = [temperature]
     
     def _worker_writeoutfile(self):
-        pot_energy = (self.integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
+        pot_energy = self.context.getState(getEnergy = True).getPotentialEnergy()/kilocalorie_per_mole
         temperature = self.par[0]
         if self.outfile_p:
             self.outfile_p.write("%f %f\n" % (temperature, pot_energy))
 
     def _worker_getenergy(self):                       
-        pot_energy = (self.integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
+        pot_energy = self.context.getState(getEnergy = True).getPotentialEnergy()/kilocalorie_per_mole
         self._outq.put(pot_energy)
-        self.pot = [pot_energy]
+        self.pot = (pot_energy)
 
     def _openmm_worker_body(self):    
         input_dms_file  = '%s_0.dms' % self.basename 
@@ -163,7 +172,7 @@ class OpenCLContext(object):
         self.platform = Platform.getPlatformByName('OpenCL')
         self.platform_properties["OpenCLPlatformIndex"] = str(self.platformId)
         self.platform_properties["DeviceIndex"] = str(self.deviceId)
-    
+
         self.simulation = Simulation(self.topology, self.system, self.integrator, self.platform, self.platform_properties)
         self.context = self.simulation.context
         self.nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
@@ -341,8 +350,8 @@ class OMMReplica(object):
             q = """SELECT epot,temperature,cycle,stateid,mdsteps FROM tre_data WHERE id = 1"""
             ans = conn.execute(q)
             for (epot,temperature,cycle,stateid,mdsteps) in conn.execute(q):
-                self.pot = (epot)
-                self.par = (temperature)
+                self.pot = [epot]
+                self.par = [temperature]
                 self.cycle = cycle
                 self.stateid = stateid
                 self.mdsteps = mdsteps
@@ -376,7 +385,6 @@ class OMMReplica(object):
         return self.cycle
 
     def get_stateid(self):
-        print(self.stateid)
         return self.stateid
 
 class LocalOpenMMTransport(Transport):

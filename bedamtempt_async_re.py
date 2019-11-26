@@ -70,7 +70,7 @@ class OpenCLContextSDM(OpenCLContext):
         u0 = self.par[5]
         w0 = self.par[6]
         if self.outfile_p:
-            self.outfile_p.write("%f %f %f %f %f %f %f %f\n" % (lmbd, lmbd1, lmbd2, alpha*kilocalorie_per_mole, u0/kilocalorie_per_mole, w0/kilocalorie_per_mole, pot_energy, bind_energy))
+            self.outfile_p.write("%f %f %f %f %f %f %f %f %f\n" % (temperature, lmbd, lmbd1, lmbd2, alpha*kilocalorie_per_mole, u0/kilocalorie_per_mole, w0/kilocalorie_per_mole, pot_energy, bind_energy))
 
     def _worker_getenergy(self):                       
         bind_energy = (self.integrator.getBindE()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
@@ -414,7 +414,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
             if bind_energy == None:
                 msg = "Error retrieving state for replica %d" % repl
                 self._exit(msg)
-            parameters = [lmbd, lambda1, lambda2, alpha, u0, w0]
+            parameters = [temperature, lmbd, lambda1, lambda2, alpha, u0, w0]
             return (parameters, bind_energy, pot_energy)
         else:
             return self._extractLast_lambda_BindingEnergy_TotalEnergy_fromFile(repl,cycle)
@@ -424,45 +424,22 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         datai = self._getOpenMMData(output_file)
         nf = len(datai[0])
         nr = len(datai)
-        # example of format (simple alchemical path):
-        # <lambda, potential energy, binding energy>
-        # 0.300000,-44753.762502,-130.875000
-        #   0          1                 2
-        #
-        # example of format (quad bias alchemical path):
-        # <lambda, gamma, b, w0, potential energy, binding energy>
-        # 0.300000,0.1567,-1.345,12.345,-44753.762502,-130.875000
-        #   0         1      2       3         4          5
-        #format (ilogistic potential):
-        # <lambda, lambda1, lambda2, alpha, u0, w0,  potential energy, binding energy>
-        #   0         1       2       3     4    5       6                7
+        # example of format  (ilogistic potential):
+        # <temperature, lambda, lambda1, lambda2, alpha, u0, w0,  potential energy, binding energy>
+        #   0         1       2       3     4    5       6                7       8
         #
         # [nr-1]: last record
         #
-        if nf == 3:
-            lmbd = datai[nr-1][0]
-            binding_energy = datai[nr-1][2]
-            pot_energy = datai[nr-1][1]
-            return (lmbd, binding_energy, pot_energy)
-        elif nf == 6:
-            lmbd =  datai[nr-1][0]
-            gamma = datai[nr-1][1]
-            b =     datai[nr-1][2]
-            w0 =    datai[nr-1][3]
-            parameters = [lmbd, gamma, b, w0]
-            pot_energy = datai[nr-1][4]
-            binding_energy = datai[nr-1][5]
-            return (parameters, binding_energy, pot_energy)
-        elif nf == 8:
-            lmbd =    datai[nr-1][0]
-            lambda1 = datai[nr-1][1]
-            lambda2 = datai[nr-1][2]
-            alpha =   datai[nr-1][3]
-            u0    =   datai[nr-1][4]
-            w0    =   datai[nr-1][5]
-            parameters = [lmbd, lambda1, lambda2, alpha, u0, w0]
-            pot_energy = datai[nr-1][6]
-            binding_energy = datai[nr-1][7]
+        temperature = datai[nr-1][0]
+        lmbd =    datai[nr-1][1]
+        lambda1 = datai[nr-1][2]
+        lambda2 = datai[nr-1][3]
+        alpha =   datai[nr-1][4]
+        u0    =   datai[nr-1][5]
+        w0    =   datai[nr-1][6]
+        parameters = [temperature,lmbd, lambda1, lambda2, alpha, u0, w0]
+        pot_energy = datai[nr-1][7]
+        binding_energy = datai[nr-1][8]
         return (parameters, binding_energy, pot_energy)
 
     def print_status(self):
@@ -475,21 +452,10 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         """
         logfile = "%s_stat.txt" % self.basename
         ofile = self._openfile(logfile,"w")
-        if self.gammas is not None:
-            log = "Replica  State  Lambda Gamma Bcoeff W0coeff Temperature Status  Cycle \n"
-            for k in range(self.nreplicas):
-                stateid = self.status[k]['stateid_current']
-                log += "%6d   %5d  %s %s %s %s %s %5s  %5d \n" % (k, stateid, self.stateparams[stateid]['lambda'], self.stateparams[stateid]['gamma'], self.stateparams[stateid]['bcoeff'], self.stateparams[stateid]['w0coeff'], self.stateparams[stateid]['temperature'], self.status[k]['running_status'], self.status[k]['cycle_current'])
-        elif self.lambda1s is not None:
-            log = "Replica  State  Lambda Lambda1 Lambda2 Alpha U0 W0coeff Temperature Status  Cycle \n"
-            for k in range(self.nreplicas):
-                stateid = self.status[k]['stateid_current']
-                log += "%6d   %5d  %s %s %s %s %s %s %s %5s  %5d \n" % (k, stateid, self.stateparams[stateid]['lambda'], self.stateparams[stateid]['lambda1'], self.stateparams[stateid]['lambda2'], self.stateparams[stateid]['alpha'], self.stateparams[stateid]['u0'], self.stateparams[stateid]['w0coeff'], self.stateparams[stateid]['temperature'], self.status[k]['running_status'], self.status[k]['cycle_current'])
-        else:
-            log = "Replica  State  Lambda Temperature Status  Cycle \n"
-            for k in range(self.nreplicas):
-                stateid = self.status[k]['stateid_current']
-                log += "%6d   %5d  %s %s %5s  %5d \n" % (k, stateid, self.stateparams[stateid]['lambda'], self.stateparams[stateid]['temperature'], self.status[k]['running_status'], self.status[k]['cycle_current'])
+        log = "Replica  State  Lambda Lambda1 Lambda2 Alpha U0 W0coeff Temperature Status  Cycle \n"
+        for k in range(self.nreplicas):
+            stateid = self.status[k]['stateid_current']
+            log += "%6d   %5d  %s %s %s %s %s %s %s %5s  %5d \n" % (k, stateid, self.stateparams[stateid]['lambda'], self.stateparams[stateid]['lambda1'], self.stateparams[stateid]['lambda2'], self.stateparams[stateid]['alpha'], self.stateparams[stateid]['u0'], self.stateparams[stateid]['w0coeff'], self.stateparams[stateid]['temperature'], self.status[k]['running_status'], self.status[k]['cycle_current'])
         log += "Running = %d\n" % self.running
         log += "Waiting = %d\n" % self.waiting
 
@@ -497,33 +463,23 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         ofile.close()
 
     def _getPot(self,repl,cycle):
-        (parameters, u, etot) = self._extractLast_lambda_BindingEnergy_PotEnergy(repl,cycle)
-        if not isinstance(parameters, list): #lambda is the only alchemical parameter
-            # removes lambda*u from etot to get e0. Note that this is the lambda from the
-            # output file not the current lambda.
-            lmb = parameters
-            e0 = float(etot) - float(lmb)*float(u)
-        elif len(parameters) == 4:
-            lmb = float(parameters[0])
-            gamma = float(parameters[1])
-            b = float(parameters[2])
-            w0 = float(parameters[3])
-            uf = float(u)
-            e0 = float(etot) - (0.5*gamma*uf*uf + b*uf + w0)
-        elif len(parameters) == 6:
-            lmb = float(parameters[0])
-            lambda1 = float(parameters[1])
-            lambda2 = float(parameters[2])
-            alpha = float(parameters[3])
-            u0 = float(parameters[4])
-            w0 = float(parameters[5])
-            uf = float(u)
-            ee = 1.0 + math.exp(-alpha*(uf-u0))
-            ebias = 0.0
-            if alpha > 0:
-                ebias = ((lambda2 - lambda1)/alpha) * math.log(ee)
-            ebias += lambda2 * uf + w0
-            e0 = float(etot) - ebias
+        (parameters, u, epot) = self._extractLast_lambda_BindingEnergy_PotEnergy(repl,cycle)
+        
+        temperature = float(parameters[0])
+        lmb = float(parameters[1])
+        lambda1 = float(parameters[2])
+        lambda2 = float(parameters[3])
+        alpha = float(parameters[4])
+        u0 = float(parameters[5])
+        w0 = float(parameters[6])
+        
+        uf = float(u)
+        ee = 1.0 + math.exp(-alpha*(uf-u0))
+        ebias = 0.0
+        if alpha > 0:
+            ebias = ((lambda2 - lambda1)/alpha) * math.log(ee)
+        ebias += lambda2 * uf + w0
+        e0 = float(epot) - ebias
         return (e0,uf)
 
     def _getPar(self,repl):
@@ -533,69 +489,40 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         kb = 0.0019872041
         beta = 1./(kb*tempt)
         parameters = [beta,lmb]
-        if 'gamma' in self.stateparams[sid].keys():
-            gamma = float(self.stateparams[sid]['gamma'])
-            parameters.append(gamma)
-            b = float(self.stateparams[sid]['bcoeff'])
-            parameters.append(b)
-            w0 = float(self.stateparams[sid]['w0coeff'])
-            parameters.append(w0)
-        elif 'lambda1' in  self.stateparams[sid].keys():
-            lambda1 = float(self.stateparams[sid]['lambda1'])
-            lambda2 = float(self.stateparams[sid]['lambda2'])
-            alpha =  float(self.stateparams[sid]['alpha'])
-            u0 = float(self.stateparams[sid]['u0'])
-            w0 = float(self.stateparams[sid]['w0coeff'])
-            parameters.append(lambda1)
-            parameters.append(lambda2)
-            parameters.append(alpha)
-            parameters.append(u0)
-            parameters.append(w0)
-            
+        lambda1 = float(self.stateparams[sid]['lambda1'])
+        lambda2 = float(self.stateparams[sid]['lambda2'])
+        alpha =  float(self.stateparams[sid]['alpha'])
+        u0 = float(self.stateparams[sid]['u0'])
+        w0 = float(self.stateparams[sid]['w0coeff'])
+        parameters.append(lambda1)
+        parameters.append(lambda2)
+        parameters.append(alpha)
+        parameters.append(u0)
+        parameters.append(w0)
+        
         return (parameters)
 
     def _reduced_energy(self,par,pot):
         # par: list of parameters
         # pot: list of potentials
-        if len(par) == 2:
-            # This is for temperature/binding potential beta*(U0+lambda*u)
-            beta = par[0]
-            lmb = par[1]
-            e0 = pot[0]
-            u = pot[1]
-            return beta*(e0 + lmb*u)
-        elif len(par) == 5:
-            # This is for the quadbias potential
-            # beta*(U0+0.5*gamma*u^2+b*u+w0)
-            beta = par[0]
-            lmb = par[1]
-            gamma = par[2]
-            b = par[3]
-            w0 = par[4]
-            e0 = pot[0]
-            u = pot[1]
-            return beta*(e0 + 0.5*gamma*u*u + b*u + w0)
-        elif len(par) == 7:
-            # This is for the ilogistic potential
-            beta = par[0]
-            lmb = par[1]
-            lambda1 = par[2]
-            lambda2 = par[3]
-            alpha = par[4]
-            u0 = par[5]
-            w0 = par[6]
+        # This is for the ilogistic potential
+        beta = par[0]
+        lmb = par[1]
+        lambda1 = par[2]
+        lambda2 = par[3]
+        alpha = par[4]
+        u0 = par[5]
+        w0 = par[6]
 
-            e0 = pot[0]
-            uf = pot[1]
+        e0 = pot[0]
+        uf = pot[1]
             
-            ee = 1.0 + math.exp(-alpha*(uf-u0))
-            ebias = 0.0
-            if alpha > 0:
-                ebias = ((lambda2 - lambda1)/alpha) * math.log(ee)
-            ebias += lambda2 * uf + w0
-            return beta*(e0 + ebias)
-        else:
-            return None
+        ee = 1.0 + math.exp(-alpha*(uf-u0))
+        ebias = 0.0
+        if alpha > 0:
+            ebias = ((lambda2 - lambda1)/alpha) * math.log(ee)
+        ebias += lambda2 * uf + w0
+        return beta*(e0 + ebias)
 
     def checkpointJob(self):
         if self.transport_mechanism == "LOCAL_OPENMM":

@@ -417,7 +417,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
             parameters = [temperature, lmbd, lambda1, lambda2, alpha, u0, w0]
             return (parameters, bind_energy, pot_energy)
         else:
-            return self._extractLast_lambda_BindingEnergy_TotalEnergy_fromFile(repl,cycle)
+            return self._extractLast_lambda_BindingEnergy_PotEnergy_fromFile(repl,cycle)
 
     def _extractLast_lambda_BindingEnergy_PotEnergy_fromFile(self,repl,cycle):
         output_file = "r%s/%s_%d.out" % (repl,self.basename,cycle)

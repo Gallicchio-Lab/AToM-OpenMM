@@ -228,17 +228,39 @@ class SDMReplica(OMMReplica):
             self.dms.setVelocities(self.velocities)
 
 
-    def set_posvel_from_file(self, cycle):
-        ligfile = "%s_lig_%d.dms" % (self.basename, cycle)
-        rcptfile = "%s_rcpt_%d.dms" % (self.basename, cycle)
+    def set_statepot_from_outputfile(self, replica, cycle):
+        outfile = "r%d/%s_%d.out" % (replica, self.basename, cycle)
+        data = self._getOpenMMData(outfile)
+        # example of format  (ilogistic potential):
+        # <temperature, lambda, lambda1, lambda2, alpha, u0, w0,  potential energy, binding energy>
+        #   0         1       2       3     4    5       6                7       8
+        #
+        nr = len(data)
+        temperature = float(datai[nr-1][0])
+        lmbd =    float(datai[nr-1][1])
+        lambda1 = float(datai[nr-1][2])
+        lambda2 = float(datai[nr-1][3])
+        alpha =   float(datai[nr-1][4])
+        u0    =   float(datai[nr-1][5])
+        w0    =   float(datai[nr-1][6])
+        parameters = [temperature,lmbd, lambda1, lambda2, alpha, u0, w0]
+        pot_energy = datai[nr-1][7]
+        binding_energy = datai[nr-1][8]
+        self.set_state(self.stateid, parameters)
+        self.set_energy([pot_energy])
+
+            
+    def set_posvel_from_file(self, replica, cycle):
+        ligfile = "r%d/%s_lig_%d.dms" % (replica, self.basename, cycle)
+        rcptfile = "r%d/%s_rcpt_%d.dms" % (replica, self.basename, cycle)
         dms = DesmondDMSFile([ligfile, rcptfile])
         self.positions = copy.deepcopy(dms.positions)
         self.velocities = copy.deepcopy(dms.velocities)
         dms.close()
 
-    def write_posvel_to_file(self, cyle):
-        ligfile = "%s_lig_%d.dms" % (self.basename, cycle)
-        rcptfile = "%s_rcpt_%d.dms" % (self.basename, cycle)
+    def write_posvel_to_file(self, replica, cyle):
+        ligfile = "r%d/%s_lig_%d.dms" % (replica, self.basename, cycle)
+        rcptfile = "r%d/%s_rcpt_%d.dms" % (replica, self.basename, cycle)
         dms = DesmondDMSFile([ligfile, rcptfile])
         dms.setPositions(self.positions)
         dms.setVelocities(self.velocities)
@@ -408,56 +430,30 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         ofile.close()
     
     def _extractLast_lambda_BindingEnergy_PotEnergy(self,repl,cycle):
-        if self.transport_mechanism == "LOCAL_OPENMM":
-            """
-            Extracts binding energy etc. from replica objects
-            works only for iLog potential
-            """
-            replica = self.openmm_replicas[repl]
-            (stateid, par) = replica.get_state()
-            pot = replica.get_energy()
+        """
+        Extracts binding energy etc. from replica objects
+        works only for iLog potential
+        """
+        replica = self.openmm_replicas[repl]
+        (stateid, par) = replica.get_state()
+        pot = replica.get_energy()
 
-            pot_energy =  pot[0]
-            bind_energy = pot[1]
+        pot_energy =  pot[0]
+        bind_energy = pot[1]
             
-            temperature = par[0]
-            lmbd =        par[1]
-            lambda1 =     par[2]
-            lambda2 =     par[3]
-            alpha =       par[4]
-            u0 =          par[5]
-            w0 =          par[6]
+        temperature = par[0]
+        lmbd =        par[1]
+        lambda1 =     par[2]
+        lambda2 =     par[3]
+        alpha =       par[4]
+        u0 =          par[5]
+        w0 =          par[6]
 
-            if bind_energy == None:
-                msg = "Error retrieving state for replica %d" % repl
-                self._exit(msg)
-            parameters = [temperature, lmbd, lambda1, lambda2, alpha, u0, w0]
-            return (parameters, bind_energy, pot_energy)
-        else:
-            return self._extractLast_lambda_BindingEnergy_PotEnergy_fromFile(repl,cycle)
-
-    def _extractLast_lambda_BindingEnergy_PotEnergy_fromFile(self,repl,cycle):
-        output_file = "r%s/%s_%d.out" % (repl,self.basename,cycle)
-        datai = self._getOpenMMData(output_file)
-        nf = len(datai[0])
-        nr = len(datai)
-        # example of format  (ilogistic potential):
-        # <temperature, lambda, lambda1, lambda2, alpha, u0, w0,  potential energy, binding energy>
-        #   0         1       2       3     4    5       6                7       8
-        #
-        # [nr-1]: last record
-        #
-        temperature = datai[nr-1][0]
-        lmbd =    datai[nr-1][1]
-        lambda1 = datai[nr-1][2]
-        lambda2 = datai[nr-1][3]
-        alpha =   datai[nr-1][4]
-        u0    =   datai[nr-1][5]
-        w0    =   datai[nr-1][6]
-        parameters = [temperature,lmbd, lambda1, lambda2, alpha, u0, w0]
-        pot_energy = datai[nr-1][7]
-        binding_energy = datai[nr-1][8]
-        return (parameters, binding_energy, pot_energy)
+        if bind_energy == None:
+            msg = "Error retrieving state for replica %d" % repl
+            self._exit(msg)
+        parameters = [temperature, lmbd, lambda1, lambda2, alpha, u0, w0]
+        return (parameters, bind_energy, pot_energy)
 
     def print_status(self):
         """
@@ -542,25 +538,23 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         return beta*(e0 + ebias)
 
     def checkpointJob(self):
-        if self.transport_mechanism == "LOCAL_OPENMM":
-            #disable ctrl-c
-            s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-            # update replica objects of waiting replicas
-            for repl in [k for k in range(self.nreplicas)
-                    if self.status[k]['running_status'] == 'W']:
-                stateid = self.status[repl]['stateid_current']
-                lambd = self.stateparams[stateid]['lambda']
-                temperature = self.stateparams[stateid]['temperature']
-                lambda1 = self.stateparams[stateid]['lambda1']
-                lambda2 = self.stateparams[stateid]['lambda2']
-                alpha = self.stateparams[stateid]['alpha']
-                u0 = self.stateparams[stateid]['u0']
-                w0 = self.stateparams[stateid]['w0coeff']
-                par = [temperature, lambd, lambda1, lambda2, alpha, u0, w0]
-                self.openmm_replicas[repl].set_state(stateid, par)
-            for replica in self.openmm_replicas:
-                replica.save_dms()
-            signal.signal(signal.SIGINT, s)
+        #disable ctrl-c
+        s = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        # update replica objects of waiting replicas
+        for repl in [k for k in range(self.nreplicas) if self.status[k]['running_status'] == 'W']:
+            stateid = self.status[repl]['stateid_current']
+            lambd = self.stateparams[stateid]['lambda']
+            temperature = self.stateparams[stateid]['temperature']
+            lambda1 = self.stateparams[stateid]['lambda1']
+            lambda2 = self.stateparams[stateid]['lambda2']
+            alpha = self.stateparams[stateid]['alpha']
+            u0 = self.stateparams[stateid]['u0']
+            w0 = self.stateparams[stateid]['w0coeff']
+            par = [temperature, lambd, lambda1, lambda2, alpha, u0, w0]
+            self.openmm_replicas[repl].set_state(stateid, par)
+        for replica in self.openmm_replicas:
+            replica.save_dms()
+        signal.signal(signal.SIGINT, s)
 
     #override for creating SDM versions of the contexts
     def CreateOpenCLContext(self,basename, platform_id = None, device_id = None):
@@ -587,7 +581,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
             executable = "./runopenmm"
 
             #sync positions/velocities from internal replica to input dms file
-            self.openmm_replicas[replica].write_posvel_to_file(cyle-1)
+            self.openmm_replicas[replica].write_posvel_to_file(replica, cycle-1)
             
             job_info = {
                 "replica": replica,

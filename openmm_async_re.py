@@ -76,6 +76,9 @@ class openmm_job(async_re):
             remote_replica_dir = "%s_r%d_c%d" % (self.basename, replica, cycle)
             executable = "./runopenmm"
 
+            #sync positions/velocities from internal replica to input dms file
+            self.openmm_replicas[replica].write_posvel_to_file(replica, cycle-1)
+            
             job_info = {
                 "cycle": cycle,
                 "replica": replica,

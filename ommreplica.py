@@ -112,6 +112,7 @@ class OMMReplica(object):
     def get_stateid(self):
         return self.stateid
 
+    #these are used with the ssh transport to read energies etc. from the output files
     def _getOpenMMData(self,outfile):
         """
         Reads all of the Openmm simulation data values temperature, energies,
@@ -128,7 +129,7 @@ class OMMReplica(object):
             line = f.readline()
         f.close()
         return data
-    
+
     def set_statepot_from_outputfile(self, replica, cycle):
         outfile = "r%d/%s_%d.out" % (replica, self.basename, cycle)
         data = self._getOpenMMData(outfile)
@@ -146,7 +147,7 @@ class OMMReplica(object):
         self.velocities = copy.deepcopy(dms.velocities)
         dms.close()
 
-    def write_posvel_to_file(self, cyle):
+    def write_posvel_to_file(self, replica, cycle):
         tfile = "r%d/%s_%d.dms" % (replica, self.basename, cycle)
         dms = DesmondDMSFile([tfile])
         dms.setPositions(self.positions)

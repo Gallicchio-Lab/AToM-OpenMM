@@ -7,6 +7,7 @@ import random
 import logging
 from async_re import async_re
 from openmm_async_re import openmm_job
+from ommreplica import OMMReplica
 
 class tempt_async_re_job(openmm_job):
 
@@ -60,8 +61,8 @@ class tempt_async_re_job(openmm_job):
         stateid = self.status[replica]['stateid_current']
         cycle = self.status[replica]['cycle_current']
 
-        template = "%s.inp" % basename
-        inpfile = "r%d/%s_%d.inp" % (replica, basename, cycle)
+        template = "%s.py" % basename
+        inpfile = "r%d/%s_%d.py" % (replica, basename, cycle)
 
         temperature = self.stateparams[stateid]['temperature']
         # read template buffer
@@ -74,7 +75,6 @@ class tempt_async_re_job(openmm_job):
         tbuffer = tbuffer.replace("@temperature@",temperature)
         tbuffer = tbuffer.replace("@jobname@",basename)
         tbuffer = tbuffer.replace("@replica@",str(replica))
-        tbuffer = tbuffer.replace("@cycle@",str(cycle))
         # write out
         ofile = self._openfile(inpfile, "w")
         ofile.write(tbuffer)
@@ -85,51 +85,15 @@ class tempt_async_re_job(openmm_job):
         ofile.write("%d %d %s\n" % (cycle, stateid, temperature))
         ofile.close()
 
-    def _extractLast_TotalEnergy(self,repl,cycle):
-        """
-        Extracts binding energy from Impact output
-        """
-        output_file = "r%s/%s_%d.out" % (repl,self.basename,cycle)
-        datai = self._getImpactData(output_file)
-        nf = len(datai[0])
-        nr = len(datai)
-        # [nr-1]: last record
-        #    [2]: total energy item (0 is step number and 1 is temperature)
-        #
-        # (total energy)
-        return datai[nr-1][2]
-
     def _extractLast_PotEnergy(self,repl,cycle):
-        if self.transport_mechanism == "LOCAL_OPENMM":
-            replica = self.openmm_replicas[repl]
-            (stateid, par) = replica.get_state()
-            pot = replica.get_energy()
-#            print("extract")
-#            print(pot)
-            pot_energy =  pot[0]
-            temperature = par[0]
-            if pot_energy == None:
-                msg = "Error retrieving state for replica %d" % repl
-                self._exit(msg)
-            return (par, pot)
-        else:
-            return self._extractLast_PotEnergy_fromFile(repl,cycle)
-
-    def _extractLast_PotEnergy_fromFile(self,repl,cycle):
-        output_file = "r%s/%s_%d.out" % (repl,self.basename,cycle)
-        datai = self._getOpenMMData(output_file)
-        nf = len(datai[0]) #number of fields
-        nr = len(datai) #number of records
-        # example of format:
-        # <temperature, potential energy>
-        # 300.000,-44753.762502
-        #
-        # [nr-1]: last record
-        #
-        temperature = datai[nr-1][0]
-        pot_energy = datai[nr-1][1]
-        par = [temperature]
-        pot = [pot_energy]
+        replica = self.openmm_replicas[repl]
+        (stateid, par) = replica.get_state()
+        pot = replica.get_energy()
+        pot_energy =  pot[0]
+        temperature = par[0]
+        if pot_energy == None:
+            msg = "Error retrieving state for replica %d" % repl
+            self._exit(msg)
         return (par, pot)
     
     def print_status(self):

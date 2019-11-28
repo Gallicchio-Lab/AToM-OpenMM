@@ -13,6 +13,7 @@ from simtk.unit import *
 from simtk.openmm.app.desmonddmsfile import *
 from datetime import datetime
 from SDMplugin import *
+from ommreplica import OMMReplica
 
 from transport import Transport
 
@@ -286,106 +287,6 @@ class OpenCLContext(object):
 
         startedSignal.clear()
         readySignal.clear()
-        
-class OMMReplica(object):
-    #
-    # Holds and manages OpenMM system for a replica
-    #
-    def __init__(self, replica_id, basename):
-        self._id = replica_id
-        self.basename = basename
-
-        self.pot = None
-        self.par = None
-        self.is_energy_assigned = False
-        self.is_state_assigned = False
-        self.cycle = 0
-        self.stateid = None
-        self.mdsteps = 0
-        
-        self.open_dms()
-        
-        self.positions = copy.deepcopy(self.dms.positions)
-        self.velocities = copy.deepcopy(self.dms.velocities)        
-
-
-    def set_state(self, stateid, par):
-        self.stateid = int(stateid)
-        self.par = par
-        self.is_state_assigned = True
-        
-    def get_state(self):
-        return (self.stateid, self.par)
-
-    def get_energy(self):
-        return self.pot
-
-    def set_energy(self, pot):
-        self.pot = pot
-        self.is_energy_assigned = True
-        
-    def set_posvel(self, positions, velocities):
-        self.positions = positions
-        self.velocities = velocities
-
-    def open_dms(self):
-        input_file  = '%s_0.dms' % self.basename 
-
-        if not os.path.isdir('r%d' % self._id):
-            os.mkdir('r%d' % self._id)
-
-        output_file  = 'r%d/%s_ckp.dms' % (self._id,self.basename)
-        if not os.path.isfile(output_file):
-            shutil.copyfile(input_file, output_file)
-
-        self.dms = DesmondDMSFile([output_file]) 
-
-        self.sql_conn = self.dms._conn[0]
-                
-        # check for tre_data table in dms file
-        tables = self.dms._tables[0]
-        conn = self.sql_conn
-        if 'tre_data' in tables:
-            # read tre_data table
-            q = """SELECT epot,temperature,cycle,stateid,mdsteps FROM tre_data WHERE id = 1"""
-            ans = conn.execute(q)
-            for (epot,temperature,cycle,stateid,mdsteps) in conn.execute(q):
-                self.pot = [epot]
-                self.par = [temperature]
-                self.cycle = cycle
-                self.stateid = stateid
-                self.mdsteps = mdsteps
-        else:
-            #create tre_data table with dummy values
-            conn.execute("CREATE TABLE IF NOT EXISTS tre_data (id INTEGER PRIMARY KEY, epot REAL, temperature REAL, cycle INTEGER, stateid INTEGER, mdsteps INTEGER )")
-            conn.execute("INSERT INTO tre_data (epot,temperature,cycle,stateid,mdsteps) VALUES (0,0,0,0,0)")
-            conn.commit()
-            self.dms._tables[0] = self.dms._readSchemas(conn)
-
-    def save_dms(self):
-        if self.is_state_assigned and self.is_energy_assigned:
-            conn = self.sql_conn
-            pot_energy =  float(self.pot[0])            
-            temperature = float(self.par[0])
-            conn.execute("UPDATE tre_data SET epot = %f, temperature = %f, cycle = %d, stateid = %d, mdsteps = %d WHERE id = 1" % (pot_energy, temperature, self.cycle, self.stateid, self.mdsteps))
-            conn.commit()
-            self.dms.setPositions(self.positions)
-            self.dms.setVelocities(self.velocities)
-
-    def set_mdsteps(self, mdsteps):
-        self.mdsteps = mdsteps
-
-    def get_mdsteps(self):
-        return self.mdsteps
-
-    def set_cycle(self, cycle):
-        self.cycle = cycle
-        
-    def get_cycle(self):
-        return self.cycle
-
-    def get_stateid(self):
-        return self.stateid
 
 class LocalOpenMMTransport(Transport):
     """
@@ -393,9 +294,6 @@ class LocalOpenMMTransport(Transport):
     """
     def __init__(self, jobname, openmm_contexts, openmm_replicas):
         # jobname: identifies current asyncRE job
-        # compute_nodes: list of OpenCL devices. The most important field is compute_nodes['slot_number']
-        # which holds the device id in the format <platform_id>:<device_id>
-        # nreplicas: number of replicas, 0 ... nreplicas-1
         Transport.__init__(self)
         self.logger = logging.getLogger("async_re.local_openmm_transport")
         
@@ -403,7 +301,7 @@ class LocalOpenMMTransport(Transport):
         self.openmm_contexts = openmm_contexts
         self.nprocs = len(self.openmm_contexts)
 
-        #constructs replica OpenMM objects
+        # record replica OpenMM objects
         self.openmm_replicas = openmm_replicas
 
         # device status = None if idle

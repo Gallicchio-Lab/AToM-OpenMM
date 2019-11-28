@@ -13,11 +13,17 @@ from simtk.unit import *
 from simtk.openmm.app.desmonddmsfile import *
 from SDMplugin import *
 from local_openmm_transport import OpenCLContext
-from local_openmm_transport import OMMReplica
+from ommreplica import OMMReplica
 
 class openmm_job(async_re):
     def __init__(self, command_file, options):
         async_re.__init__(self, command_file, options)
+
+        #creates openmm replica objects
+        self.openmm_replicas = []
+        for i in range(self.nreplicas):
+            replica = self.CreateReplica(i, self.basename)
+            self.openmm_replicas.append(replica)
         
         if self.transport_mechanism == "LOCAL_OPENMM":
             
@@ -31,26 +37,19 @@ class openmm_job(async_re):
                 device_id = int(matches.group(2))
                 self.openmm_contexts.append(self.CreateOpenCLContext(self.basename, platform_id, device_id))
 
-            #creates openmm replica objects
-            self.openmm_replicas = []
-            for i in range(self.nreplicas):
-                replica = self.CreateReplica(i, self.basename)
-                self.openmm_replicas.append(replica)
                 
     def checkpointJob(self):
-        if self.transport_mechanism == "LOCAL_OPENMM":
-            #disable ctrl-c
-            s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-            # update replica objects of waiting replicas
-            for repl in [k for k in range(self.nreplicas)
-                    if self.status[k]['running_status'] == 'W']:
-                stateid = self.status[repl]['stateid_current']
-                temperature = self.stateparams[stateid]['temperature']
-                par = [temperature]
-                self.openmm_replicas[repl].set_state(stateid, par)
-            for replica in self.openmm_replicas:
-                replica.save_dms()
-            signal.signal(signal.SIGINT, s)
+        #disable ctrl-c
+        s = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        # update replica objects of waiting replicas
+        for repl in [k for k in range(self.nreplicas) if self.status[k]['running_status'] == 'W']:
+            stateid = self.status[repl]['stateid_current']
+            temperature = self.stateparams[stateid]['temperature']
+            par = [temperature]
+            self.openmm_replicas[repl].set_state(stateid, par)
+        for replica in self.openmm_replicas:
+            replica.save_dms()
+        signal.signal(signal.SIGINT, s)
             
     def CreateOpenCLContext(self,basename, platform_id = None, device_id = None):
         return OpenCLContext(basename, platform_id, device_id, self.keywords)
@@ -72,14 +71,14 @@ class openmm_job(async_re):
 
         if self.transport_mechanism == "SSH":
 
-            # WORK IN PROGRESS
-            
             rstfile_p = "%s_%d.dms" % (self.basename,cycle-1)
             local_working_directory = os.getcwd() + "/r" + str(replica)
             remote_replica_dir = "%s_r%d_c%d" % (self.basename, replica, cycle)
             executable = "./runopenmm"
 
             job_info = {
+                "cycle": cycle,
+                "replica": replica,
                 "executable": executable,
                 "input_file": input_file,
                 "output_file": log_file,
@@ -115,15 +114,18 @@ class openmm_job(async_re):
             dcdfile = "%s_%d.dcd" % (self.basename,cycle)
             
             job_output_files.append(output_file)
-
             job_output_files.append(dmsfile)
             job_output_files.append(pdbfile)
             job_output_files.append(dcdfile)
+
+            job_info["job_input_files"] = job_input_files
+            job_info["job_output_files"] = job_output_files
             
         elif self.transport_mechanism == "LOCAL_OPENMM":
 
             nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
             job_info = {
+                "replica": replica,
                 "cycle": cycle,
                 "nsteps": nsteps
             }
@@ -137,48 +139,26 @@ class openmm_job(async_re):
 
     # default behavior for temperature replica exchange
     def update_state_of_replica(self, repl):
-        if self.transport_mechanism == "LOCAL_OPENMM":
-
-            replica = self.openmm_replicas[repl]
-
-            #retrieve previous state if set
-            (old_stateid, old_par) =  replica.get_state()
-            if old_stateid != None:
-                old_temperature = old_par[0]
-
-            #sets new state
-            stateid = self.status[repl]['stateid_current']
-            temperature = self.stateparams[stateid]['temperature']
-            par = [temperature]
-            replica.set_state(stateid, par)
-
-            #rescale velocities (relevant only if state has changed)
-            if old_stateid != None:
-                if stateid != old_stateid:
-                    scale = math.sqrt(float(temperature)/float(old_temperature))
-                    for i in range(0,len(replica.velocities)):
-                        replica.velocities[i] = scale*replica.velocities[i] 
-            
-    def _getOpenMMData(self,file):
-        """
-        Reads all of the Openmm simulation data values temperature, energies,
-        etc.  at each time step and puts into a big table
-        """
-        if not os.path.exists(file):
-            msg = 'File does not exists: %s' % file
-            self._exit(msg)
+        replica = self.openmm_replicas[repl]
         
-        data = []
-        f = self._openfile(file, "r")
-        line = f.readline()
-        while line:
-            datablock = []
-            for word in line.split():
-                datablock.append(float(word))
-            data.append(datablock)
-            line = f.readline()
-        f.close
-        return data
+        #retrieve previous state if set
+        (old_stateid, old_par) =  replica.get_state()
+        if old_stateid != None:
+            old_temperature = old_par[0]
+            
+        #sets new state
+        stateid = self.status[repl]['stateid_current']
+        temperature = self.stateparams[stateid]['temperature']
+        par = [temperature]
+        replica.set_state(stateid, par)
+
+        #rescale velocities (relevant only if state has changed)
+        if old_stateid != None:
+            if stateid != old_stateid:
+                scale = math.sqrt(float(temperature)/float(old_temperature))
+                for i in range(0,len(replica.velocities)):
+                    replica.velocities[i] = scale*replica.velocities[i]
+
 
     def _hasCompleted(self,replica,cycle):
         """
@@ -190,9 +170,7 @@ class openmm_job(async_re):
 
         output_file = "r%s/%s_%d.out" % (replica,self.basename,cycle)
         failed_file = "r%s/%s_%d.failed" % (replica,self.basename,cycle)
-        dmsfile_lig = "r%s/%s_lig_%d.dms" % (replica,self.basename,cycle)
-        dmsfile_rcpt = "r%s/%s_rcpt_%d.dms" % (replica,self.basename,cycle)
-
+        dmsfile = "r%s/%s_%d.dms" % (replica,self.basename,cycle)
         
         if os.path.exists(failed_file):
             return False
@@ -200,21 +178,19 @@ class openmm_job(async_re):
         #check existence of dms files
         if not self.transport_mechanism == "LOCAL_OPENMM":
             try:
-                if not (os.path.exists(dmsfile_rcpt) and os.path.exists(dmsfile_lig)):
-                    self.logger.warning("Cannot find file %s and %s", dmsfile_rcpt, dmsfile_lig)
+                if not (os.path.exists(dmsfile)):
+                    self.logger.warning("Cannot find file %s", dmsfile)
                     return False
             except:
-                self.logger.error("Error accessing file %s and %s", dmsfile_rcpt, dmsfile_lig)
+                self.logger.error("Error accessing file %s", dmsfile)
                 return False
 
         #check that we can read data from .out
-        #        try:
-        datai = self._getOpenMMData(output_file)
-        nf = len(datai[0])
-        nr = len(datai)
-        #except:
-	#    self.logger.warning("Unable to read/parse file %s", output_file)
-        #    return False
+        try:
+            self.openmm_replicas[replica].set_statepot_from_outputfile(replica, cycle)
+        except:
+	    self.logger.warning("Unable to read/parse output file for replica %d cycle %d" % (replica, cycle))
+            return False
 
         return True
 

@@ -11,21 +11,22 @@ import logging
 import subprocess
 import Queue
 
+from ommreplica import OMMReplica
 from transport import Transport
 
 class ssh_transport(Transport):
     """
     Class to launch and monitor jobs on a set of nodes via ssh (paramiko)
     """
-    def __init__(self, jobname, compute_nodes, replicas): #changed on 12/1/14
+    def __init__(self, jobname, compute_nodes, openmm_replicas):
         # jobname: identifies current asyncRE job
         # compute_nodes: list of names of nodes in the pool
-        # nreplicas: number of replicas, 0 ... nreplicas-1
-        Transport.__init__(self) #WFF - 2/18/15
-        self.logger = logging.getLogger("async_re.ssh_transport") #WFF - 3/2/15
+        # openmm_replicas: list of openmm replica objects
+        Transport.__init__(self)
+        self.logger = logging.getLogger("async_re.ssh_transport")
         
         # names of compute nodes (slots)
-        self.compute_nodes = compute_nodes #changed on 12/1/14
+        self.compute_nodes = compute_nodes
         self.nprocs = len(self.compute_nodes)
         #self.openmm_platform = None
                         
@@ -38,10 +39,13 @@ class ssh_transport(Transport):
         self.node_status = [ None for k in range(self.nprocs)]
 	#self.openmm_platform = None
 	
-
+        #records replica OpenMM objects
+        self.openmm_replicas = openmm_replicas
+        nreplicas = len(openmm_replicas)
+        
         # contains the nodeid of the node running a replica
         # None = no information about where the replica is running
-        self.replica_to_job = [ None for k in replicas ]
+        self.replica_to_job = [ None for k in range(nreplicas) ]
 
         # implements a queue of jobs from which to draw the next job
         # to launch
@@ -216,6 +220,7 @@ class ssh_transport(Transport):
                 #job['nslots']   = int(self.compute_nodes[node]["slot_number"])
                 job['nslots']   = self.compute_nodes[node]["slot_number"]
                 job['username'] = self.compute_nodes[node]["user_name"]
+                job['openmm_replica'] = self.openmm_replicas[replica]
                 #added on 10.22.15 save the arch information for platform, save the slot information for multiple GPU
                 job['architecture'] = self.compute_nodes[node]["arch"]
 		opencl = 'OpenCL'
@@ -270,7 +275,6 @@ class ssh_transport(Transport):
                 job['process_handle'] = processid
 
 		job['start_time'] = time.time()
-		print time.time()
 
                 # connects node to replica
                 self.replica_to_job[replica] = job
@@ -325,6 +329,17 @@ class ssh_transport(Transport):
             else:
                 done = not process.is_alive()
             if done:
+                # update openmm replica
+                thiscycle = int(job["cycle"])
+                thisreplica = int(job["replica"])
+                ommreplica = job['openmm_replica']
+                ommreplica.set_cycle(thiscycle+1)
+                #attempt retrieve data from output files
+                try:
+                    ommreplica.set_statepot_from_outputfile(thisreplica,thiscycle)
+                    ommreplica.set_posvel_from_file(thisreplica,thiscycle)
+                except:
+                    self.logger.info("Warning: unable to retrieve data for replica %d, cycle %d" % (replica,thiscycle))
                 # disconnects replica from job and node
                 self._clear_resource(replica)
                 self.replica_to_job[replica] = None

@@ -17,7 +17,7 @@ from SDMplugin import *
 from async_re import async_re
 from bedam_async_re import bedam_async_re_job
 from local_openmm_transport import OpenCLContext
-from local_openmm_transport import OMMReplica
+from ommreplica import OMMReplica
 
 # OpenMM context overrides for alchemical SDM
 class OpenCLContextSDM(OpenCLContext):
@@ -227,6 +227,23 @@ class SDMReplica(OMMReplica):
             self.dms.setPositions(self.positions)
             self.dms.setVelocities(self.velocities)
 
+
+    def set_posvel_from_file(self, cycle):
+        ligfile = "%s_lig_%d.dms" % (self.basename, cycle)
+        rcptfile = "%s_rcpt_%d.dms" % (self.basename, cycle)
+        dms = DesmondDMSFile([ligfile, rcptfile])
+        self.positions = copy.deepcopy(dms.positions)
+        self.velocities = copy.deepcopy(dms.velocities)
+        dms.close()
+
+    def write_posvel_to_file(self, cyle):
+        ligfile = "%s_lig_%d.dms" % (self.basename, cycle)
+        rcptfile = "%s_rcpt_%d.dms" % (self.basename, cycle)
+        dms = DesmondDMSFile([ligfile, rcptfile])
+        dms.setPositions(self.positions)
+        dms.setVelocities(self.velocities)
+        dms.close()
+        
 class bedamtempt_async_re_job(bedam_async_re_job):
     def _setLogger(self):
         self.logger = logging.getLogger("async_re.bedamtempt_async_re")
@@ -567,9 +584,14 @@ class bedamtempt_async_re_job(bedam_async_re_job):
 	    rstfile_lig_p = "%s_lig_%d.dms" % (self.basename,cycle-1)
             local_working_directory = os.getcwd() + "/r" + str(replica)
             remote_replica_dir = "%s_r%d_c%d" % (self.basename, replica, cycle)
-            executable = "./runopenmm" #edit 10.20
+            executable = "./runopenmm"
 
+            #sync positions/velocities from internal replica to input dms file
+            self.openmm_replicas[replica].write_posvel_to_file(cyle-1)
+            
             job_info = {
+                "replica": replica,
+                "cycle": cycle,
                 "executable": executable,
                 "input_file": input_file,
                 "output_file": log_file,
@@ -593,8 +615,8 @@ class bedamtempt_async_re_job(bedam_async_re_job):
             job_input_files = []
             job_input_files.append(input_file)
             if rstfile_rcpt_p and rstfile_lig_p:
-                job_input_files.append(rstfile_rcpt_p) #edit 10.16
-	    	job_input_files.append(rstfile_lig_p) #edit 10.16
+                job_input_files.append(rstfile_rcpt_p)
+	    	job_input_files.append(rstfile_lig_p)
             for filename in self.extfiles:
                 job_input_files.append(filename)
 
@@ -604,31 +626,26 @@ class bedamtempt_async_re_job(bedam_async_re_job):
             job_output_files.append(err_file)
             output_file = "%s_%d.out" % (self.basename, cycle)
 
-            if self.keywords.get('RE_TYPE') == 'TEMPT':
-                dmsfile = "%s_%d.dms" % (self.basename, cycle)
-            elif self.keywords.get('RE_TYPE') == 'BEDAMTEMPT':
-                rcptfile="%s_rcpt_%d.dms" % (self.basename,cycle)
-                ligfile="%s_lig_%d.dms" % (self.basename,cycle)
-                pdbfile="%s_%d.pdb" % (self.basename,cycle)
-                dcdfile="%s_%d.dcd" % (self.basename,cycle)
+            rcptfile="%s_rcpt_%d.dms" % (self.basename,cycle)
+            ligfile="%s_lig_%d.dms" % (self.basename,cycle)
+            pdbfile="%s_%d.pdb" % (self.basename,cycle)
+            dcdfile="%s_%d.dcd" % (self.basename,cycle)
                 
             job_output_files.append(output_file)
 
-            if self.keywords.get('RE_TYPE') == 'TEMPT':
-                job_output_files.append(dmsfile)
-            elif self.keywords.get('RE_TYPE') == 'BEDAMTEMPT':
-                job_output_files.append(rcptfile)
-                job_output_files.append(ligfile)
-                job_output_files.append(pdbfile)
-                job_output_files.append(dcdfile)
+            job_output_files.append(rcptfile)
+            job_output_files.append(ligfile)
+            job_output_files.append(pdbfile)
+            job_output_files.append(dcdfile)
                 
-            job_info["job_input_files"] = job_input_files;
-            job_info["job_output_files"] = job_output_files;
+            job_info["job_input_files"] = job_input_files
+            job_info["job_output_files"] = job_output_files
 
         elif self.transport_mechanism == "LOCAL_OPENMM":
 
             nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
             job_info = {
+                "replica": replica,
                 "cycle": cycle,
                 "nsteps": nsteps
             }
@@ -684,7 +701,46 @@ class bedamtempt_async_re_job(bedam_async_re_job):
                    scale = math.sqrt(float(temperature)/float(old_temperature))
                    for i in range(0,len(replica.velocities)):
                        replica.velocities[i] = scale*replica.velocities[i] 
-    
+
+
+    def _hasCompleted(self,replica,cycle):
+        """
+        Returns true if an OpenMM replica has successfully completed a cycle.
+        """
+        if self.transport_mechanism == "LOCAL_OPENMM":
+            #safeguards are off for local transport
+            return True
+        
+        output_file = "r%s/%s_%d.out" % (replica,self.basename,cycle)
+        failed_file = "r%s/%s_%d.failed" % (replica,self.basename,cycle)
+        dmsfile_lig = "r%s/%s_lig_%d.dms" % (replica,self.basename,cycle)
+        dmsfile_rcpt = "r%s/%s_rcpt_%d.dms" % (replica,self.basename,cycle)
+        
+        if os.path.exists(failed_file):
+            return False
+
+        #check existence of dms files
+        if not self.transport_mechanism == "LOCAL_OPENMM":
+            try:
+                if not (os.path.exists(dmsfile_rcpt) and os.path.exists(dmsfile_lig)):
+                    self.logger.warning("Cannot find file %s and %s", dmsfile_rcpt, dmsfile_lig)
+                    return False
+            except:
+                self.logger.error("Error accessing file %s and %s", dmsfile_rcpt, dmsfile_lig)
+                return False
+
+        #check that we can read data from .out
+        #        try:
+        datai = self._getOpenMMData(output_file)
+        nf = len(datai[0])
+        nr = len(datai)
+        #except:
+	#    self.logger.warning("Unable to read/parse file %s", output_file)
+        #    return False
+
+        return True
+
+                       
 if __name__ == '__main__':
 
     # Parse arguments:

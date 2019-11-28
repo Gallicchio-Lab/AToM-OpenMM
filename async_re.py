@@ -29,7 +29,7 @@ from configobj import ConfigObj
 
 from gibbs_sampling import *
 
-from local_openmm_transport import OMMReplica
+from ommreplica import OMMReplica
 from local_openmm_transport import OpenCLContext
 
 import multiprocessing as mp
@@ -324,7 +324,7 @@ class async_re(object):
             from ssh_transport import ssh_transport
             
             # creates SSH transport
-            self.transport = ssh_transport(self.basename, self.compute_nodes, [ i for i in range(self.nreplicas)])
+            self.transport = ssh_transport(self.basename, self.compute_nodes, self.openmm_replicas)
 
         elif self.transport_mechanism == "BOINC":
             from boinc_transport import boinc_transport
@@ -352,19 +352,16 @@ class async_re(object):
         # at present only restarts if all replica directories have at least one *.out file when transport_mechanism == 'LOCAL_OPENMM'
         if replica_dirs_exist:
             setup = False
-            if self.transport_mechanism == "LOCAL_OPENMM":
-                for k in range(self.nreplicas):
-                    repl_dir = 'r%d' %k
-                    all_files = os.listdir(repl_dir)
-                    for f in all_files:
-                        if f.endswith(".out"):
-                            setup = False
-                            break
-                        else:
-                            setup = True
-        else:
-            setup = True
-            
+            for k in range(self.nreplicas):
+                repl_dir = 'r%d' %k
+                all_files = os.listdir(repl_dir)
+                for f in all_files:
+                    if f.endswith(".out"):
+                        setup = False
+                        break
+                    else:
+                        setup = True
+
         if setup:
             # create status table
             self.status = [{'stateid_current': k, 'running_status': 'W',
@@ -374,10 +371,7 @@ class async_re(object):
                 # create replicas directories r1, r2, etc.
                 for k in range(self.nreplicas):
                     repl_dir = 'r%d'%k
-                    if os.path.exists(repl_dir):
-                        _exit('Inconsistent set of replica directories found.'
-                              ' Remove them to trigger setup.')
-                    else:
+                    if not os.path.exists(repl_dir):
                         os.mkdir('r%d'%k)
                 # create links for external files
                 if self.extfiles is not None:
@@ -395,10 +389,9 @@ class async_re(object):
         else:
             #this is a restart
             self._read_status()
-            if self.transport_mechanism == "LOCAL_OPENMM":
-                for replica in self.openmm_replicas:
-                    self.status[replica._id]['cycle_current'] = replica.get_cycle()
-                    self.status[replica._id]['stateid_current'] = replica.get_stateid()
+            for replica in self.openmm_replicas:
+                self.status[replica._id]['cycle_current'] = replica.get_cycle()
+                self.status[replica._id]['stateid_current'] = replica.get_stateid()
             self.updateStatus(restart=True)
             if self.transport_mechanism == "BOINC":
                 # restart BOINC workunit id list

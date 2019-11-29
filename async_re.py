@@ -206,6 +206,7 @@ class async_re(object):
                 # reset job transport
                 self.transport = None
             #set the nodes information
+            self.num_nodes = len(node_info)
             self.compute_nodes=node_info
             #Can print out here to check the node information
             self.logger.info("compute nodes: %s", ', '.join([n['node_name'] for n in node_info]))
@@ -248,11 +249,6 @@ class async_re(object):
         self.walltime = float(self.keywords.get('WALL_TIME'))
         if self.walltime is None:
             self._exit('WALL_TIME (in minutes) needs to be specified')
-
-        if self.keywords.get('TOTAL_CORES') is None:
-            self._exit('TOTAL_CORES needs to be specified')
-        if self.keywords.get('SUBJOB_CORES') is None:
-            self._exit('SUBJOB_CORES needs to be specified')
 
         # Optional variables
         #
@@ -570,17 +566,16 @@ class async_re(object):
 
     def _njobs_to_run(self):
         # size of subjob buffer as a percentage of job slots
-        # (TOTAL_CORES/SUBJOB_CORES)
         subjobs_buffer_size = self.keywords.get('SUBJOBS_BUFFER_SIZE')
         if subjobs_buffer_size is None:
             subjobs_buffer_size = 0.5
         else:
             subjobs_buffer_size = float(subjobs_buffer_size)
+            
         # launch new replicas if the number of submitted/running subjobs is
         # less than the number of available slots
         # (total_cores/subjob_cores) + 50%
-        available_slots = (int(self.keywords.get('TOTAL_CORES')) /
-                           int(self.keywords.get('SUBJOB_CORES')))
+        available_slots = self.num_nodes
         max_njobs_submittable = int((1.+subjobs_buffer_size)*available_slots)
         nlaunch = self.waiting - max(2,self.nreplicas - max_njobs_submittable)
         nlaunch = max(0,nlaunch)

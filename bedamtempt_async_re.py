@@ -227,7 +227,6 @@ class SDMReplica(OMMReplica):
             self.dms.setPositions(self.positions)
             self.dms.setVelocities(self.velocities)
 
-
     def set_statepot_from_outputfile(self, replica, cycle):
         outfile = "r%d/%s_%d.out" % (replica, self.basename, cycle)
         data = self._getOpenMMData(outfile)
@@ -236,19 +235,18 @@ class SDMReplica(OMMReplica):
         #   0         1       2       3     4    5       6                7       8
         #
         nr = len(data)
-        temperature = float(datai[nr-1][0])
-        lmbd =    float(datai[nr-1][1])
-        lambda1 = float(datai[nr-1][2])
-        lambda2 = float(datai[nr-1][3])
-        alpha =   float(datai[nr-1][4])
-        u0    =   float(datai[nr-1][5])
-        w0    =   float(datai[nr-1][6])
+        temperature = float(data[nr-1][0])
+        lmbd =    float(data[nr-1][1])
+        lambda1 = float(data[nr-1][2])
+        lambda2 = float(data[nr-1][3])
+        alpha =   float(data[nr-1][4])
+        u0    =   float(data[nr-1][5])
+        w0    =   float(data[nr-1][6])
         parameters = [temperature,lmbd, lambda1, lambda2, alpha, u0, w0]
-        pot_energy = datai[nr-1][7]
-        binding_energy = datai[nr-1][8]
+        pot_energy = data[nr-1][7]
+        binding_energy = data[nr-1][8]
         self.set_state(self.stateid, parameters)
-        self.set_energy([pot_energy])
-
+        self.set_energy([pot_energy, binding_energy])
             
     def set_posvel_from_file(self, replica, cycle):
         ligfile = "r%d/%s_lig_%d.dms" % (replica, self.basename, cycle)
@@ -258,7 +256,7 @@ class SDMReplica(OMMReplica):
         self.velocities = copy.deepcopy(dms.velocities)
         dms.close()
 
-    def write_posvel_to_file(self, replica, cyle):
+    def write_posvel_to_file(self, replica, cycle):
         ligfile = "r%d/%s_lig_%d.dms" % (replica, self.basename, cycle)
         rcptfile = "r%d/%s_rcpt_%d.dms" % (replica, self.basename, cycle)
         dms = DesmondDMSFile([ligfile, rcptfile])
@@ -670,31 +668,30 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         return status
 
     def update_state_of_replica(self, repl):
-        if self.transport_mechanism == "LOCAL_OPENMM":
-           replica = self.openmm_replicas[repl]
+        replica = self.openmm_replicas[repl]
 
-           #retrieve previous state if set
-           (old_stateid, old_par) =  replica.get_state()
-           if old_stateid != None:
-               old_temperature = old_par[0]
+        #retrieve previous state if set
+        (old_stateid, old_par) =  replica.get_state()
+        if old_stateid != None:
+            old_temperature = old_par[0]
             
-           stateid = self.status[repl]['stateid_current']
-           temperature = self.stateparams[stateid]['temperature']
-           lambd = self.stateparams[stateid]['lambda']
-           lambda1 = self.stateparams[stateid]['lambda1']
-           lambda2 = self.stateparams[stateid]['lambda2']
-           alpha = self.stateparams[stateid]['alpha']
-           u0 = self.stateparams[stateid]['u0']
-           w0 = self.stateparams[stateid]['w0coeff']
-           par = [temperature, lambd, lambda1, lambda2, alpha, u0, w0]
-           replica.set_state(stateid, par)
+        stateid = self.status[repl]['stateid_current']
+        temperature = self.stateparams[stateid]['temperature']
+        lambd = self.stateparams[stateid]['lambda']
+        lambda1 = self.stateparams[stateid]['lambda1']
+        lambda2 = self.stateparams[stateid]['lambda2']
+        alpha = self.stateparams[stateid]['alpha']
+        u0 = self.stateparams[stateid]['u0']
+        w0 = self.stateparams[stateid]['w0coeff']
+        par = [temperature, lambd, lambda1, lambda2, alpha, u0, w0]
+        replica.set_state(stateid, par)
 
-           #rescale velocities (relevant only if state has changed)
-           if old_stateid != None:
-               if stateid != old_stateid:
-                   scale = math.sqrt(float(temperature)/float(old_temperature))
-                   for i in range(0,len(replica.velocities)):
-                       replica.velocities[i] = scale*replica.velocities[i] 
+        #rescale velocities (relevant only if state has changed)
+        if old_stateid != None:
+            if stateid != old_stateid:
+                scale = math.sqrt(float(temperature)/float(old_temperature))
+                for i in range(0,len(replica.velocities)):
+                    replica.velocities[i] = scale*replica.velocities[i] 
 
 
     def _hasCompleted(self,replica,cycle):
@@ -724,13 +721,11 @@ class bedamtempt_async_re_job(bedam_async_re_job):
                 return False
 
         #check that we can read data from .out
-        #        try:
-        datai = self._getOpenMMData(output_file)
-        nf = len(datai[0])
-        nr = len(datai)
-        #except:
-	#    self.logger.warning("Unable to read/parse file %s", output_file)
-        #    return False
+        try:
+            self.openmm_replicas[replica]._getOpenMMData(output_file)
+        except:
+	    self.logger.warning("Unable to read/parse output file for replica %d cycle %d" % (replica, cycle))
+            return False
 
         return True
 

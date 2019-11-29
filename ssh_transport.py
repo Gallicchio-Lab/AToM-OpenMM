@@ -339,7 +339,7 @@ class ssh_transport(Transport):
                     ommreplica.set_statepot_from_outputfile(thisreplica,thiscycle)
                     ommreplica.set_posvel_from_file(thisreplica,thiscycle)
                 except:
-                    self.logger.info("Warning: unable to retrieve data for replica %d, cycle %d" % (replica,thiscycle))
+                    self.logger.warning("Unable to retrieve data for replica %d, cycle %d" % (replica,thiscycle))
                 # disconnects replica from job and node
                 self._clear_resource(replica)
                 self.replica_to_job[replica] = None

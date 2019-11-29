@@ -532,7 +532,7 @@ class async_re(object):
 
     def updateStatus(self, restart = False):
         """Scan the replicas and update their states."""
-        self.transport.poll() # WFF 2/18/15
+        self.transport.poll()
         for k in range(self.nreplicas):
             self._updateStatus_replica(k,restart)
         self._write_status()

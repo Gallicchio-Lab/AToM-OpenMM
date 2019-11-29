@@ -190,7 +190,7 @@ class openmm_job(async_re):
 
         #check that we can read data from .out
         try:
-            self.openmm_replicas[replica].set_statepot_from_outputfile(replica, cycle)
+            self.openmm_replicas[replica]._getOpenMMData(output_file)
         except:
 	    self.logger.warning("Unable to read/parse output file for replica %d cycle %d" % (replica, cycle))
             return False

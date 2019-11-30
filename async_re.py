@@ -81,6 +81,9 @@ class async_re(object):
 
     def __init__(self, command_file, options):
         self.command_file = command_file
+        if not os.path.exists(self.command_file):
+            self._exit('No such file: %s'%self.command_file)
+
         self.jobname = os.path.splitext(os.path.basename(command_file))[0]
         self.keywords = ConfigObj(self.command_file)
         
@@ -92,9 +95,12 @@ class async_re(object):
         signal.signal(signal.SIGINT, self._signal_handler)
 
     def _cleanup(self):
-        if self.transport_mechanism == "LOCAL_OPENMM":
-            for ommcontext in self.openmm_contexts:
-                ommcontext.finish()
+        try:
+            if self.transport_mechanism == "LOCAL_OPENMM":
+                for ommcontext in self.openmm_contexts:
+                    ommcontext.finish()
+        except:
+            pass
 
     def _exit(self, message):
         self._cleanup()

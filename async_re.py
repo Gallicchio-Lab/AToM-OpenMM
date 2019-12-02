@@ -1,7 +1,6 @@
 # File Based Replica Exchange class
 """
-The core module of ASyncRE-OpenMM: a framework to prepare and run file-based
-asynchronous replica exchange calculations.
+The core module of ASyncRE-OpenMM: a framework to run asynchronous replica exchange calculations with OpenMM
 
 Contributors:
 Baofeng Zhang <baofzhang@gmail.com>
@@ -9,7 +8,7 @@ Emilio Gallicchio <emilio.gallicchio@gmail.com>
 
 
 This code is adapted from:
-https://github.com/
+https://github.com/ComputationalBiophysicsCollaborative/AsyncRE
 authored by:
 Baofeng Zhang
 Emilio Gallicchio
@@ -34,7 +33,7 @@ from local_openmm_transport import OpenCLContext
 
 import multiprocessing as mp
 
-__version__ = '1.0.0'
+__version__ = '0.2.0'
 
 def _exit(message):
     """Print and flush a message to stdout and then exit."""
@@ -94,6 +93,9 @@ class async_re(object):
         #catch ctrl-C to terminate threads gracefully
         signal.signal(signal.SIGINT, self._signal_handler)
 
+    def getVersion(self):
+        return __version__
+
     def _cleanup(self):
         try:
             if self.transport_mechanism == "LOCAL_OPENMM":
@@ -150,6 +152,7 @@ class async_re(object):
 
     def _printStatus(self):
         """Print a report of the input parameters."""
+        self.logger.info("ASyncRE-OpenMM, Version %s" % self.getVersion())
         self.logger.info("command_file = %s", self.command_file)
         self.logger.info("jobname = %s", self.jobname)
         self.logger.info("Keywords:")

@@ -12,6 +12,12 @@ Credits
 
 This software is developed and maintained by [Emilio Gallicchio's lab](http://www.compmolbiophysbc.org) with support from current and past grants from the National Science Foundation (ACI 1440665 and CHE 1750511).
 
+Authors:
+
+Emilio Gallicchio <egallicchio@brooklyn.cuny.edu>
+Baofeng Zhang <baofzhang@gmail.com>
+Rajat Pal <rajatfor2014@gmail.com>
+
 This code is adapted from the [AsyncRE](https://github.com/ComputationalBiophysicsCollaborative/AsyncRE) package for the IMPACT program.
 
 Citation

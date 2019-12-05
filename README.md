@@ -30,3 +30,6 @@ Installation & Usage
 
 This version of ASyncRE is tailored to Single-Decoupling Alchemical calculations. See the [OpenMM SDM Workflow](https://github.com/egallicc/openmm_sdm_workflow) for installation instructions and tutorials.
 
+See [examples](examples/tutorials.md) for temperature replica exchange tutorials.
+
+

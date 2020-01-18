@@ -40,6 +40,7 @@ class OpenCLContext(object):
         self.deviceId = device_id
         self.basename = basename
         self.keywords = keywords
+        self.nprnt = int(self.keywords.get('PRNT_FREQUENCY'))
         self._p = Process(target=self.openmm_worker)
         #, args=(self._cmdq,self._outq,self._inq, self._startedSignal, self._readySignal, self._runningSignal, basename, platform_id, device_id, keywords))
         self._p.daemon = True
@@ -91,9 +92,7 @@ class OpenCLContext(object):
         self._readySignal.wait()
         self._cmdq.put("SETREPORTERS")
         self._inq.put(current_steps)
-        self._inq.put(outfile)
         self._inq.put(logfile)
-        self._inq.put(dcdfile)
 
     # kills worker
     def finish(self):
@@ -116,11 +115,16 @@ class OpenCLContext(object):
     def is_started(self):
         return self._startedSignal.is_set()
 
-    # starts execution loop if the worker
-    def run(self):
+    # starts execution loop of the worker
+    def run(self, nsteps, nheating = 0, ncooling = 0, hightemp = 0.0):
         self._startedSignal.wait()
         self._readySignal.wait()
         self._cmdq.put("RUN")
+        self._inq.put(nsteps)
+        self._inq.put(nheating)
+        self._inq.put(ncooling)
+        self._inq.put(hightemp)
+        
 
     #
     # routine being multi-processed (worker)
@@ -162,6 +166,15 @@ class OpenCLContext(object):
         MDstepsize = float(self.keywords.get('TIME_STEP')) * picosecond
         self.integrator = LangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond)
 
+    def _openmm_worker_run(self):
+        if self.nheating > 0:
+            self.integrator.setTemperature(self.hightemp)
+            self.simulation.step(self.nheating)
+            self.simulation.step(self.ncooling)
+            production_temperature = self.par[0]
+            self.integrator.setTemperature(production_temperature)
+        self.simulation.step(self.nsteps)        
+        
     def openmm_worker(self):
         self._startedSignal.clear()
         self._readySignal.clear()
@@ -176,24 +189,17 @@ class OpenCLContext(object):
 
         self.simulation = Simulation(self.topology, self.system, self.integrator, self.platform, self.platform_properties)
         self.context = self.simulation.context
-        self.nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
-        self.nprnt = int(self.keywords.get('PRNT_FREQUENCY'))
-        self.ntrj = int(self.keywords.get('TRJ_FREQUENCY'))
-        if not self.nprnt % self.nsteps == 0:
-            print("nprnt must be an integer multiple of nsteps.")
-            return
-        if not self.ntrj % self.nsteps == 0:
-            print("ntrj must be an integer multiple of nsteps.")
-            return
+        
         self.simulation.reporters = []
 
-        self.nsteps_current = 0
-        self.outfile = None
-        self.logfile = None
-        self.dcdfile = None
-        self.outfile_p = None
-        self.logfile_p = None
-
+        #sets up logfile
+        self.wdir = "cntxt%d:%d" % (int(self.platformId),int(self.deviceId))
+        if not os.path.isdir(self.wdir):
+            os.mkdir(self.wdir)
+        self.logfile = "%s/%s.log" % (self.wdir, self.basename)
+        self.logfile_p = open(self.logfile, 'a+')
+        self.simulation.reporters.append(StateDataReporter(self.logfile_p, self.nprnt, step=True, temperature=True))        
+        
         self.par = None
         self.pot = None
     
@@ -201,9 +207,6 @@ class OpenCLContext(object):
         self.velocities = None
 
         self.command = None
-
-        write_out_flag = False
-        write_trj_flag = False
     
         #start event loop
         self._startedSignal.set()
@@ -219,45 +222,20 @@ class OpenCLContext(object):
                 self.velocities = self._inq.get()
                 self.context.setPositions(self.positions)
                 self.context.setVelocities(self.velocities)
-            elif command == "SETREPORTERS":
-                replica_steps = self._inq.get()
-                last_step = replica_steps + self.nsteps
-                outfile = self._inq.get()
-                logfile = self._inq.get()
-                dcdfile = self._inq.get()
-                self.simulation.reporters = []
-                write_out_flag = ( last_step % self.nprnt == 0 )
-                if last_step % self.nprnt == 0:
-                    if self.outfile_p != None:
-                        self.outfile_p.close()
-                    self.outfile_p = open(outfile, 'a+')
-                    if self.logfile_p != None:
-                        self.logfile_p.close()
-                    self.logfile_p = open(logfile, 'a+')
-                    self.simulation.reporters.append(StateDataReporter(self.logfile_p, self.nsteps, step=True, temperature=True))
-
-                    write_trj_flag = ( last_step % self.ntrj == 0 )
-                    if write_trj_flag :
-                        do_append = os.path.exists(dcdfile)
-                        self.simulation.reporters.append(DCDReporter(dcdfile, self.nsteps, append = do_append))
             elif command == "RUN":
                 self._readySignal.clear()
                 self._runningSignal.set()
 
-                self.simulation.step(self.nsteps)
+                self.nsteps = int(self._inq.get())
+                self.nheating = int(self._inq.get())
+                self.ncooling = int(self._inq.get())
+                self.hightemp = float(self._inq.get())
 
-                self.nsteps_current += self.nsteps
+                self._openmm_worker_run()
             
-                if write_out_flag:
-                    self._worker_writeoutfile()
-                    if self.outfile_p:
-                        self.outfile_p.close()
-                        self.outfile_p = None
-                    if self.logfile_p:
-                        self.logfile_p.flush()
+                if self.logfile_p:
+                    self.logfile_p.flush()
 
-                self.simulation.reporters = [] #reset reporters
-            
                 self._runningSignal.clear()
                 self._readySignal.set()
             elif command == "GETENERGY":
@@ -364,20 +342,12 @@ class LocalOpenMMTransport(Transport):
         self.jobqueue.put(replica)
         return self.jobqueue.qsize()
 
-    def LaunchReplica(self, sdm_context, replica, cycle):
+    def LaunchReplica(self, sdm_context, replica, cycle, nsteps,
+                      nheating = 0, ncooling = 0, hightemp = 0.0):
         (stateid, par) = replica.get_state()
         sdm_context.set_state(par)
         sdm_context.set_posvel(replica.positions, replica.velocities)
-        
-        #out_file     = 'r%d/%s_%d.out' % (replica._id,replica.basename,cycle)
-        #log_file     = 'r%d/%s_%d.log' % (replica._id,replica.basename,cycle)
-        #dcd_file     = 'r%d/%s_%d.dcd' % (replica._id,replica.basename,cycle)
-        out_file     = 'r%d/%s.out' % (replica._id,replica.basename)
-        log_file     = 'r%d/%s.log' % (replica._id,replica.basename)
-        dcd_file     = 'r%d/%s.dcd' % (replica._id,replica.basename)
-        sdm_context.set_reporters(replica.mdsteps,out_file, log_file, dcd_file)
-        
-        sdm_context.run()
+        sdm_context.run(nsteps, nheating, ncooling, hightemp)
 
     def ProcessJobQueue(self, mintime, maxtime):
         #Launches jobs waiting in the queue.
@@ -407,7 +377,17 @@ class LocalOpenMMTransport(Transport):
                 self.replica_to_job[replica] = job
                 self.node_status[node] = replica
 
-                self.LaunchReplica(job['openmm_context'], job['openmm_replica'], job['cycle'])
+                if 'nheating' in job:
+                    nheating = job['nheating']
+                    ncooling = job['ncooling']
+                    hightemp = job['hightemp']
+                else:
+                    nheating = 0
+                    ncooling = 0
+                    hightemp = 0.0
+                    
+                self.LaunchReplica(job['openmm_context'], job['openmm_replica'], job['cycle'],
+                                   job['nsteps'], nheating, ncooling, hightemp)
                 
                 # updates number of jobs launched
                 njobs_launched += 1
@@ -433,6 +413,25 @@ class LocalOpenMMTransport(Transport):
             self._clear_resource(replica)
             self.replica_to_job[replica] = None
 
+    def _update_replica(self, job):
+        #update replica cycle, mdsteps, write out, etc.
+        ommreplica = job['openmm_replica']
+        cycle = ommreplica.get_cycle() + 1
+        ommreplica.set_cycle(cycle)
+        mdsteps = ommreplica.get_mdsteps() + job['nsteps']
+        ommreplica.set_mdsteps(mdsteps)
+        #update positions and velocities of openmm replica
+        (pos,vel) = job['openmm_context'].get_posvel()
+        ommreplica.set_posvel(pos,vel)
+        #update energies of openmm replica
+        pot = job['openmm_context'].get_energy()
+        ommreplica.set_energy(pot)
+        #output data and trajectory file update 
+        if mdsteps % job['nprnt'] == 0:
+            ommreplica.save_out()
+        if mdsteps % job['ntrj'] == 0:
+            ommreplica.save_dcd()
+            
     def isDone(self,replica,cycle):
         """
         Checks if a replica completed a run.
@@ -461,18 +460,8 @@ class LocalOpenMMTransport(Transport):
             if done:
                 # disconnects replica from job and node
                 self._clear_resource(replica)
-                #update cycle and mdsteps of replica
-                ommreplica = job['openmm_replica']
-                cycle = ommreplica.get_cycle() + 1
-                ommreplica.set_cycle(cycle)
-                mdsteps = ommreplica.get_mdsteps() + job['nsteps']
-                ommreplica.set_mdsteps(mdsteps)
-                #update positions and velocities of openmm replica
-                (pos,vel) = job['openmm_context'].get_posvel()
-                ommreplica.set_posvel(pos,vel)
-                #update energies of openmm replica
-                pot = job['openmm_context'].get_energy()
-                ommreplica.set_energy(pot)
+                #update replica info
+                self._update_replica(job)
                 #flag replica as not linked to a job
                 self.replica_to_job[replica] = None
 

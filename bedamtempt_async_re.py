@@ -5,6 +5,7 @@ import random
 import logging
 import signal
 import shutil
+import random
 
 from simtk import openmm as mm
 from simtk.openmm.app import *
@@ -59,18 +60,6 @@ class OpenCLContextSDM(OpenCLContext):
         self.integrator.setW0coeff(w0 / kilojoule_per_mole)
         self.par = [temperature, lmbd, lmbd1, lmbd2, alpha, u0, w0]
 
-    def _worker_writeoutfile(self):
-        pot_energy = (self.integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
-        bind_energy = (self.integrator.getBindE()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
-        temperature = self.par[0]
-        lmbd = self.par[1]
-        lmbd1 = self.par[2]
-        lmbd2 = self.par[3]
-        alpha = self.par[4]
-        u0 = self.par[5]
-        w0 = self.par[6]
-        if self.outfile_p:
-            self.outfile_p.write("%f %f %f %f %f %f %f %f %f\n" % (temperature, lmbd, lmbd1, lmbd2, alpha*kilocalorie_per_mole, u0/kilocalorie_per_mole, w0/kilocalorie_per_mole, pot_energy, bind_energy))
 
     def _worker_getenergy(self):                       
         bind_energy = (self.integrator.getBindE()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
@@ -164,7 +153,7 @@ class OpenCLContextSDM(OpenCLContext):
         self.integrator.setSoftCoreMethod(sdm_utils.RationalSoftCoreMethod)
         self.integrator.setUmax(umsc / kilojoule_per_mole)
         self.integrator.setAcore(acore)
-
+        
 class SDMReplica(OMMReplica):
     #overrides to open dms file for SDM-RE
     def open_dms(self):
@@ -263,6 +252,21 @@ class SDMReplica(OMMReplica):
         dms.setPositions(self.positions)
         dms.setVelocities(self.velocities)
         dms.close()
+
+    def save_out(self):
+        pot_energy = self.pot[0]
+        bind_energy = self.pot[1]
+        temperature = self.par[0]
+        lmbd = self.par[1]
+        lmbd1 = self.par[2]
+        lmbd2 = self.par[3]
+        alpha = self.par[4]
+        u0 = self.par[5]
+        w0 = self.par[6]
+        if self.outfile:
+            self.outfile.write("%f %f %f %f %f %f %f %f %f\n" % (temperature, lmbd, lmbd1, lmbd2, alpha, u0, w0, pot_energy, bind_energy))
+            self.outfile.flush()
+
         
 class bedamtempt_async_re_job(bedam_async_re_job):
     def _setLogger(self):
@@ -542,12 +546,12 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         for repl in [k for k in range(self.nreplicas) if self.status[k]['running_status'] == 'W']:
             stateid = self.status[repl]['stateid_current']
             lambd = self.stateparams[stateid]['lambda']
-            temperature = self.stateparams[stateid]['temperature']
-            lambda1 = self.stateparams[stateid]['lambda1']
-            lambda2 = self.stateparams[stateid]['lambda2']
-            alpha = self.stateparams[stateid]['alpha']
-            u0 = self.stateparams[stateid]['u0']
-            w0 = self.stateparams[stateid]['w0coeff']
+            temperature = float(self.stateparams[stateid]['temperature'])
+            lambda1 = float(self.stateparams[stateid]['lambda1'])
+            lambda2 = float(self.stateparams[stateid]['lambda2'])
+            alpha = float(self.stateparams[stateid]['alpha'])
+            u0 = float(self.stateparams[stateid]['u0'])
+            w0 = float(self.stateparams[stateid]['w0coeff'])
             par = [temperature, lambd, lambda1, lambda2, alpha, u0, w0]
             self.openmm_replicas[repl].set_state(stateid, par)
         for replica in self.openmm_replicas:
@@ -636,12 +640,28 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         elif self.transport_mechanism == "LOCAL_OPENMM":
 
             nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
+            nprnt = int(self.keywords.get('PRNT_FREQUENCY'))
+            ntrj = int(self.keywords.get('TRJ_FREQUENCY'))
+            if not nprnt % nsteps == 0:
+                self._exit("nprnt must be an integer multiple of nsteps.")
+            if not ntrj % nsteps == 0:
+                sys._exit("ntrj must be an integer multiple of nsteps.")
+
             job_info = {
                 "replica": replica,
                 "cycle": cycle,
-                "nsteps": nsteps
+                "nsteps": nsteps,
+                "nprnt": nprnt,
+                "ntrj": ntrj
             }
             
+            if self.keywords.get('HEAT_AND_COOL_RATE') is not None:
+                probht = float(self.keywords.get('HEAT_AND_COOL_RATE'))
+                if probht > random.random():
+                    job_info['nheating'] = int(self.keywords.get('HEATING_STEPS'))
+                    job_info['ncooling'] = int(self.keywords.get('COOLING_STEPS'))
+                    job_info['hightemp'] = float(self.keywords.get('HIGHTEMPERATURE'))
+                    
         else: #local with runopenmm?
             executable = os.getcwd() + "/runopenmm" #edit on 10.19
             working_directory = os.getcwd() + "/r" + str(replica)
@@ -674,15 +694,15 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         (old_stateid, old_par) =  replica.get_state()
         if old_stateid != None:
             old_temperature = old_par[0]
-            
+
         stateid = self.status[repl]['stateid_current']
-        temperature = self.stateparams[stateid]['temperature']
-        lambd = self.stateparams[stateid]['lambda']
-        lambda1 = self.stateparams[stateid]['lambda1']
-        lambda2 = self.stateparams[stateid]['lambda2']
-        alpha = self.stateparams[stateid]['alpha']
-        u0 = self.stateparams[stateid]['u0']
-        w0 = self.stateparams[stateid]['w0coeff']
+        temperature = float(self.stateparams[stateid]['temperature'])
+        lambd = float(self.stateparams[stateid]['lambda'])
+        lambda1 = float(self.stateparams[stateid]['lambda1'])
+        lambda2 = float(self.stateparams[stateid]['lambda2'])
+        alpha = float(self.stateparams[stateid]['alpha'])
+        u0 = float(self.stateparams[stateid]['u0'])
+        w0 = float(self.stateparams[stateid]['w0coeff'])
         par = [temperature, lambd, lambda1, lambda2, alpha, u0, w0]
         replica.set_state(stateid, par)
 

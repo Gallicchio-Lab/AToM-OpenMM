@@ -27,12 +27,18 @@ class OMMReplica(object):
         self.cycle = 0
         self.stateid = None
         self.mdsteps = 0
-        
+
+        if not os.path.isdir('r%d' % self._id):
+            os.mkdir('r%d' % self._id)
+
+        self.open_out()
+
         self.open_dms()
         
         self.positions = copy.deepcopy(self.dms.positions)
         self.velocities = copy.deepcopy(self.dms.velocities)        
 
+        self.open_dcd()
 
     def set_state(self, stateid, par):
         self.stateid = int(stateid)
@@ -53,11 +59,17 @@ class OMMReplica(object):
         self.positions = positions
         self.velocities = velocities
 
+    def open_out(self):
+        outfilename =  'r%d/%s.out' % (self._id,self.basename)
+        self.outfile = open(outfilename, 'a+')
+
+    def save_out(self):
+        pot_energy = self.pot
+        temperature = self.par[0]
+        self.outfile.write("%f %f\n" % (temperature, pot_energy))
+        
     def open_dms(self):
         input_file  = '%s_0.dms' % self.basename 
-
-        if not os.path.isdir('r%d' % self._id):
-            os.mkdir('r%d' % self._id)
 
         output_file  = 'r%d/%s_ckp.dms' % (self._id,self.basename)
         if not os.path.isfile(output_file):
@@ -97,6 +109,19 @@ class OMMReplica(object):
             self.dms.setPositions(self.positions)
             self.dms.setVelocities(self.velocities)
 
+    def open_dcd(self):
+        dcdfilename =  'r%d/%s.dcd' % (self._id,self.basename)
+        append = os.path.isfile(dcdfilename)
+        if append:
+            mode = 'r+b'
+        else:
+            mode = 'wb'
+        self.dcdfile = open(dcdfilename, mode)
+        self.dcd = DCDFile(self.dcdfile, self.dms.topology, 0.001*picosecond, append=append)
+
+    def save_dcd(self):
+        self.dcd.writeModel(self.positions, unitCellDimensions=None, periodicBoxVectors=None)
+        
     def set_mdsteps(self, mdsteps):
         self.mdsteps = mdsteps
 

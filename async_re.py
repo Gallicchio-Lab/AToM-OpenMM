@@ -351,21 +351,26 @@ class async_re(object):
             repl_dir = 'r%d'%k
             if not os.path.exists(repl_dir):
                 replica_dirs_exist = False
-                
-        # support for restart of the replicas implemented
-        # probably need to refine the logic **
-        # at present only restarts if all replica directories have at least one *.out file when transport_mechanism == 'LOCAL_OPENMM'
+
         if replica_dirs_exist:
             setup = False
+        else:
+            setup = True
+
+        if not setup:
+            #check that output files exist and are not empty
+            #in each replica directory
             for k in range(self.nreplicas):
+                out_exist = False
                 repl_dir = 'r%d' %k
                 all_files = os.listdir(repl_dir)
                 for f in all_files:
-                    if f.endswith(".out"):
-                        setup = False
+                    if f.endswith(".out") and os.path.getsize("%s/%s" % (repl_dir,f)) > 0:
+                        out_exist = True
                         break
-                    else:
-                        setup = True
+                if not out_exist:
+                    setup = True
+                    break
 
         if setup:
             # create status table
@@ -464,8 +469,10 @@ class async_re(object):
             self.print_status()
                 
             if last_checkpoint_time == None or current_time - last_checkpoint_time > checkpoint_time:
+                self.logger.info("Checkpointing ...")
                 self.checkpointJob()
                 last_checkpoint_time = current_time
+                self.logger.info("done.")
 
         self.transport.DrainJobQueue()
         self.updateStatus()
@@ -621,10 +628,8 @@ class async_re(object):
         """Perform exchanges among waiting replicas using Gibbs sampling."""
 
 	#check the exchange
-	#added on 10.21.15 check the exchange
-	self.logger.info("starting the replica exchange")
-	#added end on 10.21.15
-
+        if self.verbose:
+	    self.logger.info("starting the replica exchange")
 
         replicas_to_exchange = self.replicas_waiting_to_exchange
         states_to_exchange = self.states_waiting_to_exchange
@@ -646,7 +651,8 @@ class async_re(object):
         matrix_start_time = time.time()
         swap_matrix = self._computeSwapMatrix(replicas_to_exchange,
                                               states_to_exchange)
-	self.logger.info(swap_matrix) #added on 10.22.15
+        if self.verbose:
+	    self.logger.info(swap_matrix)
         matrix_time = time.time() - matrix_start_time
 
         sampling_start_time = time.time()
@@ -681,6 +687,8 @@ class async_re(object):
                         sid_j = self.status[repl_j]['stateid_current']
                         self.status[repl_i]['stateid_current'] = sid_j
                         self.status[repl_j]['stateid_current'] = sid_i
+                        self.logger.info("Replica %d new state %d" % (repl_i, sid_j))
+                        self.logger.info("Replica %d new state %d" % (repl_j, sid_i))
             else:
                 repl_i = choice(replicas_to_exchange)
                 sid_i = self.status[repl_i]['stateid_current']
@@ -703,7 +711,9 @@ class async_re(object):
                     sid_j = self.status[repl_j]['stateid_current']
                     self.status[repl_i]['stateid_current'] = sid_j
                     self.status[repl_j]['stateid_current'] = sid_i
-
+                    self.logger.info("Replica %d new state %d" % (repl_i, sid_j))
+                    self.logger.info("Replica %d new state %d" % (repl_j, sid_i))
+                    
         # Uncomment to debug Gibbs sampling:
         # Actual and observed populations of state permutations should match.
         #

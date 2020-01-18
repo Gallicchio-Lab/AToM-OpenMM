@@ -44,7 +44,7 @@ class openmm_job(async_re):
         # update replica objects of waiting replicas
         for repl in [k for k in range(self.nreplicas) if self.status[k]['running_status'] == 'W']:
             stateid = self.status[repl]['stateid_current']
-            temperature = self.stateparams[stateid]['temperature']
+            temperature = float(self.stateparams[stateid]['temperature'])
             par = [temperature]
             self.openmm_replicas[repl].set_state(stateid, par)
         for replica in self.openmm_replicas:
@@ -127,11 +127,21 @@ class openmm_job(async_re):
         elif self.transport_mechanism == "LOCAL_OPENMM":
 
             nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
+            nprnt = int(self.keywords.get('PRNT_FREQUENCY'))
+            ntrj = int(self.keywords.get('TRJ_FREQUENCY'))
+            if not nprnt % nsteps == 0:
+                self._exit("nprnt must be an integer multiple of nsteps.")
+            if not ntrj % nsteps == 0:
+                sys._exit("ntrj must be an integer multiple of nsteps.")
+
             job_info = {
                 "replica": replica,
                 "cycle": cycle,
-                "nsteps": nsteps
+                "nsteps": nsteps,
+                "nprnt": nprnt,
+                "ntrj": ntrj
             }
+
             
         else: #local with runopenmm?
             self._exit("Unknown job transport")

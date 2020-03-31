@@ -1,4 +1,5 @@
 from __future__ import print_function
+from __future__ import division
 """
 Multiprocessing job transport for AsyncRE/OpenMM
 """
@@ -26,7 +27,7 @@ class OpenCLContext(object):
     #  get_energy_values()
     #  _worker_setstate_fromqueue()
     #  _worker_writeoutfile)
-    #  _worker_getenergy()                       
+    #  _worker_getenergy()
     #  _openmm_worker_body()
     def __init__(self, basename, platform_id, device_id, keywords):
         s = signal.signal(signal.SIGINT, signal.SIG_IGN) #so that children do not respond to ctrl-c
@@ -68,7 +69,7 @@ class OpenCLContext(object):
         self._cmdq.put("GETENERGY")
         pot = self.get_energy_values()
         return pot
-    
+
     # set positions and velocities of worker
     def set_posvel(self, positions, velocities):
         self._startedSignal.wait()
@@ -106,7 +107,7 @@ class OpenCLContext(object):
         self._p.terminate()
         self._p.join(10) #10s time-out
         self._p.exitcode
-        
+
     # is worker running?
     def is_running(self):
         return self._runningSignal.is_set()
@@ -124,33 +125,31 @@ class OpenCLContext(object):
         self._inq.put(nheating)
         self._inq.put(ncooling)
         self._inq.put(hightemp)
-        
 
     #
     # routine being multi-processed (worker)
     # default is temperature replica exchange (MD at constant temperature)
     #
-    
     def _worker_setstate_fromqueue(self):
         # can override in child class
         temperature = self._inq.get()
         self.integrator.setTemperature(temperature)
         self.par = [temperature]
-    
+
     def _worker_writeoutfile(self):
         pot_energy = self.context.getState(getEnergy = True).getPotentialEnergy()/kilocalorie_per_mole
         temperature = self.par[0]
         if self.outfile_p:
             self.outfile_p.write("%f %f\n" % (temperature, pot_energy))
 
-    def _worker_getenergy(self):                       
+    def _worker_getenergy(self):
         pot_energy = self.context.getState(getEnergy = True).getPotentialEnergy()/kilocalorie_per_mole
         self._outq.put(pot_energy)
         self.pot = (pot_energy)
 
-    def _openmm_worker_body(self):    
-        input_dms_file  = '%s_0.dms' % self.basename 
-        self.dms = DesmondDMSFile([input_dms_file]) 
+    def _openmm_worker_body(self):
+        input_dms_file  = '%s_0.dms' % self.basename
+        self.dms = DesmondDMSFile([input_dms_file])
         self.topology = self.dms.topology
         implicitsolvent = str(self.keywords.get('IMPLICITSOLVENT'))
         if implicitsolvent is None:
@@ -173,8 +172,8 @@ class OpenCLContext(object):
             self.simulation.step(self.ncooling)
             production_temperature = self.par[0]
             self.integrator.setTemperature(production_temperature)
-        self.simulation.step(self.nsteps)        
-        
+        self.simulation.step(self.nsteps)
+
     def openmm_worker(self):
         self._startedSignal.clear()
         self._readySignal.clear()
@@ -189,7 +188,7 @@ class OpenCLContext(object):
 
         self.simulation = Simulation(self.topology, self.system, self.integrator, self.platform, self.platform_properties)
         self.context = self.simulation.context
-        
+
         self.simulation.reporters = []
 
         #sets up logfile
@@ -199,15 +198,15 @@ class OpenCLContext(object):
         self.logfile = "%s/%s.log" % (self.wdir, self.basename)
         self.logfile_p = open(self.logfile, 'a+')
         self.simulation.reporters.append(StateDataReporter(self.logfile_p, self.nprnt, step=True, temperature=True))        
-        
+
         self.par = None
         self.pot = None
-    
+
         self.positions = None
         self.velocities = None
 
         self.command = None
-    
+
         #start event loop
         self._startedSignal.set()
         self._readySignal.set()
@@ -232,7 +231,7 @@ class OpenCLContext(object):
                 self.hightemp = float(self._inq.get())
 
                 self._openmm_worker_run()
-            
+
                 if self.logfile_p:
                     self.logfile_p.flush()
 
@@ -274,7 +273,7 @@ class LocalOpenMMTransport(Transport):
         # jobname: identifies current asyncRE job
         Transport.__init__(self)
         self.logger = logging.getLogger("async_re.local_openmm_transport")
-        
+
         # openmm contexts
         self.openmm_contexts = openmm_contexts
         self.nprocs = len(self.openmm_contexts)
@@ -337,7 +336,7 @@ class LocalOpenMMTransport(Transport):
         #Enqueues a replica for running based on provided job info.
         job = job_info
         job['replica'] = replica
-	job['start_time'] = 0
+        job['start_time'] = 0
         self.replica_to_job[replica] = job
         self.jobqueue.put(replica)
         return self.jobqueue.qsize()
@@ -366,12 +365,12 @@ class LocalOpenMMTransport(Transport):
                 # grabs job on top of the queue
                 replica = self.jobqueue.get()
                 job = self.replica_to_job[replica]
-               
+
                 # assign job to available node
                 job['nodeid'] = node
                 job['openmm_replica'] = self.openmm_replicas[replica]
                 job['openmm_context'] = self.openmm_contexts[node]
-		job['start_time'] = time.time()
+                job['start_time'] = time.time()
 
                 # connects node to replica
                 self.replica_to_job[replica] = job
@@ -385,10 +384,10 @@ class LocalOpenMMTransport(Transport):
                     nheating = 0
                     ncooling = 0
                     hightemp = 0.0
-                    
+
                 self.LaunchReplica(job['openmm_context'], job['openmm_replica'], job['cycle'],
                                    job['nsteps'], nheating, ncooling, hightemp)
-                
+
                 # updates number of jobs launched
                 njobs_launched += 1
 
@@ -431,7 +430,7 @@ class LocalOpenMMTransport(Transport):
             ommreplica.save_out()
         if mdsteps % job['ntrj'] == 0:
             ommreplica.save_dcd()
-            
+
     def isDone(self,replica,cycle):
         """
         Checks if a replica completed a run.

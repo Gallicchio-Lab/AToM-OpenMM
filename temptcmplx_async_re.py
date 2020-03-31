@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import division
 import os
 import sys
 import re
@@ -23,9 +25,9 @@ from SDMplugin import *
 # OpenMM context overrides for T-RE for a complex
 class OpenCLContextCmplx(OpenCLContext):
     def _openmm_worker_body(self):
-        input_dms_file_lig = '%s_lig_0.dms' % self.basename 
-        input_dms_file_rcpt  = '%s_rcpt_0.dms' % self.basename 
-        self.dms = DesmondDMSFile([input_dms_file_lig, input_dms_file_rcpt]) 
+        input_dms_file_lig = '%s_lig_0.dms' % self.basename
+        input_dms_file_rcpt  = '%s_rcpt_0.dms' % self.basename
+        self.dms = DesmondDMSFile([input_dms_file_lig, input_dms_file_rcpt])
         self.topology = self.dms.topology
         implicitsolvent = str(self.keywords.get('IMPLICITSOLVENT'))
         if implicitsolvent is None:
@@ -40,11 +42,11 @@ class OpenCLContextCmplx(OpenCLContext):
         frictionCoeff = float(self.keywords.get('FRICTION_COEFF')) / picosecond
         MDstepsize = float(self.keywords.get('TIME_STEP')) * picosecond
         self.integrator = LangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond)
-        
+
 class CmplxReplica(OMMReplica):
     #overrides to open dms file for a complex
     def open_dms(self):
-        rcptfile_input  = '%s_rcpt_0.dms' % self.basename 
+        rcptfile_input  = '%s_rcpt_0.dms' % self.basename
         ligfile_input   = '%s_lig_0.dms'  % self.basename
 
         if not os.path.isdir('r%d' % self._id):
@@ -58,11 +60,11 @@ class CmplxReplica(OMMReplica):
         if not os.path.isfile(rcptfile_output):
             shutil.copyfile(rcptfile_input, rcptfile_output)
 
-        self.dms = DesmondDMSFile([ligfile_output, rcptfile_output]) 
+        self.dms = DesmondDMSFile([ligfile_output, rcptfile_output])
 
         self.sql_conn_lig = self.dms._conn[0]
         self.sql_conn_rcpt = self.dms._conn[1]
-                
+
         # check for tre_data table in dms file
         tables = self.dms._tables[0]
         conn = self.sql_conn_lig
@@ -88,13 +90,13 @@ class CmplxReplica(OMMReplica):
                 conn.execute("INSERT INTO tre_data (epot,temperature,cycle,stateid,mdsteps) VALUES (0,0,0,0,0)")
                 conn.commit()
                 self.dms._tables[0] = self.dms._readSchemas(conn)
-            pot_energy =  float(self.pot[0])            
+            pot_energy =  float(self.pot[0])
             temperature = float(self.par[0])
             conn.execute("UPDATE tre_data SET epot = %f, temperature = %f, cycle = %d, stateid = %d, mdsteps = %d WHERE id = 1" % (pot_energy, temperature, self.cycle, self.stateid, self.mdsteps))
             conn.commit()
             self.dms.setPositions(self.positions)
             self.dms.setVelocities(self.velocities)
-            
+
     def set_posvel_from_file(self, replica, cycle):
         ligfile = "r%d/%s_lig_%d.dms" % (replica, self.basename, cycle)
         rcptfile = "r%d/%s_rcpt_%d.dms" % (replica, self.basename, cycle)
@@ -119,24 +121,24 @@ class temptcmplx_async_re_job(tempt_async_re_job):
         return CmplxReplica(repl_id, basename)
 
 if __name__ == '__main__':
-    
+
     # Parse arguments:
     usage = "%prog <ConfigFile>"
 
     if len(sys.argv) != 2:
-        print "Please specify ONE input file"
+        print("Please specify ONE input file")
         sys.exit(1)
 
     commandFile = sys.argv[1]
 
-    print ""
-    print "===================================="
-    print "Temperature Asynchronous Replica Exchange "
-    print "===================================="
-    print ""
-    print "Started at: " + str(time.asctime())
-    print "Input file:", commandFile
-    print ""
+    print("")
+    print("====================================")
+    print("Temperature Asynchronous Replica Exchange ")
+    print("====================================")
+    print("")
+    print("Started at: " + str(time.asctime()))
+    print("Input file:", commandFile)
+    print("")
     sys.stdout.flush()
 
     rx = temptcmplx_async_re_job(commandFile, options=None)

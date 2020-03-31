@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import division
 import sys
 import time
 import math
@@ -17,7 +19,7 @@ class bedam_async_re_job(openmm_job):
         if self.keywords.get('RE_TYPE') != 'BEDAM':
             self._exit("RE_TYPE is not BEDAM")
 
-	#BEDAM runs with OPENMM
+        #BEDAM runs with OPENMM
         if self.keywords.get('ENGINE') != 'OPENMM': #edited on 10.16.15
             self._exit("ENGINE is not OPENMM") #edit 10.16
         #input files
@@ -98,9 +100,9 @@ class bedam_async_re_job(openmm_job):
         dl = float(lambda_b) - float(lambda_a)
         du = float(u_b) - float(u_a)
         delta = -dl*du
-	#added on 10.21.15 check the exchange
-	self.logger.info("dl = %f du = %f delta = %f", dl, du, delta)
-	#added end on 10.21.15
+        #added on 10.21.15 check the exchange
+        self.logger.info("dl = %f du = %f delta = %f", dl, du, delta)
+        #added end on 10.21.15
 
         if self.keywords.get('VERBOSE') == "yes":
             self.logger.info("Pair Info")
@@ -111,9 +113,9 @@ class bedam_async_re_job(openmm_job):
         csi = random.random()
         if math.exp(-self.bedam_beta*delta) > csi:
             status_func = lambda val: self.status[val]['stateid_current']
-	    #added on 10.21.15 check the exchange
-	    #self.logger.info("%s %s", status_func(repl_a), status_func(repl_b))
-	    #added end on 10.21.15
+            #added on 10.21.15 check the exchange
+            #self.logger.info("%s %s", status_func(repl_a), status_func(repl_b))
+            #added end on 10.21.15
             if self.keywords.get('VERBOSE') == "yes":
                 self.logger.info("Accepted %f %f", math.exp(-self.bedam_beta*delta, csi))
                 self.logger.info("%s %s", status_func(repl_a), status_func(repl_b))
@@ -133,25 +135,25 @@ class bedam_async_re_job(openmm_job):
         datai = self._getOpenMMData(output_file)
         nf = len(datai[0])
         nr = len(datai)
-	#check the binding energy in the last position 10.21.15
-	self.logger.info("binding energy = %f", datai[nr-1][nf-1])
-	#end on 10.21.15
+        #check the binding energy in the last position 10.21.15
+        self.logger.info("binding energy = %f", datai[nr-1][nf-1])
+        #end on 10.21.15
         return datai[nr-1][nf-1]
 
     def _getPot(self,repl,cycle):
 
-	#check the energy in the last position 10.21.15
-	self.logger.info("_getpot energy = %f", float(self._extractLast_BindingEnergy(repl,cycle)))
-	#end on 10.21.15
+        #check the energy in the last position 10.21.15
+        self.logger.info("_getpot energy = %f", float(self._extractLast_BindingEnergy(repl,cycle)))
+        #end on 10.21.15
         return float(self._extractLast_BindingEnergy(repl,cycle))
 
     def _getPar(self,repl):
         sid = self.status[repl]['stateid_current']
         lmb = self.lambdas[sid]
-	#check the lambda 10.21.15
-	self.logger.info("_getPar = %f", float(lmb))
-	#end on 10.21.15
-	
+        #check the lambda 10.21.15
+        self.logger.info("_getPar = %f", float(lmb))
+        #end on 10.21.15
+
         return float(lmb)
 
     def _reduced_energy(self,par,pot):
@@ -167,19 +169,19 @@ if __name__ == '__main__':
     usage = "%prog <ConfigFile>"
 
     if len(sys.argv) != 2:
-        print "Please specify ONE input file"
+        print("Please specify ONE input file")
         sys.exit(1)
 
     commandFile = sys.argv[1]
 
-    print ""
-    print "===================================="
-    print "BEDAM Asynchronous Replica Exchange "
-    print "===================================="
-    print ""
-    print "Started at: " + str(time.asctime())
-    print "Input file:", commandFile
-    print ""
+    print("")
+    print("====================================")
+    print("BEDAM Asynchronous Replica Exchange ")
+    print("====================================")
+    print("")
+    print("Started at: " + str(time.asctime()))
+    print("Input file:", commandFile)
+    print("")
     sys.stdout.flush()
 
     rx = bedam_async_re_job(commandFile, options=None)

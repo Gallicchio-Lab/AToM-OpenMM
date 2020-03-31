@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import division
 import sys
 import time
 import math
@@ -61,7 +63,7 @@ class OpenCLContextSDM(OpenCLContext):
         self.par = [temperature, lmbd, lmbd1, lmbd2, alpha, u0, w0]
 
 
-    def _worker_getenergy(self):                       
+    def _worker_getenergy(self):
         bind_energy = (self.integrator.getBindE()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
         pot_energy = (self.integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
         self._outq.put(pot_energy)
@@ -69,13 +71,13 @@ class OpenCLContextSDM(OpenCLContext):
         self.pot = (pot_energy, bind_energy)
 
     def  _openmm_worker_body(self):
-        
-        rcptfile_input  = '%s_rcpt_0.dms' % self.basename 
+
+        rcptfile_input  = '%s_rcpt_0.dms' % self.basename
         ligfile_input   = '%s_lig_0.dms'  % self.basename
-        
-        self.dms = DesmondDMSFile([ligfile_input, rcptfile_input]) 
+
+        self.dms = DesmondDMSFile([ligfile_input, rcptfile_input])
         self.topology = self.dms.topology
-    
+
         implicitsolvent = str(self.keywords.get('IMPLICITSOLVENT'))
         if implicitsolvent is None:
             self.system = self.dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = None)
@@ -94,7 +96,7 @@ class OpenCLContextSDM(OpenCLContext):
         #convert the string of lig atoms to integer
         lig_atom_restr = [int(i) for i in cm_lig_atoms]
         #rcpt_atom_restr = [121, 210, 281, 325, 406, 527, 640, 650, 795, 976, 1276]   #indexes of rcpt atoms for CM-CM Vsite restraint
-        
+
         cm_rcpt_atoms = self.keywords.get('REST_LIGAND_CMREC_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
         #convert the string of receptor rcpt atoms to integer
         rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
@@ -103,7 +105,7 @@ class OpenCLContextSDM(OpenCLContext):
         kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
         cmtol = float(self.keywords.get('CM_TOL'))
         r0 = cmtol * angstrom #radius of Vsite sphere
-    
+
         #these can be 'None" if not using orientational restraints
         lig_ref_atoms = None # the 3 atoms of the ligand that define the coordinate system of the ligand
         rcpt_ref_atoms = None # the 3 atoms of the receptor that define the coordinate system of the receptor
@@ -116,7 +118,7 @@ class OpenCLContextSDM(OpenCLContext):
         dihedral2center = None * degrees
         kfdihedral2 = None * kilocalorie_per_mole/degrees**2
         dihedral2tol = None * degrees
-    
+
         #transform indexes of receptor atoms
         for i in range(len(rcpt_atom_restr)):
             rcpt_atom_restr[i] += natoms_ligand
@@ -140,7 +142,7 @@ class OpenCLContextSDM(OpenCLContext):
                                     dihedral2center = dihedral2center,
                                     kfdihedral2 = kfdihedral2,
                                     dihedral2tol = dihedral2tol)
-    
+
         # the integrator object is context-specific
         #temperature = int(self.keywords.get('TEMPERATURES')) * kelvin
         temperature = 300 * kelvin #will be overriden in set_state()
@@ -153,11 +155,11 @@ class OpenCLContextSDM(OpenCLContext):
         self.integrator.setSoftCoreMethod(sdm_utils.RationalSoftCoreMethod)
         self.integrator.setUmax(umsc / kilojoule_per_mole)
         self.integrator.setAcore(acore)
-        
+
 class SDMReplica(OMMReplica):
     #overrides to open dms file for SDM-RE
     def open_dms(self):
-        rcptfile_input  = '%s_rcpt_0.dms' % self.basename 
+        rcptfile_input  = '%s_rcpt_0.dms' % self.basename
         ligfile_input   = '%s_lig_0.dms'  % self.basename
 
         if not os.path.isdir('r%d' % self._id):
@@ -175,7 +177,7 @@ class SDMReplica(OMMReplica):
 
         self.sql_conn_lig = self.dms._conn[0]
         self.sql_conn_rcpt = self.dms._conn[1]
-                
+
         # check for sdm_data table in lig dms
         tables = self.dms._tables[0]
         conn = self.sql_conn_lig
@@ -202,7 +204,7 @@ class SDMReplica(OMMReplica):
 
             pot_energy =  float(self.pot[0])
             bind_energy = float(self.pot[1])
-            
+
             temperature = float(self.par[0])
             lmbd =        float(self.par[1])
             lambda1 =     float(self.par[2])
@@ -210,7 +212,7 @@ class SDMReplica(OMMReplica):
             alpha =       float(self.par[4])
             u0 =          float(self.par[5])
             w0coeff =     float(self.par[6])
-            
+
             conn.execute("UPDATE sdm_data SET binde = %f, epot = %f, temperature = %f, lambda = %f, lambda1 = %f, lambda2 = %f, alpha = %f, u0 = %f, w0 = %f, cycle = %d, stateid = %d, mdsteps = %d WHERE id = 1" % (bind_energy, pot_energy, temperature, lmbd, lambda1, lambda2, alpha, u0, w0coeff, self.cycle, self.stateid, self.mdsteps))
             conn.commit()
             self.dms.setPositions(self.positions)
@@ -236,7 +238,7 @@ class SDMReplica(OMMReplica):
         binding_energy = data[nr-1][8]
         self.set_state(self.stateid, parameters)
         self.set_energy([pot_energy, binding_energy])
-            
+
     def set_posvel_from_file(self, replica, cycle):
         ligfile = "r%d/%s_lig_%d.dms" % (replica, self.basename, cycle)
         rcptfile = "r%d/%s_rcpt_%d.dms" % (replica, self.basename, cycle)
@@ -267,7 +269,7 @@ class SDMReplica(OMMReplica):
             self.outfile.write("%f %f %f %f %f %f %f %f %f\n" % (temperature, lmbd, lmbd1, lmbd2, alpha, u0, w0, pot_energy, bind_energy))
             self.outfile.flush()
 
-        
+
 class bedamtempt_async_re_job(bedam_async_re_job):
     def _setLogger(self):
         self.logger = logging.getLogger("async_re.bedamtempt_async_re")
@@ -277,7 +279,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         #make sure BEDAM + TEMPERATURE is wanted
         if self.keywords.get('RE_TYPE') != 'BEDAMTEMPT':
             self._exit("RE_TYPE is not BEDAMTEMPT")
-	#BEDAM runs with openmm //edit on 10.15
+        #BEDAM runs with openmm //edit on 10.15
         if self.keywords.get('ENGINE') != 'OPENMM':
             self._exit("ENGINE is not OPENMM")
         #input files
@@ -328,10 +330,8 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         #added on 10.19.15
         self.implicitsolvent =  self.keywords.get('IMPLICITSOLVENT')
         self.totalsteps = self.keywords.get('PRODUCTION_STEPS')
-	self.jobname = self.keywords.get('ENGINE_INPUT_BASENAME')
-	self.stepgap = self.keywords.get('PRNT_FREQUENCY')
-	
-
+        self.jobname = self.keywords.get('ENGINE_INPUT_BASENAME')
+        self.stepgap = self.keywords.get('PRNT_FREQUENCY')
 
     def _buildBEDAMStates(self):
         self.stateparams = []
@@ -364,7 +364,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
                     st['lambda'] = lambd
                     st['temperature'] = tempt
                     self.stateparams.append(st)
-            
+
         return len(self.stateparams)
 
 
@@ -377,7 +377,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
 
         if self.transport_mechanism == "LOCAL_OPENMM":
             return
-            
+
         basename = self.basename
         stateid = self.status[replica]['stateid_current']
         cycle = self.status[replica]['cycle_current']
@@ -386,8 +386,8 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         inpfile = "r%d/%s_%d.py" % (replica, basename, cycle)
         implicitsolvent = self.implicitsolvent
         totalsteps = self.totalsteps
-	jobname = self.jobname
-	stepgap = self.stepgap
+        jobname = self.jobname
+        stepgap = self.stepgap
 
 
         lambd = self.stateparams[stateid]['lambda']
@@ -408,7 +408,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
             tbuffer = tbuffer.replace("@gamma@",gamma)
             tbuffer = tbuffer.replace("@bcoeff@",b)
             tbuffer = tbuffer.replace("@w0coeff@",w0)
-            
+
         if 'lambda1' in self.stateparams[stateid].keys():
             lambda1 = self.stateparams[stateid]['lambda1']
             lambda2 = self.stateparams[stateid]['lambda2']
@@ -420,7 +420,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
             tbuffer = tbuffer.replace("@alpha@",alpha)
             tbuffer = tbuffer.replace("@u0@",u0)
             tbuffer = tbuffer.replace("@w0coeff@",w0)
-            
+
         # write out
         ofile = self._openfile(inpfile, "w")
         ofile.write(tbuffer)
@@ -430,7 +430,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         ofile = self._openfile("r%d/state.history" % replica, "a")
         ofile.write("%d %d %s %s\n" % (cycle, stateid, lambd, temperature))
         ofile.close()
-    
+
     def _extractLast_lambda_BindingEnergy_PotEnergy(self,repl,cycle):
         """
         Extracts binding energy etc. from replica objects
@@ -442,7 +442,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
 
         pot_energy =  pot[0]
         bind_energy = pot[1]
-            
+
         temperature = par[0]
         lmbd =        par[1]
         lambda1 =     par[2]
@@ -479,7 +479,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
 
     def _getPot(self,repl,cycle):
         (parameters, u, epot) = self._extractLast_lambda_BindingEnergy_PotEnergy(repl,cycle)
-        
+
         temperature = float(parameters[0])
         lmb = float(parameters[1])
         lambda1 = float(parameters[2])
@@ -487,7 +487,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         alpha = float(parameters[4])
         u0 = float(parameters[5])
         w0 = float(parameters[6])
-        
+
         uf = float(u)
         ee = 1.0 + math.exp(-alpha*(uf-u0))
         ebias = 0.0
@@ -514,7 +514,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         parameters.append(alpha)
         parameters.append(u0)
         parameters.append(w0)
-        
+
         return (parameters)
 
     def _reduced_energy(self,par,pot):
@@ -531,7 +531,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
 
         e0 = pot[0]
         uf = pot[1]
-            
+
         ee = 1.0 + math.exp(-alpha*(uf-u0))
         ebias = 0.0
         if alpha > 0:
@@ -565,26 +565,26 @@ class bedamtempt_async_re_job(bedam_async_re_job):
     #override for creating SDM versions of the replicas
     def CreateReplica(self, repl_id, basename):
         return SDMReplica(repl_id, basename)
-    
+
     #override for launching an SDM replica
-    def _launchReplica(self,replica,cycle): 
+    def _launchReplica(self,replica,cycle):
         """
         Launches a SDM OpenMM sub-job
         """
         input_file = "%s_%d.py" % (self.basename, cycle)
         log_file = "%s_%d.log" % (self.basename, cycle)
         err_file = "%s_%d.err" % (self.basename, cycle)
-        
+
         if self.transport_mechanism == "SSH":
-	    rstfile_rcpt_p = "%s_rcpt_%d.dms" % (self.basename,cycle-1)
-	    rstfile_lig_p = "%s_lig_%d.dms" % (self.basename,cycle-1)
+            rstfile_rcpt_p = "%s_rcpt_%d.dms" % (self.basename,cycle-1)
+            rstfile_lig_p = "%s_lig_%d.dms" % (self.basename,cycle-1)
             local_working_directory = os.getcwd() + "/r" + str(replica)
             remote_replica_dir = "%s_r%d_c%d" % (self.basename, replica, cycle)
             executable = "./runopenmm"
 
             #sync positions/velocities from internal replica to input dms file
             self.openmm_replicas[replica].write_posvel_to_file(replica, cycle-1)
-            
+
             job_info = {
                 "replica": replica,
                 "cycle": cycle,
@@ -612,7 +612,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
             job_input_files.append(input_file)
             if rstfile_rcpt_p and rstfile_lig_p:
                 job_input_files.append(rstfile_rcpt_p)
-	    	job_input_files.append(rstfile_lig_p)
+                job_input_files.append(rstfile_lig_p)
             for filename in self.extfiles:
                 job_input_files.append(filename)
 
@@ -626,14 +626,14 @@ class bedamtempt_async_re_job(bedam_async_re_job):
             ligfile="%s_lig_%d.dms" % (self.basename,cycle)
             pdbfile="%s_%d.pdb" % (self.basename,cycle)
             dcdfile="%s_%d.dcd" % (self.basename,cycle)
-                
+
             job_output_files.append(output_file)
 
             job_output_files.append(rcptfile)
             job_output_files.append(ligfile)
             job_output_files.append(pdbfile)
             job_output_files.append(dcdfile)
-                
+
             job_info["job_input_files"] = job_input_files
             job_info["job_output_files"] = job_output_files
 
@@ -654,14 +654,14 @@ class bedamtempt_async_re_job(bedam_async_re_job):
                 "nprnt": nprnt,
                 "ntrj": ntrj
             }
-            
+
             if self.keywords.get('HEAT_AND_COOL_RATE') is not None:
                 probht = float(self.keywords.get('HEAT_AND_COOL_RATE'))
                 if probht > random.random():
                     job_info['nheating'] = int(self.keywords.get('HEATING_STEPS'))
                     job_info['ncooling'] = int(self.keywords.get('COOLING_STEPS'))
                     job_info['hightemp'] = float(self.keywords.get('HIGHTEMPERATURE'))
-                    
+
         else: #local with runopenmm?
             executable = os.getcwd() + "/runopenmm" #edit on 10.19
             working_directory = os.getcwd() + "/r" + str(replica)
@@ -675,16 +675,16 @@ class bedamtempt_async_re_job(bedam_async_re_job):
             failed_file = "r%s/%s_%d.failed" % (str(replica),self.basename,cycle)
             if os.path.exists(failed_file):
                 os.remove(failed_file)
-            
+
         if self.keywords.get('VERBOSE') == "yes":
             msg = "_launchReplica(): Launching %s %s in directory %s cycle %d"
             if self.transport_mechanism is 'SSH':
                 self.logger.info(msg, executable, input_file, local_working_directory, cycle)
-            elif not self.transport_mechanism is 'LOCAL_OPENMM':
+            elif not (self.transport_mechanism ==  'LOCAL_OPENMM'):
                 self.logger.info(msg, executable, input_file, working_directory, cycle)
 
         status = self.transport.launchJob(replica, job_info)
-        
+
         return status
 
     def update_state_of_replica(self, repl):
@@ -711,8 +711,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
             if stateid != old_stateid:
                 scale = math.sqrt(float(temperature)/float(old_temperature))
                 for i in range(0,len(replica.velocities)):
-                    replica.velocities[i] = scale*replica.velocities[i] 
-
+                    replica.velocities[i] = scale*replica.velocities[i]
 
     def _hasCompleted(self,replica,cycle):
         """
@@ -721,12 +720,12 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         if self.transport_mechanism == "LOCAL_OPENMM":
             #safeguards are off for local transport
             return True
-        
+
         output_file = "r%s/%s_%d.out" % (replica,self.basename,cycle)
         failed_file = "r%s/%s_%d.failed" % (replica,self.basename,cycle)
         dmsfile_lig = "r%s/%s_lig_%d.dms" % (replica,self.basename,cycle)
         dmsfile_rcpt = "r%s/%s_rcpt_%d.dms" % (replica,self.basename,cycle)
-        
+
         if os.path.exists(failed_file):
             return False
 
@@ -744,31 +743,31 @@ class bedamtempt_async_re_job(bedam_async_re_job):
         try:
             self.openmm_replicas[replica]._getOpenMMData(output_file)
         except:
-	    self.logger.warning("Unable to read/parse output file for replica %d cycle %d" % (replica, cycle))
+            self.logger.warning("Unable to read/parse output file for replica %d cycle %d" % (replica, cycle))
             return False
 
         return True
 
-                       
+
 if __name__ == '__main__':
 
     # Parse arguments:
     usage = "%prog <ConfigFile>"
 
     if len(sys.argv) != 2:
-        print "Please specify ONE input file"
+        print("Please specify ONE input file")
         sys.exit(1)
 
     commandFile = sys.argv[1]
 
-    print ""
-    print "===================================="
-    print "BEDAM Asynchronous Replica Exchange "
-    print "===================================="
-    print ""
-    print "Started at: " + str(time.asctime())
-    print "Input file:", commandFile
-    print ""
+    print("")
+    print("====================================")
+    print("BEDAM Asynchronous Replica Exchange ")
+    print("====================================")
+    print("")
+    print("Started at: " + str(time.asctime()))
+    print("Input file:", commandFile)
+    print("")
     sys.stdout.flush()
 
     rx = bedamtempt_async_re_job(commandFile, options=None)

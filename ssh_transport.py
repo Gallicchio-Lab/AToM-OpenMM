@@ -1,6 +1,8 @@
 """
 SSH job transport for AsyncRE
 """
+from __future__ import print_function
+from __future__ import division
 import os
 import re
 import sys
@@ -24,12 +26,12 @@ class ssh_transport(Transport):
         # openmm_replicas: list of openmm replica objects
         Transport.__init__(self)
         self.logger = logging.getLogger("async_re.ssh_transport")
-        
+
         # names of compute nodes (slots)
         self.compute_nodes = compute_nodes
         self.nprocs = len(self.compute_nodes)
         #self.openmm_platform = None
-                        
+
         # node status = None if idle
         # Otherwise a structure containing:
         #    replica number being executed
@@ -37,12 +39,12 @@ class ssh_transport(Transport):
         #    process name
         #    ...
         self.node_status = [ None for k in range(self.nprocs)]
-	#self.openmm_platform = None
-	
+        #self.openmm_platform = None
+
         #records replica OpenMM objects
         self.openmm_replicas = openmm_replicas
         nreplicas = len(openmm_replicas)
-        
+
         # contains the nodeid of the node running a replica
         # None = no information about where the replica is running
         self.replica_to_job = [ None for k in range(nreplicas) ]
@@ -87,13 +89,13 @@ class ssh_transport(Transport):
         return available[0]
 
     def _launchCmd(self, command, job):
-	if job['username'] =="":
-	    ssh_command = "ssh %s" % job['nodename']
+        if job['username'] =="":
+            ssh_command = "ssh %s" % job['nodename']
             scp_remote = "%s:" % job['nodename']
-	else:
-	    ssh_command = "ssh %s@%s" % (job['nodename'],job['username'])
-            scp_remote = "%s@%s:" % (job['username'],job['username']) 
-        
+        else:
+            ssh_command = "ssh %s@%s" % (job['nodename'],job['username'])
+            scp_remote = "%s@%s:" % (job['username'],job['username'])
+
         if job["remote_working_directory"]:
             mkdir_command = ssh_command + " mkdir -p %s" % job['remote_working_directory']
             self.logger.info(mkdir_command)
@@ -109,7 +111,7 @@ class ssh_transport(Transport):
             chmod_command = ssh_command + " chmod -R 777 %s" % job['remote_working_directory']
             self.logger.info(chmod_command)
             subprocess.call(chmod_command, shell=True)
-            
+
             inputfile = job["remote_working_directory"]+ "/" + job['input_file']
             self.logger.info( "Inputfile: %s Platform: %s Slot number:  %s", inputfile, job['platform'],job['nslots'])
             cfmod_command = ssh_command + " sed -i 's/@platform@/%s/g' %s ;" % (job['platform'],inputfile)
@@ -147,51 +149,51 @@ class ssh_transport(Transport):
         output_file = job_info["output_file"]
         error_file = job_info["error_file"]
         executable = job_info["executable"]
-        
+
         command = "%s %s > %s 2> %s " % ( executable, input_file, output_file, error_file)
 
         job = job_info
         job['replica'] = replica
         job['command'] = command
         job['process_handle'] = None
-	job['start_time'] = 0
-		
+        job['start_time'] = 0
+
         self.replica_to_job[replica] = job
 
         self.jobqueue.put(replica)
 
         return self.jobqueue.qsize()
-        
+
     #intel coprocessor setup
     #edit on 10.20.15
     def ModifyCommand(self,job, command):
         nodename = job['nodename']
         nodeN = job['nthreads']
         slotN = job['nslots']
-	architecture = job['architecture']
+        architecture = job['architecture']
 
         #add command to go to remote working directory
         cd_to_command = "cd %s ; " % job["remote_working_directory"]
-        
+
         #mic_pattern = re.compile("mic0" or "mic1")
 
         #if re.search(mic_pattern, nodename):
-        #    offset = slotN * (nodeN/4)  
+        #    offset = slotN * (nodeN/4)
         #    add_to_command = "export KMP_PLACE_THREADS=6C,4T,%dO ; " % offset
         #else:
         #    add_to_command = "export OMP_NUM_THREADS=%d;"% nodeN
         #new_command = add_to_command + cd_to_command + command
 
         #set up the python env environment 10.21.15
-	new_command = cd_to_command + command
+        new_command = cd_to_command + command
         self.logger.info(new_command) #can print new_command here to check the command
         return new_command
     #edit end on 10.20.15
-    
+
     def DrainJobQueue(self):
         # not needed for ssh transport (?)
         pass
-    
+
     def ProcessJobQueue(self, mintime, maxtime):
         """
         Launches jobs waiting in the queue.
@@ -212,7 +214,7 @@ class ssh_transport(Transport):
                 # grabs job on top of the queue
                 replica = self.jobqueue.get()
                 job = self.replica_to_job[replica]
-               
+
                 # assign job to available node
                 job['nodeid'] = node
                 job['nodename'] = self.compute_nodes[node]["node_name"]
@@ -223,11 +225,11 @@ class ssh_transport(Transport):
                 job['openmm_replica'] = self.openmm_replicas[replica]
                 #added on 10.22.15 save the arch information for platform, save the slot information for multiple GPU
                 job['architecture'] = self.compute_nodes[node]["arch"]
-		opencl = 'OpenCL'
-		if opencl in job['architecture']:
-		    job['platform']='OpenCL'
-		else:
-		    job['platform']='Reference'
+                opencl = 'OpenCL'
+                if opencl in job['architecture']:
+                    job['platform']='OpenCL'
+                else:
+                    job['platform']='Reference'
                 #added end on 10.22.15
 
                 # get the shell command
@@ -245,19 +247,19 @@ class ssh_transport(Transport):
 
                 #if self.compute_nodes[node]["arch"]:
                 #    architecture = self.compute_nodes[node]["arch"] 
-		    #self.platforms = architecture
+                #self.platforms = architecture
                 #else:
                 #    architecture = "Reference"
-		#self.openmm_platform = architecture
-		#self.openmm_slot = job['nslots']
-		
-		#add the architecture information and the slot information into the input file #10.22.15
-		#inpfile = "r%d/%s_%d.py" % (replica, basename, cycle)
+                #self.openmm_platform = architecture
+                #self.openmm_slot = job['nslots']
 
-		#end on 10.22.15
+                #add the architecture information and the slot information into the input file #10.22.15
+                #inpfile = "r%d/%s_%d.py" % (replica, basename, cycle)
+
+                #end on 10.22.15
 
 
-		#edit on 10.20.15
+                #edit on 10.20.15
                 #exec_directory = job["exec_directory"]
                 #lib_directory = exec_directory + "/lib/" + architecture
                 #bin_directory  = exec_directory + "/bin/" + architecture
@@ -267,14 +269,14 @@ class ssh_transport(Transport):
                 #    job["exec_files"].append(lib_directory + "/" + filename)
                 #for filename in os.listdir(bin_directory):
                 #    job["exec_files"].append(bin_directory + "/" + filename)
-		#edit end on 10.20.15
+                #edit end on 10.20.15
                 # launches job
                 processid = mp.Process(target=self._launchCmd, args=(command, job))
                 processid.start()
 
                 job['process_handle'] = processid
 
-		job['start_time'] = time.time()
+                job['start_time'] = time.time()
 
                 # connects node to replica
                 self.replica_to_job[replica] = job
@@ -296,17 +298,17 @@ class ssh_transport(Transport):
         return njobs_launched
 
     def cancel(self, replica):
-	"""
-	Kills a running replica
-	"""
-	job = self.replica_to_job[replica]
-	if job == None:
-	    return
-	
-	process = job['process_handle']
-	if process == None:
-	    return
-	process.terminate()
+        """
+        Kills a running replica
+        """
+        job = self.replica_to_job[replica]
+        if job == None:
+            return
+
+        process = job['process_handle']
+        if process == None:
+            return
+        process.terminate()
 
 
     def isDone(self,replica,cycle):
@@ -343,13 +345,13 @@ class ssh_transport(Transport):
                 # disconnects replica from job and node
                 self._clear_resource(replica)
                 self.replica_to_job[replica] = None
-	    elif process:
-		time_interval = time.time() - job['start_time']
-		if time.time() - job['start_time'] > 18000:
-		    self.logger.info("time interval is %f for replica %d", time_interval, replica)
-		    self.logger.info("18000 seconds time limit is exceeded for replica %d", replica)
-		    self.cancel(replica)
-		    self._clear_resource(replica)
-		    self.replica_to_job[replica] = None
-		    done = True
+            elif process:
+                time_interval = time.time() - job['start_time']
+                if time.time() - job['start_time'] > 18000:
+                    self.logger.info("time interval is %f for replica %d", time_interval, replica)
+                    self.logger.info("18000 seconds time limit is exceeded for replica %d", replica)
+                    self.cancel(replica)
+                    self._clear_resource(replica)
+                    self.replica_to_job[replica] = None
+                    done = True
             return done

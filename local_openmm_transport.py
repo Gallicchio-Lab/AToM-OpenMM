@@ -193,7 +193,7 @@ class OpenCLContext(object):
         self.simulation.reporters = []
 
         #sets up logfile
-        self.wdir = "cntxt%d:%d" % (int(self.platformId),int(self.deviceId))
+        self.wdir = "cntxt%d_%d" % (int(self.platformId),int(self.deviceId))
         if not os.path.isdir(self.wdir):
             os.mkdir(self.wdir)
         self.logfile = "%s/%s.log" % (self.wdir, self.basename)

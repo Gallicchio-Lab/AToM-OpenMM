@@ -211,7 +211,7 @@ class async_re(object):
                         self._exit('tmp_folder in nodefile needs to be specified')
                     nodeid += 1
                     line = f.readline()
-                    f.close()
+                f.close()
             except:
                 self._exit("Unable to process nodefile %s" % nodefile)
                 # reset job transport

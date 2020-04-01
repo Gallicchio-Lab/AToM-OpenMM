@@ -1,19 +1,22 @@
 """Gibbs sampling routines"""
+from __future__ import print_function
+from __future__ import division
 from numpy import zeros, exp, sum, log, asarray
 from numpy.random import random as _random
 from random import choice
 from itertools import permutations
+import six
 
 def _exit(message):
     """Print and flush a message to stdout and then exit."""
-    print message
+    print(message)
     sys.stdout.flush()
-    print 'exiting...'
+    print('exiting...')
     sys.exit(1)
 
 def weighted_choice(choices):
     """Return a discrete outcome given a set of outcome/weight pairs."""
-    r = _random()*sum(w for c,w in choices)
+    r = _random()*sum(w for c,w in list(choices))
     for c,w in choices:
         r -= w
         if r < 0:
@@ -55,7 +58,7 @@ def pairwise_metropolis_sampling(repl_i, sid_i, replicas, states, U):
             return repl_j
     else:
         return repl_j
-    
+
 def pairwise_independence_sampling(repl_i, sid_i, replicas, states, U):
     """
     Return a replica "j" to exchange with the given replica "i" based on
@@ -89,11 +92,12 @@ def pairwise_independence_sampling(repl_i, sid_i, replicas, states, U):
     nreplicas = len(replicas)
     ps = zeros(nreplicas) # probability of swap i <-> j
     du = zeros(nreplicas) # Boltzmann exponent, ps ~ exp(-du)
+
     for j,repl_j,sid_j in zip(range(nreplicas),replicas,states):
         du[j] = (U[sid_i][repl_j] + U[sid_j][repl_i] 
                  - U[sid_i][repl_i] - U[sid_j][repl_j])
     eu = exp(-du)
-    
+
     pii = 1.0
     i = -1
     f = 1./(float(nreplicas) - 1.)
@@ -104,7 +108,7 @@ def pairwise_independence_sampling(repl_i, sid_i, replicas, states, U):
         else:
             if eu[j] > 1.0:
                 ps[j] = f
-            else:                    
+            else:
                 ps[j] = f*eu[j]
             pii -= ps[j]
     try:
@@ -112,7 +116,8 @@ def pairwise_independence_sampling(repl_i, sid_i, replicas, states, U):
     except IndexError:
         _exit('gibbs_re_j(): unrecoverable error: replica %d not in the '
               'list of waiting replicas?'%i)
-    return replicas[weighted_choice(zip(range(nreplicas),ps))]
+
+    return replicas[weighted_choice(list(zip(range(nreplicas),ps)))]
 
 def state_perm_distribution(replicas, states, swap_matrix):
     """
@@ -121,7 +126,7 @@ def state_perm_distribution(replicas, states, swap_matrix):
     such permutations:
 
     p(s) = (1/Z_s) exp(-sum_i^states u_si)
-    
+
     Z_s = sum_r^permutations exp(-sum_i^states u_ri)
 
     s/r denote permutations of states, i denotes a specific state

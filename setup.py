@@ -25,7 +25,7 @@ from async_re import __version__ as VERSION
 
 NAME = 'async_re'
 
-MODULES = 'async_re', 'date_async_re', 'openmm_async_re', 'bedam_async_re', 'bedamtempt_async_re', 'tempt_async_re', 'gibbs_sampling', 'ssh_transport', 'boinc_transport', 'local_openmm_transport', 'ommreplica'
+MODULES = 'async_re', 'date_async_re', 'openmm_async_re', 'bedam_async_re', 'bedamtempt_async_re', 'tempt_async_re', 'temptcmplx_async_re.py', 'gibbs_sampling', 'ssh_transport', 'boinc_transport', 'local_openmm_transport', 'ommreplica'
 
 REQUIRES = 'configobj', 'numpy'
 

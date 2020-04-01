@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import division
 import os
 import re
 import random
@@ -24,9 +26,8 @@ class openmm_job(async_re):
         for i in range(self.nreplicas):
             replica = self.CreateReplica(i, self.basename)
             self.openmm_replicas.append(replica)
-        
+
         if self.transport_mechanism == "LOCAL_OPENMM":
-            
             # creates openmm context objects
             self.openmm_contexts = []
             pattern = re.compile('(\d+):(\d+)')
@@ -37,7 +38,6 @@ class openmm_job(async_re):
                 device_id = int(matches.group(2))
                 self.openmm_contexts.append(self.CreateOpenCLContext(self.basename, platform_id, device_id))
 
-                
     def checkpointJob(self):
         #disable ctrl-c
         s = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -50,13 +50,13 @@ class openmm_job(async_re):
         for replica in self.openmm_replicas:
             replica.save_dms()
         signal.signal(signal.SIGINT, s)
-            
+
     def CreateOpenCLContext(self,basename, platform_id = None, device_id = None):
         return OpenCLContext(basename, platform_id, device_id, self.keywords)
 
     def CreateReplica(self, repl_id, basename):
         return OMMReplica(repl_id, basename)
-    
+
     def _setLogger(self):
         self.logger = logging.getLogger("async_re.openmm_async_re")
 
@@ -78,7 +78,7 @@ class openmm_job(async_re):
 
             #sync positions/velocities from internal replica to input dms file
             self.openmm_replicas[replica].write_posvel_to_file(replica, cycle-1)
-            
+
             job_info = {
                 "cycle": cycle,
                 "replica": replica,
@@ -101,7 +101,7 @@ class openmm_job(async_re):
             job_info["exec_directory"]=exec_directory
 
             job_input_files = []
-            
+
             job_input_files.append(input_file)
             job_input_files.append(rstfile_p)
             for filename in self.extfiles:
@@ -115,7 +115,7 @@ class openmm_job(async_re):
             dmsfile = "%s_%d.dms" % (self.basename, cycle)
             pdbfile = "%s_%d.pdb" % (self.basename,cycle)
             dcdfile = "%s_%d.dcd" % (self.basename,cycle)
-            
+
             job_output_files.append(output_file)
             job_output_files.append(dmsfile)
             job_output_files.append(pdbfile)
@@ -123,7 +123,7 @@ class openmm_job(async_re):
 
             job_info["job_input_files"] = job_input_files
             job_info["job_output_files"] = job_output_files
-            
+
         elif self.transport_mechanism == "LOCAL_OPENMM":
 
             nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
@@ -142,23 +142,19 @@ class openmm_job(async_re):
                 "ntrj": ntrj
             }
 
-            
         else: #local with runopenmm?
             self._exit("Unknown job transport")
 
         status = self.transport.launchJob(replica, job_info)
-        
         return status
 
     # default behavior for temperature replica exchange
     def update_state_of_replica(self, repl):
         replica = self.openmm_replicas[repl]
-        
         #retrieve previous state if set
         (old_stateid, old_par) =  replica.get_state()
         if old_stateid != None:
             old_temperature = old_par[0]
-            
         #sets new state
         stateid = self.status[repl]['stateid_current']
         temperature = self.stateparams[stateid]['temperature']
@@ -184,7 +180,7 @@ class openmm_job(async_re):
         output_file = "r%s/%s_%d.out" % (replica,self.basename,cycle)
         failed_file = "r%s/%s_%d.failed" % (replica,self.basename,cycle)
         dmsfile = "r%s/%s_%d.dms" % (replica,self.basename,cycle)
-        
+
         if os.path.exists(failed_file):
             return False
 
@@ -202,7 +198,7 @@ class openmm_job(async_re):
         try:
             self.openmm_replicas[replica]._getOpenMMData(output_file)
         except:
-	    self.logger.warning("Unable to read/parse output file for replica %d cycle %d" % (replica, cycle))
+            self.logger.warning("Unable to read/parse output file for replica %d cycle %d" % (replica, cycle))
             return False
 
         return True

@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import division
 import os
 import sys
 import re
@@ -56,7 +58,7 @@ class tempt_async_re_job(openmm_job):
 
         if self.transport_mechanism == "LOCAL_OPENMM":
             return
-        
+
         basename = self.basename
         stateid = self.status[replica]['stateid_current']
         cycle = self.status[replica]['cycle_current']
@@ -95,7 +97,7 @@ class tempt_async_re_job(openmm_job):
             msg = "Error retrieving state for replica %d" % repl
             self._exit(msg)
         return (par, pot)
-    
+
     def print_status(self):
         """
         Writes to BASENAME_stat.txt a text version of the status of the RE job
@@ -141,19 +143,19 @@ if __name__ == '__main__':
     usage = "%prog <ConfigFile>"
 
     if len(sys.argv) != 2:
-        print "Please specify ONE input file"
+        print("Please specify ONE input file")
         sys.exit(1)
 
     commandFile = sys.argv[1]
 
-    print ""
-    print "===================================="
-    print "Temperature Asynchronous Replica Exchange "
-    print "===================================="
-    print ""
-    print "Started at: " + str(time.asctime())
-    print "Input file:", commandFile
-    print ""
+    print("")
+    print("====================================")
+    print("Temperature Asynchronous Replica Exchange ")
+    print("====================================")
+    print("")
+    print("Started at: " + str(time.asctime()))
+    print("Input file:", commandFile)
+    print("")
     sys.stdout.flush()
 
     rx = tempt_async_re_job(commandFile, options=None)

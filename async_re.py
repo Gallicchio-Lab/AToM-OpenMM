@@ -15,6 +15,8 @@ Emilio Gallicchio
 Junchao Xia
 
 """
+from __future__ import print_function
+from __future__ import division
 import os
 import sys
 import time
@@ -37,9 +39,9 @@ __version__ = '0.2.0'
 
 def _exit(message):
     """Print and flush a message to stdout and then exit."""
-    print message
+    print(message)
     sys.stdout.flush()
-    print 'Waiting for children to complete ...'
+    print('Waiting for children to complete ...')
     while True:
         time.sleep(1)
         if not mp.active_children():
@@ -85,7 +87,7 @@ class async_re(object):
 
         self.jobname = os.path.splitext(os.path.basename(command_file))[0]
         self.keywords = ConfigObj(self.command_file)
-        
+
         self._setLogger()
         self._checkInput()
         self._printStatus()
@@ -186,30 +188,30 @@ class async_re(object):
                 self._exit("NODEFILE needs to be specified")
             nodefile = self.keywords.get('NODEFILE')
             """
-	    check the information in the nodefile. there should be six columns in the  
+            check the information in the nodefile. there should be six columns in the  
             nodefile. They are 'node name', 'slot number', 'number of threads', 
-	    'system architect','username', and 'name of the temperary folder'
-	    """
-	    node_info= []
+            'system architect','username', and 'name of the temperary folder'
+            """
+            node_info= []
             try:
                 f = open(nodefile, 'r')
-	        line=f.readline()
-		nodeid = 0
-		while line:
-		    lineID=line.split(",")
-		    node_info.append({})
-		    node_info[nodeid]["node_name"] = str(lineID[0].strip())
-		    node_info[nodeid]["slot_number"] = str(lineID[1].strip())
-		    node_info[nodeid]["threads_number"] = str(lineID[2].strip())
-		    node_info[nodeid]["arch"] = str(lineID[3].strip())
-		    node_info[nodeid]["user_name"] = str(lineID[4].strip())
-		    node_info[nodeid]["tmp_folder"] = str(lineID[5].strip())
-		    #tmp_folder has to be pre-assigned
-		    if node_info[nodeid]["tmp_folder"] == "":
-	   		self._exit('tmp_folder in nodefile needs to be specified')
-		    nodeid += 1
-		    line = f.readline()
-		f.close()
+                line=f.readline()
+                nodeid = 0
+                while line:
+                    lineID=line.split(",")
+                    node_info.append({})
+                    node_info[nodeid]["node_name"] = str(lineID[0].strip())
+                    node_info[nodeid]["slot_number"] = str(lineID[1].strip())
+                    node_info[nodeid]["threads_number"] = str(lineID[2].strip())
+                    node_info[nodeid]["arch"] = str(lineID[3].strip())
+                    node_info[nodeid]["user_name"] = str(lineID[4].strip())
+                    node_info[nodeid]["tmp_folder"] = str(lineID[5].strip())
+                    #tmp_folder has to be pre-assigned
+                    if node_info[nodeid]["tmp_folder"] == "":
+                        self._exit('tmp_folder in nodefile needs to be specified')
+                    nodeid += 1
+                    line = f.readline()
+                    f.close()
             except:
                 self._exit("Unable to process nodefile %s" % nodefile)
                 # reset job transport
@@ -219,7 +221,7 @@ class async_re(object):
             self.compute_nodes=node_info
             #Can print out here to check the node information
             self.logger.info("compute nodes: %s", ', '.join([n['node_name'] for n in node_info]))
-            
+
         # exchange or not, switch added for WCG by Junchao
 
         self.exchange = True
@@ -327,7 +329,7 @@ class async_re(object):
 
         if self.transport_mechanism == "SSH":
             from ssh_transport import ssh_transport
-            
+
             # creates SSH transport
             self.transport = ssh_transport(self.basename, self.compute_nodes, self.openmm_replicas)
 
@@ -336,8 +338,8 @@ class async_re(object):
 
             # creates BOINC transport
             self.transport = boinc_transport(self.basename, self.keywords, self.nreplicas, self.extfiles)
-            
-        elif self.transport_mechanism == "LOCAL_OPENMM":    
+
+        elif self.transport_mechanism == "LOCAL_OPENMM":
             from local_openmm_transport import LocalOpenMMTransport
 
             #creates local OpenMM transport
@@ -376,7 +378,7 @@ class async_re(object):
             # create status table
             self.status = [{'stateid_current': k, 'running_status': 'W',
                             'cycle_current': 1} for k in range(self.nreplicas)]
-            
+
             if not self.transport_mechanism == "LOCAL_OPENMM":
                 # create replicas directories r1, r2, etc.
                 for k in range(self.nreplicas):
@@ -391,11 +393,11 @@ class async_re(object):
                 # create input files no. 1
                 for k in range(self.nreplicas):
                     self._buildInpFile(k)
-                           
+
             # save status tables
             self._write_status()
             self.updateStatus()
-                    
+
         else:
             #this is a restart
             self._read_status()
@@ -467,7 +469,7 @@ class async_re(object):
                 self.doExchanges()
             self._write_status()
             self.print_status()
-                
+
             if last_checkpoint_time == None or current_time - last_checkpoint_time > checkpoint_time:
                 self.logger.info("Checkpointing ...")
                 self.checkpointJob()
@@ -498,7 +500,7 @@ class async_re(object):
 
     def checkpointJob(self):
         pass
-    
+
     def _write_status(self):
         """
         Pickle the current state of the RE job and write to in BASENAME.stat.
@@ -507,12 +509,12 @@ class async_re(object):
         s = signal.signal(signal.SIGINT, signal.SIG_IGN)
 
         status_file = '%s.stat'%self.basename
-        f = _open(status_file,'w')
+        f = _open(status_file,'wb')
         pickle.dump(self.status,f)
         f.close()
-        
+
         signal.signal(signal.SIGINT, s)
-        
+
     def _read_status(self):
         """
         Unpickle and load the current state of the RE job from BASENAME.stat.
@@ -587,7 +589,7 @@ class async_re(object):
             subjobs_buffer_size = 0.5
         else:
             subjobs_buffer_size = float(subjobs_buffer_size)
-            
+
         # launch new replicas if the number of submitted/running subjobs is
         # less than the number of available slots
         # (total_cores/subjob_cores) + 50%
@@ -605,7 +607,7 @@ class async_re(object):
 
     def _cycle_of_replica(self,repl):
         return self.status[repl]['cycle_current']
-    
+
     def launchJobs(self):
         """
         Scans the replicas in wait state and randomly launches them
@@ -627,9 +629,9 @@ class async_re(object):
     def doExchanges(self):
         """Perform exchanges among waiting replicas using Gibbs sampling."""
 
-	#check the exchange
+        #check the exchange
         if self.verbose:
-	    self.logger.info("starting the replica exchange")
+            self.logger.info("starting the replica exchange")
 
         replicas_to_exchange = self.replicas_waiting_to_exchange
         states_to_exchange = self.states_waiting_to_exchange
@@ -652,7 +654,7 @@ class async_re(object):
         swap_matrix = self._computeSwapMatrix(replicas_to_exchange,
                                               states_to_exchange)
         if self.verbose:
-	    self.logger.info(swap_matrix)
+            self.logger.info(swap_matrix)
         matrix_time = time.time() - matrix_start_time
 
         sampling_start_time = time.time()
@@ -661,7 +663,7 @@ class async_re(object):
             mreps = self.nexchg_rounds
         else:
             mreps = nreplicas_to_exchange**(-self.nexchg_rounds)
-            
+
         for reps in range(mreps):
             if self.exchangeBySet:
                 for repl_i in replicas_to_exchange:
@@ -673,7 +675,7 @@ class async_re(object):
                                                         replicas_to_exchange,
                                                         curr_states,
                                                         swap_matrix)
-                        
+
                     elif self.exchangeMethod == 'pairwise_metropolis':
                         repl_j = pairwise_metropolis_sampling(repl_i,sid_i,
                                                         replicas_to_exchange,
@@ -713,7 +715,7 @@ class async_re(object):
                     self.status[repl_j]['stateid_current'] = sid_i
                     self.logger.info("Replica %d new state %d" % (repl_i, sid_j))
                     self.logger.info("Replica %d new state %d" % (repl_j, sid_i))
-                    
+
         # Uncomment to debug Gibbs sampling:
         # Actual and observed populations of state permutations should match.
         #
@@ -743,46 +745,6 @@ class async_re(object):
     # see tempt and bedamtempt child classes for specific implementations
     def update_state_of_replica(self, repl):
         pass
-
-            
-#     def _check_remote_resource(self, resource_url):
-#         """
-#         check if it's a remote resource. Basically see if 'ssh' is present
-#         """
-#         ssh_c = re.compile("(.+)\+ssh://(.*)")
-#         m = re.match(ssh_c, resource_url)
-#         if m:
-#             self.remote_protocol = m.group(1)
-#             self.remote_server = m.group(2)
-#             print resource_url + " : yes" + " " + remote_protocol + " " + remote_server
-#             return 1
-#         else:
-#             print resource_url + " : no"
-#             return 0
-
-#     def _setup_remote_workdir(self):
-#         """
-#         rsync local working directory with remote working directory
-#         """
-#         os.system("ssh %s mkdir -p %s" % (self.remote_server, self.keywords.get('REMOTE_WORKING_DIR')))
-#         extfiles = " "
-#         for efile in self.extfiles:
-#             extfiles = extfiles + " " + efile
-#         os.system("rsync -av %s %s/%s/" % (extfiles, self.remote_server, self.keywords.get('REMOTE_WORKING_DIR')))
-
-#         dirs = ""
-#         for k in range(self.nreplicas):
-#             dirs = dirs + " r%d" % k
-#         setup_script = """
-# cd %s ; \
-# for i in `seq 0 %d` ; do \
-# mkdir -p r$i ; \
-
-
-
-
-
-# """
 
     def _debug_collect_state_populations(self, replicas):
         """

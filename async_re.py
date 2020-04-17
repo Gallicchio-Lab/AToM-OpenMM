@@ -520,7 +520,7 @@ class async_re(object):
         Unpickle and load the current state of the RE job from BASENAME.stat.
         """
         status_file = '%s.stat'%self.basename
-        f = _open(status_file,'r')
+        f = _open(status_file,'rb')
         self.status = pickle.load(f)
         f.close()
 

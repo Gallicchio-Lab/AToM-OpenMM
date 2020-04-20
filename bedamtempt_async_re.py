@@ -79,7 +79,7 @@ class OpenCLContextSDM(OpenCLContext):
         self.topology = self.dms.topology
 
         implicitsolvent = str(self.keywords.get('IMPLICITSOLVENT'))
-        if implicitsolvent is None:
+        if implicitsolvent is None or 'None' in implicitsolvent:
             self.system = self.dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = None)
         elif implicitsolvent == 'AGBNP':
             self.system = self.dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = 'AGBNP')

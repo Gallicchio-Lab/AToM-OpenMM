@@ -78,14 +78,16 @@ class OpenCLContextSDM(OpenCLContext):
         self.dms = DesmondDMSFile([ligfile_input, rcptfile_input])
         self.topology = self.dms.topology
 
-        implicitsolvent = str(self.keywords.get('IMPLICITSOLVENT'))
-        if implicitsolvent is None or 'None' in implicitsolvent:
-            self.system = self.dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = None)
-        elif implicitsolvent == 'AGBNP':
-            self.system = self.dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = 'AGBNP')
-        else:
-            print('Unknown implicit solvent %s' % implicitsolvent)
-            sys.exit(1)
+        self.system = self.dms.createSystem(nonbondedMethod=NoCutoff)
+
+        #implicitsolvent = str(self.keywords.get('IMPLICITSOLVENT'))
+        #if implicitsolvent is None or 'None' in implicitsolvent:
+        #    self.system = self.dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = None)
+        #elif implicitsolvent == 'AGBNP':
+        #    self.system = self.dms.createSystem(nonbondedMethod=NoCutoff, OPLS = True, implicitSolvent = 'AGBNP')
+        #else:
+        #    print('Unknown implicit solvent %s' % implicitsolvent)
+        #    sys.exit(1)
 
         natoms_ligand = int(self.keywords.get('NATOMS_LIGAND'))
         lig_atoms = range(natoms_ligand)

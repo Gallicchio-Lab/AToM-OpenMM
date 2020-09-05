@@ -15,6 +15,7 @@ from simtk.openmm.app.desmonddmsfile import *
 from datetime import datetime
 from SDMplugin import *
 from ommreplica import OMMReplica
+from contextlib import contextmanager
 
 from transport import Transport
 
@@ -96,9 +97,10 @@ class OpenCLContext(object):
         self._inq.put(logfile)
 
     # kills worker
-    def finish(self):
-        self._startedSignal.wait()
-        self._readySignal.wait()
+    def finish(self, wait = True):
+        if wait:
+            self._startedSignal.wait()
+            self._readySignal.wait()
         self._cmdq.put("FINISH")
         while not self._outq.empty():
             self._outq.get()
@@ -115,6 +117,10 @@ class OpenCLContext(object):
     # is worker started?
     def is_started(self):
         return self._startedSignal.is_set()
+
+    # has worker died?
+    def has_crashed(self):
+        return not self._p.is_alive()
 
     # starts execution loop of the worker
     def run(self, nsteps, nheating = 0, ncooling = 0, hightemp = 0.0):
@@ -178,6 +184,7 @@ class OpenCLContext(object):
         self._startedSignal.clear()
         self._readySignal.clear()
         self._runningSignal.clear()
+        self._crashedSignal.clear()
 
         self._openmm_worker_body()
 
@@ -314,7 +321,8 @@ class LocalOpenMMTransport(Transport):
             return None
 
         try:
-            self.node_status[nodeid] = None
+            if not self.node_status[nodeid] < 0: #signals a crashed node that should remain disabled
+                self.node_status[nodeid] = None
         except:
             self.logger.warning("clear_resource(): unknown nodeid %", nodeid)
             return None
@@ -413,8 +421,10 @@ class LocalOpenMMTransport(Transport):
             self.replica_to_job[replica] = None
 
     def _update_replica(self, job):
-        #update replica cycle, mdsteps, write out, etc.
+        #update replica cycle, mdsteps, write out, etc. from context
         ommreplica = job['openmm_replica']
+        if job['openmm_context'].has_crashed(): #refuses to update replica from a crashed context
+            return
         cycle = ommreplica.get_cycle() + 1
         ommreplica.set_cycle(cycle)
         mdsteps = ommreplica.get_mdsteps() + job['nsteps']
@@ -450,6 +460,14 @@ class LocalOpenMMTransport(Transport):
             except:
                 #job is in the queue but not yet launched
                 return False
+
+            if openmm_context.has_crashed():
+                self.logger.warning("isDone(): replica %d has crashed", replica)
+                openmm_context.finish(wait = False)
+                self.node_status[job['nodeid']] = -1 #signals dead context
+                self._clear_resource(replica)
+                self.replica_to_job[replica] = None
+                return True
 
             if not openmm_context.is_started():
                 done = False

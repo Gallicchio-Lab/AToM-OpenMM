@@ -184,7 +184,6 @@ class OpenCLContext(object):
         self._startedSignal.clear()
         self._readySignal.clear()
         self._runningSignal.clear()
-        self._crashedSignal.clear()
 
         self._openmm_worker_body()
 

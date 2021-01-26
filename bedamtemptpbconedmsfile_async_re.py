@@ -72,13 +72,12 @@ class OpenCLContextSDM(OpenCLContext):
 
     def  _openmm_worker_body(self):
 
-        rcptfile_input  = '%s_rcpt_0.dms' % self.basename
-        ligfile_input   = '%s_lig_0.dms'  % self.basename
+        file_input  = '%s_0.dms' % self.basename
 
-        self.dms = DesmondDMSFile([ligfile_input, rcptfile_input])
+        self.dms = DesmondDMSFile(file_input)
         self.topology = self.dms.topology
 
-        self.system = self.dms.createSystem(nonbondedMethod=NoCutoff)
+        self.system = self.dms.createSystem(nonbondedMethod=PME, nonbondedCutoff=1.0*nanometer)
 
         #implicitsolvent = str(self.keywords.get('IMPLICITSOLVENT'))
         #if implicitsolvent is None or 'None' in implicitsolvent:
@@ -89,127 +88,123 @@ class OpenCLContextSDM(OpenCLContext):
         #    print('Unknown implicit solvent %s' % implicitsolvent)
         #    sys.exit(1)
 
-        natoms_ligand = int(self.keywords.get('NATOMS_LIGAND'))
-        lig_atoms = range(natoms_ligand)
+        lig_atoms = self.keywords.get('LIGAND_ATOMS')   #indexes of ligand atoms
+        if lig_atoms:
+            lig_atoms = [int(i) for i in lig_atoms]
+        else:
+            msg = "Error: LIGAND_ATOMS is required"
+            self._exit(msg)
+        sdm_utils = SDMUtils(self.system, lig_atoms)
+        
         # atom indexes here refer to indexes in either lig or rcpt dms file, rather than in the complex 
         #lig_atom_restr = [0, 1, 2, 3, 4, 5]   #indexes of ligand atoms for CM-CM Vsite restraint
-
         cm_lig_atoms = self.keywords.get('REST_LIGAND_CMLIG_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
-        #convert the string of lig atoms to integer
-        lig_atom_restr = [int(i) for i in cm_lig_atoms]
-        #rcpt_atom_restr = [121, 210, 281, 325, 406, 527, 640, 650, 795, 976, 1276]   #indexes of rcpt atoms for CM-CM Vsite restraint
+        if cm_lig_atoms:
+            lig_atom_restr = [int(i) for i in cm_lig_atoms]
+        else:
+            lig_atom_restr = None
 
         cm_rcpt_atoms = self.keywords.get('REST_LIGAND_CMREC_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
-        #convert the string of receptor rcpt atoms to integer
-        rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
+        if cm_rcpt_atoms:
+            rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
+        else:
+            rcpt_atom_restr = None
 
-        cmkf = float(self.keywords.get('CM_KF'))
-        kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
-        cmtol = float(self.keywords.get('CM_TOL'))
-        r0 = cmtol * angstrom #radius of Vsite sphere
-
-        #these can be 'None" if not using orientational restraints
-        lig_ref_atoms = None # the 3 atoms of the ligand that define the coordinate system of the ligand
-        rcpt_ref_atoms = None # the 3 atoms of the receptor that define the coordinate system of the receptor
-        angle_center = None * degrees
-        kfangle = None * kilocalorie_per_mole/degrees**2
-        angletol = None * degrees
-        dihedral1center = None * degrees
-        kfdihedral1 = None * kilocalorie_per_mole/degrees**2
-        dihedral1tol = None * degrees
-        dihedral2center = None * degrees
-        kfdihedral2 = None * kilocalorie_per_mole/degrees**2
-        dihedral2tol = None * degrees
-
-        #transform indexes of receptor atoms
-        for i in range(len(rcpt_atom_restr)):
-            rcpt_atom_restr[i] += natoms_ligand
-            if rcpt_ref_atoms:
-                for i in range(len(rcpt_ref_atoms)):
-                    rcpt_ref_atoms[i] += natoms_ligand
-
-        sdm_utils = SDMUtils(self.system, lig_atoms)
-        sdm_utils.addRestraintForce(lig_cm_particles = lig_atom_restr,
-                                    rcpt_cm_particles = rcpt_atom_restr,
-                                    kfcm = kf,
-                                    tolcm = r0,
-                                    lig_ref_particles = lig_ref_atoms,
-                                    rcpt_ref_particles = rcpt_ref_atoms,
-                                    angle_center = angle_center,
-                                    kfangle = kfangle,
-                                    angletol = angletol,
-                                    dihedral1center = dihedral1center,
-                                    kfdihedral1 = kfdihedral1,
-                                    dihedral1tol = dihedral1tol,
-                                    dihedral2center = dihedral2center,
-                                    kfdihedral2 = kfdihedral2,
-                                    dihedral2tol = dihedral2tol)
-
-        droplet = True
-        if droplet:
-            # flat-bottom potential centered at:
-            # x: 0.634787 A
-            # y: 0.317206 A
-            # z: -0.005228 A
-            #
-            fc =   5.0 * kilocalorie_per_mole/(angstrom*angstrom)
-            r0 =  24.0 * angstrom
-            x0 = 0.634787 * angstrom
-            y0 = -0.317206 * angstrom
-            z0 = 0.005228 * angstrom
-            udroplet = mm.CustomExternalForce(' (fc/2)*step(d12-r0)*(d12-r0)^2  ; d12 = sqrt((x-x0)^2 + (y-y0)^2 + (z-z0)^2)')
-            udroplet.addGlobalParameter('fc', fc / (kilojoule_per_mole/(nanometer*nanometer)) )
-            udroplet.addGlobalParameter('r0', r0 / nanometer)
-            udroplet.addGlobalParameter('x0', x0 / nanometer)
-            udroplet.addGlobalParameter('y0', y0 / nanometer)
-            udroplet.addGlobalParameter('z0', z0 / nanometer)
-            index = 0
-            for atom in self.dms.topology.atoms():
-                if atom.name == "O":
-                    udroplet.addParticle(index,[])
-                index += 1
-            udroplet.setForceGroup(self.dms.getBondedForceGroup())
-            self.system.addForce(udroplet)
+        cmrestraints_present = (cm_rcpt_atoms is not None) and (cm_lig_atoms is not None)
         
+        if cmrestraints_present:
+            cmkf = float(self.keywords.get('CM_KF'))
+            kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
+            cmtol = float(self.keywords.get('CM_TOL'))
+            r0 = cmtol * angstrom #radius of Vsite sphere
+
+            #these can be 'None" if not using orientational restraints
+            lig_ref_atoms = None # the 3 atoms of the ligand that define the coordinate system of the ligand
+            rcpt_ref_atoms = None # the 3 atoms of the receptor that define the coordinate system of the receptor
+            angle_center = None * degrees
+            kfangle = None * kilocalorie_per_mole/degrees**2
+            angletol = None * degrees
+            dihedral1center = None * degrees
+            kfdihedral1 = None * kilocalorie_per_mole/degrees**2
+            dihedral1tol = None * degrees
+            dihedral2center = None * degrees
+            kfdihedral2 = None * kilocalorie_per_mole/degrees**2
+            dihedral2tol = None * degrees
+            
+            ligoffset = self.keywords.get('LIGOFFSET')
+            if ligoffset:
+                ligoffset = [float(offset) for offset in ligoffset.split(',')]*angstrom
+            sdm_utils.addRestraintForce(lig_cm_particles = lig_atom_restr,
+                                        rcpt_cm_particles = rcpt_atom_restr,
+                                        kfcm = kf,
+                                        tolcm = r0,
+                                        lig_ref_particles = lig_ref_atoms,
+                                        rcpt_ref_particles = rcpt_ref_atoms,
+                                        angle_center = angle_center,
+                                        kfangle = kfangle,
+                                        angletol = angletol,
+                                        dihedral1center = dihedral1center,
+                                        kfdihedral1 = kfdihedral1,
+                                        dihedral1tol = dihedral1tol,
+                                        dihedral2center = dihedral2center,
+                                        kfdihedral2 = kfdihedral2,
+                                        dihedral2tol = dihedral2tol,
+                                        offset = ligoffset)
+
         # the integrator object is context-specific
         #temperature = int(self.keywords.get('TEMPERATURES')) * kelvin
         temperature = 300 * kelvin #will be overriden in set_state()
         frictionCoeff = float(self.keywords.get('FRICTION_COEFF')) / picosecond
         MDstepsize = float(self.keywords.get('TIME_STEP')) * picosecond
         umsc = float(self.keywords.get('UMAX')) * kilocalorie_per_mole
+        ubcore = self.keywords.get('UBCORE')
+        if ubcore:
+            ubcore = float(ubcore) * kilocalorie_per_mole
+        else:
+            ubcore = 0.0 * kilocalorie_per_mole
         acore = float(self.keywords.get('ACORE'))
+        
         self.integrator = LangevinIntegratorSDM(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, lig_atoms)
         self.integrator.setBiasMethod(sdm_utils.ILogisticMethod)
         self.integrator.setSoftCoreMethod(sdm_utils.RationalSoftCoreMethod)
         self.integrator.setUmax(umsc / kilojoule_per_mole)
         self.integrator.setAcore(acore)
+        self.integrator.setUbcore(ubcore/kilojoule_per_mole)
+        if self.keywords.get('DISPLACEMENT') is None:
+            dd = 200.0 #default is 20 nm in each direction
+            self.displ = [dd, dd, dd]*angstrom            
+        else:
+            self.displ = [float(displ) for displ in self.keywords.get('DISPLACEMENT').split(',')]*angstrom
+        self.integrator.setDisplacement(self.displ[0]/nanometer, self.displ[1]/nanometer, self.displ[2]/nanometer)
 
+        
 class SDMReplica(OMMReplica):
+    def __init__(self, replica_id, basename, keywords):
+        OMMReplica.__init__(self,replica_id, basename)
+        self.keywords = keywords
+
     #overrides to open dms file for SDM-RE
     def open_dms(self):
-        rcptfile_input  = '%s_rcpt_0.dms' % self.basename
-        ligfile_input   = '%s_lig_0.dms'  % self.basename
+        file_input  = '%s_0.dms' % self.basename
 
         if not os.path.isdir('r%d' % self._id):
             os.mkdir('r%d' % self._id)
 
-        ligfile_output  = 'r%d/%s_lig_ckp.dms' % (self._id,self.basename)
-        if not os.path.isfile(ligfile_output):
-            shutil.copyfile(ligfile_input, ligfile_output)
+        file_output  = 'r%d/%s_ckp.dms' % (self._id,self.basename)
+        if os.path.isfile(file_output):
+            print("Reading from %s" % file_output)
+        if not os.path.isfile(file_output):
+            shutil.copyfile(file_input, file_output)
 
-        rcptfile_output = 'r%d/%s_rcpt_ckp.dms' % (self._id,self.basename)
-        if not os.path.isfile(rcptfile_output):
-            shutil.copyfile(rcptfile_input, rcptfile_output)
+        self.dms = DesmondDMSFile(file_output) 
 
-        self.dms = DesmondDMSFile([ligfile_output, rcptfile_output]) 
-
-        self.sql_conn_lig = self.dms._conn[0]
-        self.sql_conn_rcpt = self.dms._conn[1]
+        self.sql_conn = self.dms._conn[0]
 
         # check for sdm_data table in lig dms
         tables = self.dms._tables[0]
-        conn = self.sql_conn_lig
+        conn = self.sql_conn
         if 'sdm_data' in tables:
+            print("Reading sdm_data")
             # read sdm_data table
             q = """SELECT binde,epot,temperature,lambda,lambda1,lambda2,alpha,u0,w0,cycle,stateid,mdsteps FROM sdm_data WHERE id = 1"""
             ans = conn.execute(q)
@@ -219,6 +214,7 @@ class SDMReplica(OMMReplica):
                 self.cycle = cycle
                 self.stateid = stateid
                 self.mdsteps = mdsteps
+                print("Cycles = %d" % self.cycle)
         else:
             #create sdm_data table with dummy values
             conn.execute("CREATE TABLE IF NOT EXISTS sdm_data (id INTEGER PRIMARY KEY, binde REAL, epot REAL, temperature REAL, lambda REAL, lambda1 REAL, lambda2 REAL, alpha REAL, u0 REAL, w0 REAL, cycle INTEGER, stateid INTEGER, mdsteps INTEGER )")
@@ -228,7 +224,7 @@ class SDMReplica(OMMReplica):
 
     def save_dms(self):
         if self.is_state_assigned and self.is_energy_assigned:
-            conn = self.sql_conn_lig
+            conn = self.sql_conn
 
             pot_energy =  float(self.pot[0])
             bind_energy = float(self.pot[1])
@@ -243,7 +239,8 @@ class SDMReplica(OMMReplica):
 
             conn.execute("UPDATE sdm_data SET binde = %f, epot = %f, temperature = %f, lambda = %f, lambda1 = %f, lambda2 = %f, alpha = %f, u0 = %f, w0 = %f, cycle = %d, stateid = %d, mdsteps = %d WHERE id = 1" % (bind_energy, pot_energy, temperature, lmbd, lambda1, lambda2, alpha, u0, w0coeff, self.cycle, self.stateid, self.mdsteps))
             conn.commit()
-            self.dms.setPositions(self.positions)
+            
+            self.dms.setPositions(self.positions)                    
             self.dms.setVelocities(self.velocities)
 
     def set_statepot_from_outputfile(self, replica, cycle):
@@ -268,18 +265,16 @@ class SDMReplica(OMMReplica):
         self.set_energy([pot_energy, binding_energy])
 
     def set_posvel_from_file(self, replica, cycle):
-        ligfile = "r%d/%s_lig_%d.dms" % (replica, self.basename, cycle)
-        rcptfile = "r%d/%s_rcpt_%d.dms" % (replica, self.basename, cycle)
-        dms = DesmondDMSFile([ligfile, rcptfile])
+        tfile = "r%d/%s_%d.dms" % (replica, self.basename, cycle)
+        dms = DesmondDMSFile(tfile)        
         self.positions = copy.deepcopy(dms.positions)
         self.velocities = copy.deepcopy(dms.velocities)
         dms.close()
 
     def write_posvel_to_file(self, replica, cycle):
-        ligfile = "r%d/%s_lig_%d.dms" % (replica, self.basename, cycle)
-        rcptfile = "r%d/%s_rcpt_%d.dms" % (replica, self.basename, cycle)
-        dms = DesmondDMSFile([ligfile, rcptfile])
-        dms.setPositions(self.positions)
+        tfile = "r%d/%s_%d.dms" % (replica, self.basename, cycle)
+        dms = DesmondDMSFile(tfile)
+        dms.setPositions(self.positions)                    
         dms.setVelocities(self.velocities)
         dms.close()
 
@@ -296,7 +291,7 @@ class SDMReplica(OMMReplica):
         if self.outfile:
             self.outfile.write("%f %f %f %f %f %f %f %f %f\n" % (temperature, lmbd, lmbd1, lmbd2, alpha, u0, w0, pot_energy, bind_energy))
             self.outfile.flush()
-
+          
 
 class bedamtempt_async_re_job(bedam_async_re_job):
     def _setLogger(self):
@@ -304,6 +299,10 @@ class bedamtempt_async_re_job(bedam_async_re_job):
 
     def _checkInput(self):
         async_re._checkInput(self)
+
+        #flag to do calculation with ligand displacement in PBC box
+        self.pbcdispl = True
+
         #make sure BEDAM + TEMPERATURE is wanted
         if self.keywords.get('RE_TYPE') != 'BEDAMTEMPT':
             self._exit("RE_TYPE is not BEDAMTEMPT")
@@ -592,7 +591,7 @@ class bedamtempt_async_re_job(bedam_async_re_job):
 
     #override for creating SDM versions of the replicas
     def CreateReplica(self, repl_id, basename):
-        return SDMReplica(repl_id, basename)
+        return SDMReplica(repl_id, basename,self.keywords)
 
     #override for launching an SDM replica
     def _launchReplica(self,replica,cycle):

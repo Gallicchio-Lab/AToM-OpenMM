@@ -1,9 +1,0 @@
-#!/bin/bash
-#openmm_dir=<openmm_installation_dir>
-openmm_dir=/home/software/openmm-SDM2/openmm-7.3.1-displ
-pythondir=$HOME/miniconda3
-export OPENMM_PLUGIN_DIR=${openmm_dir}/lib/plugins
-export LD_LIBRARY_PATH=${openmm_dir}/lib:${openmm_dir}/lib/plugins:$LD_LIBRARY_PATH
-export PYTHONPATH=${openmm_dir}/lib/python3.7/site-packages:$PYTHONPATH
-export PYTHONPATH=~/async_re-openmm:$PYTHONPATH
-${pythondir}/bin/python "$@"

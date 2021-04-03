@@ -76,7 +76,7 @@ class OpenCLContextSDM(OpenCLContext):
 
         self.dms = DesmondDMSFile(file_input)
         self.topology = self.dms.topology
-        number_of_atoms = self.topology.getNumAtoms()
+        self.number_of_atoms = self.topology.getNumAtoms()
         
         self.system = self.dms.createSystem(nonbondedMethod=CutoffNonPeriodic, nonbondedCutoff=15.0*nanometer)
 
@@ -88,7 +88,8 @@ class OpenCLContextSDM(OpenCLContext):
         #else:
         #    print('Unknown implicit solvent %s' % implicitsolvent)
         #    sys.exit(1)
-
+       
+        
         lig1_atoms = self.keywords.get('LIGAND1_ATOMS')   #indexes of ligand1 atoms
         lig2_atoms = self.keywords.get('LIGAND2_ATOMS')   #indexes of ligand2 atoms
         
@@ -98,7 +99,6 @@ class OpenCLContextSDM(OpenCLContext):
         else:
             msg = "Error: LIGAND1_ATOMS is required"
             self._exit(msg)
-        sdm_utils = SDMUtils(self.system)
         
         #ligand 2 atoms
         if lig2_atoms:
@@ -107,17 +107,40 @@ class OpenCLContextSDM(OpenCLContext):
             msg = "Error: LIGAND2_ATOMS is required"
             self._exit(msg)
         
-        # atom indexes here refer to indexes in either lig or rcpt dms file, rather than in the complex 
-        #lig_atom_restr = [0, 1, 2, 3, 4, 5]   #indexes of ligand atoms for CM-CM Vsite restraint
+    #    #residue category id
+    #    rcpt_resid = 1
+    #    lig1_resid = 3
+    #    lig2_resid = 2
+    #    
+    #    #ligand1 atoms
+    #    lig1_atoms = []
+    #    for at in self.topology.atoms():
+    #        if int(at.residue.id) == lig1_resid:
+    #            lig1_atoms.append(int(at.id)-1)
+    #    
+    #    #ligand2 atoms
+    #    lig2_atoms = []
+    #    for at in self.topology.atoms():
+    #        if int(at.residue.id) == lig2_resid:
+    #            lig2_atoms.append(int(at.id)-1)
+    #    
+    #    #receptor atoms
+    #    rcpt_atoms = []
+    #    for at in self.topology.atoms():
+    #        if int(at.residue.id) == rcpt_resid:
+    #            rcpt_atoms.append(int(at.id)-1)
+        
+        #ligand1, ligand2, and receptor restraint indexes
+        #lig1_atom_restr = [0, 1, 2, 3, 4, 5]   #indexes of ligand atoms for CM-CM Vsite restraint
 
-        #ligand 1 restraint
+        #ligand 1 Vsite restraint
         cm_lig1_atoms = self.keywords.get('REST_LIGAND1_CMLIG_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
         if cm_lig1_atoms:
             lig1_atom_restr = [int(i) for i in cm_lig1_atoms]
         else:
             lig1_atom_restr = None
         
-        #ligand 2 restraint
+        #ligand 2 Vsite restraint
         cm_lig2_atoms = self.keywords.get('REST_LIGAND2_CMLIG_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
         if cm_lig2_atoms:
             lig2_atom_restr = [int(i) for i in cm_lig2_atoms]
@@ -131,8 +154,10 @@ class OpenCLContextSDM(OpenCLContext):
         else:
             rcpt_atom_restr = None
 
+        sdm_utils = SDMUtils(self.system)
+        
         #added conditions of ligand 1 and ligdang 2 constraints
-        cmrestraints_present = (cm_rcpt_atoms is not None) and (cm_lig1_atoms is not None) and (cm_lig2_atoms is not None)
+        cmrestraints_present = (rcpt_atom_restr is not None) and (lig1_atom_restr is not None) and (lig2_atom_restr is not None)
         
         if cmrestraints_present:
             cmkf = float(self.keywords.get('CM_KF'))
@@ -153,15 +178,16 @@ class OpenCLContextSDM(OpenCLContext):
             kfdihedral2 = None * kilocalorie_per_mole/degrees**2
             dihedral2tol = None * degrees
             
-            #added offset for ligand 1
-            lig1offset = self.keywords.get('LIG1OFFSET')
-            if lig1offset:
-                lig1offset = [float(offset) for offset in lig1offset.split(',')]*angstrom
-            
-            #added offset for ligand 2
-            lig2offset = self.keywords.get('LIG2OFFSET')
-            if lig2offset:
-                lig2offset = [float(offset) for offset in lig2offset.split(',')]*angstrom
+            #set displacements and offsets for ligand 1 and ligand 2
+            if self.keywords.get('DISPLACEMENT') is None:
+                dd = 20.0 #default is 2 nm in each direction
+                self.displ = [dd, dd, dd]*angstrom            
+                self.lig1offset = [float(0.0*offset) for offset in self.displ/angstrom]*angstrom
+                self.lig2offset = [float(offset) for offset in self.displ/angstrom]*angstrom
+            else:
+                self.displ = [float(displ) for displ in self.keywords.get('DISPLACEMENT').split(',')]*angstrom
+                self.lig1offset = [float(0.0*offset) for offset in self.displ/angstrom]*angstrom
+                self.lig2offset = [float(offset) for offset in self.displ/angstrom]*angstrom
             
             #add restraint force to sdm utils for ligand 1 and ligand 2
             sdm_utils.addRestraintForce(lig_cm_particles = lig1_atom_restr,
@@ -179,8 +205,7 @@ class OpenCLContextSDM(OpenCLContext):
                                         dihedral2center = dihedral2center,
                                         kfdihedral2 = kfdihedral2,
                                         dihedral2tol = dihedral2tol,
-                                        offset = lig1offset)
-
+                                        offset = self.lig1offset)
             sdm_utils.addRestraintForce(lig_cm_particles = lig2_atom_restr,
                                         rcpt_cm_particles = rcpt_atom_restr,
                                         kfcm = kf,
@@ -196,21 +221,22 @@ class OpenCLContextSDM(OpenCLContext):
                                         dihedral2center = dihedral2center,
                                         kfdihedral2 = kfdihedral2,
                                         dihedral2tol = dihedral2tol,
-                                        offset = lig2offset)
+                                        offset = self.lig2offset)
         
         #include reference atoms for alignment force
-        refatoms = [4, 3, 2]
-        lig1_ref_atoms  = [ refatoms[i]+lig1_atoms[0] for i in range(3)]
+        refatoms1 = [4, 3, 2]
+        lig1_ref_atoms  = [ refatoms1[i]+lig1_atoms[0] for i in range(3)]
         
-        refatoms = [5, 4, 3]
-        lig2_ref_atoms  = [ refatoms[i]+lig2_atoms[0] for i in range(3)]
+        refatoms2 = [5, 4, 3]
+        lig2_ref_atoms  = [ refatoms2[i]+lig2_atoms[0] for i in range(3)]
+        
         #add alignment force
         sdm_utils.addAlignmentForce(liga_ref_particles = lig1_ref_atoms,
                                     ligb_ref_particles = lig2_ref_atoms,
                                     kfdispl = 25.0 * kilocalorie_per_mole/angstrom**2,
                                     ktheta =  50.0 * kilocalorie_per_mole,
                                     kpsi =  50.0 * kilocalorie_per_mole,
-                                    offset = lig2offset)
+                                    offset = self.lig2offset)
             
         # the integrator object is context-specific
         #temperature = int(self.keywords.get('TEMPERATURES')) * kelvin
@@ -225,19 +251,12 @@ class OpenCLContextSDM(OpenCLContext):
             ubcore = 0.0 * kilocalorie_per_mole
         acore = float(self.keywords.get('ACORE'))
         
-        self.integrator = LangevinIntegratorSDM(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, number_of_atoms )
+        self.integrator = LangevinIntegratorSDM(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, self.number_of_atoms )
         self.integrator.setBiasMethod(sdm_utils.ILogisticMethod)
         self.integrator.setSoftCoreMethod(sdm_utils.RationalSoftCoreMethod)
         self.integrator.setUmax(umsc / kilojoule_per_mole)
         self.integrator.setAcore(acore)
         self.integrator.setUbcore(ubcore/kilojoule_per_mole)
-        
-        #set displacements for ligand 1 and ligand 2
-        if self.keywords.get('DISPLACEMENT') is None:
-            dd = 200.0 #default is 20 nm in each direction
-            self.displ = [dd, dd, dd]*angstrom            
-        else:
-            self.displ = [float(displ) for displ in self.keywords.get('DISPLACEMENT').split(',')]*angstrom
         for i in lig1_atoms:
             self.integrator.setDisplacement(i, self.displ[0]/nanometer, self.displ[1]/nanometer, self.displ[2]/nanometer)
         for i in lig2_atoms:    

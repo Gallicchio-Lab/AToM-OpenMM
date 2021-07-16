@@ -72,7 +72,7 @@ class OpenCLContextSDM(OpenCLContext):
 
     def  _openmm_worker_body(self):
         
-        file_input  = '%s.dms' % self.basename
+        file_input  = '%s_0.dms' % self.basename
 
         self.dms = DesmondDMSFile(file_input)
         self.topology = self.dms.topology
@@ -236,10 +236,7 @@ class SDMReplica(OMMReplica):
 
     #overrides to open dms file for SDM-RE
     def open_dms(self):
-        #leg1 
-        file_input  = '%s.dms' % self.basename
-        #leg2
-        #file_input  = '%s_0.dms' % self.basename
+        file_input  = '%s_0.dms' % self.basename
 
         if not os.path.isdir('r%d' % self._id):
             os.mkdir('r%d' % self._id)

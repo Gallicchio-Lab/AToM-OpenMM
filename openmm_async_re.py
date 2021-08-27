@@ -12,8 +12,7 @@ from simtk import openmm as mm
 from simtk.openmm.app import *
 from simtk.openmm import *
 from simtk.unit import *
-from simtk.openmm.app.desmonddmsfile import *
-from SDMplugin import *
+
 from local_openmm_transport import OpenCLContext
 from ommreplica import OMMReplica
 

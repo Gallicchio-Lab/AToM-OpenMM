@@ -4,16 +4,16 @@ from __future__ import division
 Multiprocessing job transport for AsyncRE/OpenMM
 """
 import os, re, sys, time, shutil, copy, random, signal
-from multiprocessing import Process, Queue, Event
+import multiprocessing as mp
+#from multiprocessing import Process, Queue, Event
 import logging
 
 from simtk import openmm as mm
 from simtk.openmm.app import *
 from simtk.openmm import *
 from simtk.unit import *
-from simtk.openmm.app.desmonddmsfile import *
 from datetime import datetime
-from SDMplugin import *
+
 from ommreplica import OMMReplica
 from contextlib import contextmanager
 
@@ -32,18 +32,19 @@ class OpenCLContext(object):
     #  _openmm_worker_body()
     def __init__(self, basename, platform_id, device_id, keywords):
         s = signal.signal(signal.SIGINT, signal.SIG_IGN) #so that children do not respond to ctrl-c
-        self._startedSignal = Event()
-        self._readySignal = Event()
-        self._runningSignal = Event()
-        self._cmdq = Queue()
-        self._inq = Queue()
-        self._outq = Queue()
+        self.ctx =  mp.get_context('spawn')
+        self._startedSignal = self.ctx.Event()
+        self._readySignal = self.ctx.Event()
+        self._runningSignal = self.ctx.Event()
+        self._cmdq = self.ctx.Queue()
+        self._inq = self.ctx.Queue()
+        self._outq = self.ctx.Queue()
         self.platformId = platform_id
         self.deviceId = device_id
         self.basename = basename
         self.keywords = keywords
         self.nprnt = int(self.keywords.get('PRNT_FREQUENCY'))
-        self._p = Process(target=self.openmm_worker)
+        self._p = self.ctx.Process(target=self.openmm_worker)
         #, args=(self._cmdq,self._outq,self._inq, self._startedSignal, self._readySignal, self._runningSignal, basename, platform_id, device_id, keywords))
         self._p.daemon = True
         signal.signal(signal.SIGINT, s) #restore signal before start() of children
@@ -97,7 +98,7 @@ class OpenCLContext(object):
         self._inq.put(logfile)
 
     # kills worker
-    def finish(self, wait = True):
+    def finish(self, wait = False):
         if wait:
             self._startedSignal.wait()
             self._readySignal.wait()
@@ -154,6 +155,15 @@ class OpenCLContext(object):
         self.pot = (pot_energy)
 
     def _openmm_worker_body(self):
+        
+        self.plugin = self.keywords.get('ATM_PLUGIN')
+        if self.plugin == 'ATM-METAFORCE':
+            from desmonddmsfile75 import DesmondDMSFile
+            from atmmetaforce import ATMMetaForceUtils, ATMMetaForce
+        else:
+            from simtk.openmm.app.desmonddmsfile import DesmondDMSFile
+            from SDMplugin import SDMUtils, LangevinIntegratorSDM
+        
         input_dms_file  = '%s_0.dms' % self.basename
         self.dms = DesmondDMSFile([input_dms_file])
         self.topology = self.dms.topology
@@ -181,6 +191,16 @@ class OpenCLContext(object):
         self.simulation.step(self.nsteps)
 
     def openmm_worker(self):
+        
+        self.plugin = self.keywords.get('ATM_PLUGIN')
+        if self.plugin == 'ATM-METAFORCE':
+            from desmonddmsfile75 import DesmondDMSFile
+            from atmmetaforce import ATMMetaForceUtils, ATMMetaForce
+        else:
+            from simtk.openmm.app.desmonddmsfile import DesmondDMSFile
+            from SDMplugin import SDMUtils, LangevinIntegratorSDM
+
+        
         self._startedSignal.clear()
         self._readySignal.clear()
         self._runningSignal.clear()
@@ -189,6 +209,7 @@ class OpenCLContext(object):
 
         self.platform_properties = {}
         self.platform = Platform.getPlatformByName('OpenCL')
+
         self.platform_properties["OpenCLPlatformIndex"] = str(self.platformId)
         self.platform_properties["DeviceIndex"] = str(self.deviceId)
 
@@ -299,7 +320,8 @@ class LocalOpenMMTransport(Transport):
 
         # implements a queue of jobs from which to draw the next job
         # to launch
-        self.jobqueue = Queue()
+        ctx = mp.get_context('spawn')
+        self.jobqueue = ctx.Queue()
 
     def _clear_resource(self, replica):
         # frees up the node running a replica identified by replica id
@@ -328,6 +350,11 @@ class LocalOpenMMTransport(Transport):
 
         return nodeid
 
+    def numNodesAlive(self):
+        alive = [node for node in range(self.nprocs)
+                     if self.node_status[node] == None or self.node_status[node] >= 0 ]
+        return len(alive)
+        
     def _availableNode(self):
         #returns a node at random among available nodes
         available = [node for node in range(self.nprocs)

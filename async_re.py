@@ -452,7 +452,7 @@ class async_re(object):
                     cycle_time - 10)
         last_checkpoint_time = None
 
-        while time.time() < end_time:
+        while time.time() < end_time and self.transport.numNodesAlive() > 0 :
             current_time = time.time()
 
             self.updateStatus()
@@ -475,6 +475,9 @@ class async_re(object):
                 self.checkpointJob()
                 last_checkpoint_time = current_time
                 self.logger.info("done.")
+
+        if self.transport.numNodesAlive() <= 0 :
+            self.logger.info("No compute devices are alive. Quitting.")
 
         self.transport.DrainJobQueue()
         self.updateStatus()

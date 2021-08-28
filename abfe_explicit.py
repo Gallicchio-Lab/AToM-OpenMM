@@ -224,11 +224,18 @@ class OpenCLContextSDM(OpenCLContext):
                 
 class SDMReplica(OMMReplica):
     def __init__(self, replica_id, basename, keywords):
-        OMMReplica.__init__(self,replica_id, basename)
         self.keywords = keywords
+        OMMReplica.__init__(self,replica_id, basename)
+
 
     #overrides to open dms file for SDM-RE
     def open_dms(self):
+        self.plugin = self.keywords.get('ATM_PLUGIN')
+        if self.plugin == 'ATM-METAFORCE':
+            from desmonddmsfile75 import DesmondDMSFile
+        else:
+            from simtk.openmm.app.desmonddmsfile import DesmondDMSFile
+        
         file_input  = '%s_0.dms' % self.basename
 
         if not os.path.isdir('r%d' % self._id):
@@ -267,6 +274,12 @@ class SDMReplica(OMMReplica):
             self.dms._tables[0] = self.dms._readSchemas(conn)
 
     def save_dms(self):
+        self.plugin = self.keywords.get('ATM_PLUGIN')
+        if self.plugin == 'ATM-METAFORCE':
+            from desmonddmsfile75 import DesmondDMSFile
+        else:
+            from simtk.openmm.app.desmonddmsfile import DesmondDMSFile
+        
         if self.is_state_assigned and self.is_energy_assigned:
             conn = self.sql_conn
 
@@ -309,6 +322,12 @@ class SDMReplica(OMMReplica):
         self.set_energy([pot_energy, binding_energy])
 
     def set_posvel_from_file(self, replica, cycle):
+        self.plugin = self.keywords.get('ATM_PLUGIN')
+        if self.plugin == 'ATM-METAFORCE':
+            from desmonddmsfile75 import DesmondDMSFile
+        else:
+            from simtk.openmm.app.desmonddmsfile import DesmondDMSFile
+        
         tfile = "r%d/%s_%d.dms" % (replica, self.basename, cycle)
         dms = DesmondDMSFile(tfile)        
         self.positions = copy.deepcopy(dms.positions)
@@ -316,6 +335,12 @@ class SDMReplica(OMMReplica):
         dms.close()
 
     def write_posvel_to_file(self, replica, cycle):
+        self.plugin = self.keywords.get('ATM_PLUGIN')
+        if self.plugin == 'ATM-METAFORCE':
+            from desmonddmsfile75 import DesmondDMSFile
+        else:
+            from simtk.openmm.app.desmonddmsfile import DesmondDMSFile
+        
         tfile = "r%d/%s_%d.dms" % (replica, self.basename, cycle)
         dms = DesmondDMSFile(tfile)
         dms.setPositions(self.positions)                    

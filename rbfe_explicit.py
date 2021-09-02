@@ -13,9 +13,7 @@ from simtk import openmm as mm
 from simtk.openmm.app import *
 from simtk.openmm import *
 from simtk.unit import *
-from simtk.openmm.app.desmonddmsfile import *
 from datetime import datetime
-from SDMplugin import *
 
 from async_re import async_re
 from bedam_async_re import bedam_async_re_job
@@ -54,23 +52,45 @@ class OpenCLContextSDM(OpenCLContext):
         u0 = self._inq.get()
         w0 = self._inq.get()
         self.integrator.setTemperature(temperature)
-        self.integrator.setLambda(lmbd)
-        self.integrator.setLambda1(lmbd1)
-        self.integrator.setLambda2(lmbd2)
-        self.integrator.setAlpha(alpha*kilojoule_per_mole)
-        self.integrator.setU0(u0/ kilojoule_per_mole)
-        self.integrator.setW0coeff(w0 / kilojoule_per_mole)
+        self.plugin = self.keywords.get('ATM_PLUGIN')
+        if self.plugin == 'ATM-METAFORCE':
+            self.atmforce.setLambda1(lmbd1)
+            self.atmforce.setLambda2(lmbd2)
+            self.atmforce.setAlpha(alpha*kilojoule_per_mole)
+            self.atmforce.setU0(u0/ kilojoule_per_mole)
+            self.atmforce.setW0(w0 / kilojoule_per_mole)
+            self.atmforce.updateParametersInContext(self.context)
+        else:
+            self.integrator.setLambda(lmbd)
+            self.integrator.setLambda1(lmbd1)
+            self.integrator.setLambda2(lmbd2)
+            self.integrator.setAlpha(alpha*kilojoule_per_mole)
+            self.integrator.setU0(u0/ kilojoule_per_mole)
+            self.integrator.setW0coeff(w0 / kilojoule_per_mole)
         self.par = [temperature, lmbd, lmbd1, lmbd2, alpha, u0, w0]
 
 
     def _worker_getenergy(self):
-        bind_energy = (self.integrator.getBindE()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
-        pot_energy = (self.integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
+        if self.plugin == 'ATM-METAFORCE':
+            state = self.simulation.context.getState(getEnergy = True, groups = {1,3})
+            pot_energy = (state.getPotentialEnergy()).value_in_unit(kilocalorie_per_mole)
+            bind_energy = (self.atmforce.getPerturbationEnergy(self.simulation.context)).value_in_unit(kilocalorie_per_mole)
+        else:
+            bind_energy = (self.integrator.getBindE()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
+            pot_energy = (self.integrator.getPotEnergy()*kilojoule_per_mole).value_in_unit(kilocalorie_per_mole)
         self._outq.put(pot_energy)
         self._outq.put(bind_energy)
         self.pot = (pot_energy, bind_energy)
 
     def  _openmm_worker_body(self):
+
+        self.plugin = self.keywords.get('ATM_PLUGIN')
+        if self.plugin == 'ATM-METAFORCE':
+            from desmonddmsfile75 import DesmondDMSFile
+            from atmmetaforce import ATMMetaForceUtils, ATMMetaForce
+        else:
+            from simtk.openmm.app.desmonddmsfile import DesmondDMSFile
+            from SDMplugin import SDMUtils, LangevinIntegratorSDM
         
         file_input  = '%s_0.dms' % self.basename
 
@@ -117,8 +137,11 @@ class OpenCLContextSDM(OpenCLContext):
             rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
         else:
             rcpt_atom_restr = None
-
-        sdm_utils = SDMUtils(self.system)
+            
+        if self.plugin == 'ATM-METAFORCE':
+            sdm_utils = ATMMetaForceUtils(self.system)
+        else:
+            sdm_utils = SDMUtils(self.system)
         
         #added conditions of ligand 1 and ligdang 2 constraints
         cmrestraints_present = (rcpt_atom_restr is not None) and (lig1_atom_restr is not None) and (lig2_atom_restr is not None)
@@ -204,8 +227,7 @@ class OpenCLContextSDM(OpenCLContext):
                                     kpsi = float(self.keywords.get('ALIGN_K_PSI'))*kilocalorie_per_mole,
                                     offset = self.lig2offset)
         
-        # the integrator object is context-specific
-        #temperature = int(self.keywords.get('TEMPERATURES')) * kelvin
+
         temperature = 300 * kelvin #will be overriden in set_state()
         frictionCoeff = float(self.keywords.get('FRICTION_COEFF')) / picosecond
         MDstepsize = float(self.keywords.get('TIME_STEP')) * picosecond
@@ -217,25 +239,60 @@ class OpenCLContextSDM(OpenCLContext):
             ubcore = 0.0 * kilocalorie_per_mole
         acore = float(self.keywords.get('ACORE'))
         
-        self.integrator = LangevinIntegratorSDM(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, self.number_of_atoms )
-        self.integrator.setBiasMethod(sdm_utils.ILogisticMethod)
-        self.integrator.setSoftCoreMethod(sdm_utils.RationalSoftCoreMethod)
-        self.integrator.setUmax(umsc / kilojoule_per_mole)
-        self.integrator.setAcore(acore)
-        self.integrator.setUbcore(ubcore/kilojoule_per_mole)
-        for i in lig1_atoms:
-            self.integrator.setDisplacement(i, self.displ[0]/nanometer, self.displ[1]/nanometer, self.displ[2]/nanometer)
-        for i in lig2_atoms:    
-            self.integrator.setDisplacement(i, -self.displ[0]/nanometer, -self.displ[1]/nanometer, -self.displ[2]/nanometer)
+        if not (self.keywords.get('DISPLACEMENT') is None):
+            self.displ = [float(displ) for displ in self.keywords.get('DISPLACEMENT').split(',')]*angstrom
+        else:
+            msg = "Error: DISPLACEMENT is required"
+            self._exit(msg)
+            
+        if self.plugin == 'ATM-METAFORCE':
+            #create ATM Force
+            self.atmforce = ATMMetaForce()
+            
+            for at in self.dms.topology.atoms():
+                self.atmforce.addParticle(int(at.id)-1, 0., 0., 0.)
+                
+            for i in lig1_atoms:
+                self.atmforce.setParticleParameters(i, i,  self.displ[0],  self.displ[1],  self.displ[2])
+            for i in lig2_atoms:
+                self.atmforce.setParticleParameters(i, i, -self.displ[0], -self.displ[1], -self.displ[2])
+
+            self.atmforce.setUmax(umsc/kilojoules_per_mole);
+            self.atmforce.setUbcore(ubcore/kilojoules_per_mole);
+            self.atmforce.setAcore(acore);
+
+            self.atmforce.setForceGroup(3)
+
+            self.system.addForce(self.atmforce)
+
+            self.integrator = LangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond )
+            self.integrator.setIntegrationForceGroups({1,3}) 
+        else:
+            self.integrator = LangevinIntegratorSDM(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, self.number_of_atoms )
+            self.integrator.setBiasMethod(sdm_utils.ILogisticMethod)
+            self.integrator.setSoftCoreMethod(sdm_utils.RationalSoftCoreMethod)
+            self.integrator.setUmax(umsc / kilojoule_per_mole)
+            self.integrator.setAcore(acore)
+            self.integrator.setUbcore(ubcore/kilojoule_per_mole)
+            for i in lig1_atoms:
+                self.integrator.setDisplacement(i, self.displ[0]/nanometer, self.displ[1]/nanometer, self.displ[2]/nanometer)
+            for i in lig2_atoms:    
+                self.integrator.setDisplacement(i, -self.displ[0]/nanometer, -self.displ[1]/nanometer, -self.displ[2]/nanometer)
 
         
 class SDMReplica(OMMReplica):
     def __init__(self, replica_id, basename, keywords):
-        OMMReplica.__init__(self,replica_id, basename)
         self.keywords = keywords
+        OMMReplica.__init__(self,replica_id, basename)
 
     #overrides to open dms file for SDM-RE
     def open_dms(self):
+        self.plugin = self.keywords.get('ATM_PLUGIN')
+        if self.plugin == 'ATM-METAFORCE':
+            from desmonddmsfile75 import DesmondDMSFile
+        else:
+            from simtk.openmm.app.desmonddmsfile import DesmondDMSFile
+        
         file_input  = '%s_0.dms' % self.basename
 
         if not os.path.isdir('r%d' % self._id):
@@ -274,6 +331,13 @@ class SDMReplica(OMMReplica):
             self.dms._tables[0] = self.dms._readSchemas(conn)
 
     def save_dms(self):
+        self.plugin = self.keywords.get('ATM_PLUGIN')
+        if self.plugin == 'ATM-METAFORCE':
+            from desmonddmsfile75 import DesmondDMSFile
+        else:
+            from simtk.openmm.app.desmonddmsfile import DesmondDMSFile
+
+        
         if self.is_state_assigned and self.is_energy_assigned:
             conn = self.sql_conn
 
@@ -316,6 +380,12 @@ class SDMReplica(OMMReplica):
         self.set_energy([pot_energy, binding_energy])
 
     def set_posvel_from_file(self, replica, cycle):
+        self.plugin = self.keywords.get('ATM_PLUGIN')
+        if self.plugin == 'ATM-METAFORCE':
+            from desmonddmsfile75 import DesmondDMSFile
+        else:
+            from simtk.openmm.app.desmonddmsfile import DesmondDMSFile
+            
         tfile = "r%d/%s_%d.dms" % (replica, self.basename, cycle)
         dms = DesmondDMSFile(tfile)        
         self.positions = copy.deepcopy(dms.positions)
@@ -323,6 +393,12 @@ class SDMReplica(OMMReplica):
         dms.close()
 
     def write_posvel_to_file(self, replica, cycle):
+        self.plugin = self.keywords.get('ATM_PLUGIN')
+        if self.plugin == 'ATM-METAFORCE':
+            from desmonddmsfile75 import DesmondDMSFile
+        else:
+            from simtk.openmm.app.desmonddmsfile import DesmondDMSFile
+        
         tfile = "r%d/%s_%d.dms" % (replica, self.basename, cycle)
         dms = DesmondDMSFile(tfile)
         dms.setPositions(self.positions)                    

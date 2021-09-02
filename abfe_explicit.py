@@ -180,6 +180,11 @@ class OpenCLContextSDM(OpenCLContext):
             ubcore = 0.0 * kilocalorie_per_mole
         acore = float(self.keywords.get('ACORE'))
 
+        if not (self.keywords.get('DISPLACEMENT') is None):
+            self.displ = [float(displ) for displ in self.keywords.get('DISPLACEMENT').split(',')]*angstrom
+        else:
+            msg = "Error: DISPLACEMENT is required"
+            self._exit(msg)
         
         if self.plugin == 'ATM-METAFORCE':
             #create ATM Force
@@ -188,13 +193,8 @@ class OpenCLContextSDM(OpenCLContext):
             for at in self.dms.topology.atoms():
                 self.atmforce.addParticle(int(at.id)-1, 0., 0., 0.)
             
-            if not (self.keywords.get('DISPLACEMENT') is None):
-                self.displ = [float(displ) for displ in self.keywords.get('DISPLACEMENT').split(',')]*angstrom
-                for i in lig_atoms:
-                    self.atmforce.setParticleParameters(i, i, self.displ[0] * angstrom, self.displ[1] * angstrom, self.displ[2] * angstrom)
-            else:
-                msg = "Error: DISPLACEMENT is required"
-                self._exit(msg)
+            for i in lig_atoms:
+                self.atmforce.setParticleParameters(i, i, self.displ[0], self.displ[1], self.displ[2] )
 
             self.atmforce.setUmax(umsc/kilojoules_per_mole);
             self.atmforce.setUbcore(ubcore/kilojoules_per_mole);
@@ -213,14 +213,8 @@ class OpenCLContextSDM(OpenCLContext):
             self.integrator.setUmax(umsc / kilojoule_per_mole)
             self.integrator.setAcore(acore)
             self.integrator.setUbcore(ubcore/kilojoule_per_mole)
-            if not (self.keywords.get('DISPLACEMENT') is None):
-                self.displ = [float(displ) for displ in self.keywords.get('DISPLACEMENT').split(',')]*angstrom
-                for i in lig_atoms:
-                    self.integrator.setDisplacement(i, self.displ[0]/nanometer, self.displ[1]/nanometer, self.displ[2]/nanometer)
-            else:
-                msg = "Error: DISPLACEMENT is required"
-                self._exit(msg)
-
+            for i in lig_atoms:
+                self.integrator.setDisplacement(i, self.displ[0]/nanometer, self.displ[1]/nanometer, self.displ[2]/nanometer)
                 
 class SDMReplica(OMMReplica):
     def __init__(self, replica_id, basename, keywords):

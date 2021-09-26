@@ -1,8 +1,6 @@
 ASyncRE-OpenMM
 ==============
 
-VERSION 0.2.0
-
 ASynchronous Replica Exchange for OpenMM (ASyncRE-OpenMM) is an extensible Python package enabling asynchronous parallel replica exchange molecular simulations with OpenMM on heterogeneous computing environments as well as on omogeneous high performance clusters. 
 
 This code is adapted from the [AsyncRE](https://github.com/ComputationalBiophysicsCollaborative/AsyncRE) package for the IMPACT program.

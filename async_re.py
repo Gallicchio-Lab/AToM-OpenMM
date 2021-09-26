@@ -404,6 +404,7 @@ class async_re(object):
             for replica in self.openmm_replicas:
                 self.status[replica._id]['cycle_current'] = replica.get_cycle()
                 self.status[replica._id]['stateid_current'] = replica.get_stateid()
+                self.logger.info("Replica %d Cycle %d Stateid %d" % (replica._id, self.status[replica._id]['cycle_current'], self.status[replica._id]['stateid_current']))
             self.updateStatus(restart=True)
             if self.transport_mechanism == "BOINC":
                 # restart BOINC workunit id list

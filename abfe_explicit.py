@@ -237,7 +237,7 @@ class SDMReplica(OMMReplica):
 
         file_output  = 'r%d/%s_ckp.dms' % (self._id,self.basename)
         if os.path.isfile(file_output):
-            print("Reading from %s" % file_output)
+            print("Replica %d, restarting from checkpoint %s" % (self._id, file_output))
         if not os.path.isfile(file_output):
             shutil.copyfile(file_input, file_output)
 
@@ -249,7 +249,6 @@ class SDMReplica(OMMReplica):
         tables = self.dms._tables[0]
         conn = self.sql_conn
         if 'sdm_data' in tables:
-            print("Reading sdm_data")
             # read sdm_data table
             q = """SELECT binde,epot,temperature,lambda,lambda1,lambda2,alpha,u0,w0,cycle,stateid,mdsteps FROM sdm_data WHERE id = 1"""
             ans = conn.execute(q)

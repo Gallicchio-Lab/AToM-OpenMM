@@ -2,17 +2,8 @@
 """
 The core module of ASyncRE-OpenMM: a framework to run asynchronous replica exchange calculations with OpenMM
 
-Contributors:
-Baofeng Zhang <baofzhang@gmail.com>
+Authors:
 Emilio Gallicchio <emilio.gallicchio@gmail.com>
-
-
-This code is adapted from:
-https://github.com/ComputationalBiophysicsCollaborative/AsyncRE
-authored by:
-Baofeng Zhang
-Emilio Gallicchio
-Junchao Xia
 
 """
 from __future__ import print_function
@@ -30,48 +21,13 @@ from configobj import ConfigObj
 
 from gibbs_sampling import *
 
-from ommreplica import OMMReplica
-from local_openmm_transport import OpenCLContext
+from ommreplica import *
+from ommworker import *
+from local_openmm_transport import *
 
 import multiprocessing as mp
 
 __version__ = '0.2.0'
-
-def _exit(message):
-    """Print and flush a message to stdout and then exit."""
-    print(message)
-    sys.stdout.flush()
-    print('Waiting for children to complete ...')
-    while True:
-        time.sleep(1)
-        if not mp.active_children():
-            break
-    time.sleep(20)
-    sys.exit(1)
-
-def _open(name, mode, max_attempts = 100, wait_time = 1):
-    """
-    Convenience function for opening files on an unstable filesystem.
-
-    max_attempts : int
-        maximum number of attempts to make at opening a file
-    wait_time : int
-        time (in seconds) to wait between attempts
-    """
-    attempts = 0
-    f = None
-    while f is None and attempts <= max_attempts:
-        try:
-            f = open(name,mode)
-        except IOError:
-            print ('Warning: unable to access file %s, re-trying in %d '
-                   'second(s)...'%(name,wait_time))
-            f = None
-            attempts += 1
-            time.sleep(wait_time)
-    if attempts > max_attempts:
-        _exit('Too many failures accessing file %s'%name)
-    return f
 
 
 class async_re(object):
@@ -83,7 +39,7 @@ class async_re(object):
     def __init__(self, command_file, options):
         self.command_file = command_file
         if not os.path.exists(self.command_file):
-            self._exit('No such file: %s'%self.command_file)
+           self._exit('No such file: %s'%self.command_file)
 
         self.jobname = os.path.splitext(os.path.basename(command_file))[0]
         self.keywords = ConfigObj(self.command_file)
@@ -92,31 +48,39 @@ class async_re(object):
         self._checkInput()
         self._printStatus()
 
+        #set to False to run without exchanges
+        self.exchange = True
+        
         #catch ctrl-C to terminate threads gracefully
         signal.signal(signal.SIGINT, self._signal_handler)
+    
+    def _exit(self, message):
+        """Print and flush a message to stdout and then exit."""
+        self._cleanup()
+        print(message)
+        sys.stdout.flush()
+        print('Waiting for children to complete ...')
+        while True:
+            time.sleep(1)
+            if not mp.active_children():
+                break
+        time.sleep(20)
+        sys.exit(1)
+
 
     def getVersion(self):
         return __version__
 
     def _cleanup(self):
         try:
-            if self.transport_mechanism == "LOCAL_OPENMM":
-                for ommcontext in self.openmm_contexts:
-                    ommcontext.finish()
+            for worker in self.openmm_workers:
+                worker.finish()
         except:
             pass
-
-    def _exit(self, message):
-        self._cleanup()
-        _exit(message)
 
     def _signal_handler(self, sig, frame):
         msg = "SIGINT detected ... cleaning up."
         self._exit(msg)
-
-    def _openfile(self, name, mode, max_attempts = 100):
-        f = _open(name,mode,max_attempts)
-        return f
 
     def _setLogger(self):
         self.logger = logging.getLogger("async_re")
@@ -177,20 +141,20 @@ class async_re(object):
         self.transport_mechanism = self.keywords.get('JOB_TRANSPORT')
         if self.transport_mechanism is None:
             self._exit('JOB_TRANSPORT needs to be specified')
-        #SSH, BOINC and LOCAL_OPENMM are supported for now
-        if self.transport_mechanism != "SSH" and self.transport_mechanism != "BOINC" and self.transport_mechanism != "LOCAL_OPENMM" :
+        #only LOCAL_OPENMM is supported for now
+        if self.transport_mechanism != "LOCAL_OPENMM" :
             self._exit("unknown JOB_TRANSPORT %s" % self.transport_mechanism)
         # reset job transport
         self.transport = None
-       # variables required for ssh-based transport
-        if self.transport_mechanism == "SSH" or self.transport_mechanism == "LOCAL_OPENMM":
+
+        if self.transport_mechanism == "LOCAL_OPENMM":
             if self.keywords.get('NODEFILE') is None:
                 self._exit("NODEFILE needs to be specified")
             nodefile = self.keywords.get('NODEFILE')
             """
             check the information in the nodefile. there should be six columns in the  
             nodefile. They are 'node name', 'slot number', 'number of threads', 
-            'system architect','username', and 'name of the temperary folder'
+            'platform','username', and 'name of the temperary folder'
             """
             node_info= []
             try:
@@ -222,40 +186,6 @@ class async_re(object):
             #Can print out here to check the node information
             self.logger.info("compute nodes: %s", ', '.join([n['node_name'] for n in node_info]))
 
-        # exchange or not, switch added for WCG by Junchao
-
-        self.exchange = True
-        if self.keywords.get('EXCHANGE') is None:
-            self.exchange = True
-        elif self.keywords.get('EXCHANGE').lower() == 'yes':
-            self.exchange = True
-        elif self.keywords.get('EXCHANGE').lower() == 'no':
-            self.exchange = False
-        else:
-            self._exit("unknown value for exchange switch %s" % self.exchange)
-
-        # exchange by set or not, switch added for evaluting different REMD scheme
-        self.exchangeBySet = True
-        if self.keywords.get('EXCHANGE_BYSET') is None:
-            self.exchangeBySet = True
-        elif self.keywords.get('EXCHANGE_BYSET').lower() == 'yes':
-            self.exchangeBySet = True
-        elif self.keywords.get('EXCHANGE_BYSET').lower() == 'no':
-            self.exchangeBySet = False
-        else:
-            self._exit("unknown value for exchange by set %s" % self.exchangeBySet)
-
-        # exchange method, switch added for evaluting different REMD scheme
-        self.exchangeMethod = 'restrained_gibbs'
-        if self.keywords.get('EXCHANGE_METHOD') is None:
-            self.exchangeMethod = 'restrained_gibbs'
-        elif self.keywords.get('EXCHANGE_METHOD').lower() == 'restrained_gibbs':
-            self.exchangeMethod = 'restrained_gibbs'
-        elif self.keywords.get('EXCHANGE_METHOD').lower() == 'pairwise_metropolis':
-            self.exchangeMethod = 'pairwise_metropolis'
-        else:
-            self._exit("unknown exchange method %s" % self.exchangeMethod)
-
         # execution time in minutes
         self.walltime = float(self.keywords.get('WALL_TIME'))
         if self.walltime is None:
@@ -272,19 +202,6 @@ class async_re(object):
         # number of replicas (may be determined by other means)
         self.nreplicas = None
 
-        if self.keywords.get('NEXCHG_ROUNDS') is not None:
-            self.nexchg_rounds = int(self.keywords.get('NEXCHG_ROUNDS'))
-        else:
-            self.nexchg_rounds = 1
-
-        if self.keywords.get('NREPLICAS') is not None:
-            self.nreplicas = int(self.keywords.get('NREPLICAS'))
-        # extfiles variable for 'setupJob'
-        self.extfiles = self.keywords.get('ENGINE_INPUT_EXTFILES')
-        if self.extfiles is not None and self.extfiles != '':
-            self.extfiles = self.extfiles.split(',')
-        else:
-            self.extfiles = None
         # verbose printing
         if self.keywords.get('VERBOSE').lower() == 'yes':
             self.verbose = True
@@ -293,132 +210,24 @@ class async_re(object):
         else:
             self.verbose = False
 
-
-
-    def _linkReplicaFile(self, link_filename, real_filename, repl):
-        """
-        Link the file at real_filename to the name at link_filename in the
-        directory belonging to the given replica. If a file is already linked
-        to this name (e.g. from a previous cycle), remove it first.
-        """
-        os.chdir('r%d'%repl)
-        # Check that the file to be linked actually exists.
-        # TODO: This is not robust to absolute path specifications.
-        real_filename = '../%s'%real_filename
-        if not os.path.exists(real_filename):
-            self._exit('No such file: %s'%real_filename)
-        # Make/re-make the symlink.
-        if os.path.exists(link_filename):
-            os.remove(link_filename)
-        #os.symlink(real_filename,link_filename)
-        shutil.copy(real_filename,link_filename)
-        os.chdir('..')
-
+        self.implicitsolvent =  self.keywords.get('IMPLICITSOLVENT')
+        self.totalsteps = self.keywords.get('PRODUCTION_STEPS')
+        self.jobname = self.keywords.get('ENGINE_INPUT_BASENAME')
+        self.stepgap = self.keywords.get('PRNT_FREQUENCY')
 
     def setupJob(self):
-        """
-        If RE_SETUP='yes' creates and populates subdirectories, one for each
-        replica called r0, r1, ..., rN in the working directory. Otherwise
-        reads saved state from the ENGINE_BASENAME.stat file if directories
-        already exist.
+        self.transport = LocalOpenMMTransport(self.basename, self.openmm_workers, self.openmm_replicas)
+        # create status table
+        self.status = [{'stateid_current': k, 'running_status': 'W',
+                        'cycle_current': 1} for k in range(self.nreplicas)]
+        for replica in self.openmm_replicas:
+            self.status[replica._id]['cycle_current'] = replica.get_cycle()
+            self.status[replica._id]['stateid_current'] = replica.get_stateid()
+            self.logger.info("Replica %d Cycle %d Stateid %d" % (replica._id, self.status[replica._id]['cycle_current'], self.status[replica._id]['stateid_current']))
+        self.updateStatus()
 
-        To populate each directory calls _buildInpFile(k) to prepare the MD
-        engine input file for replica k. Also creates soft links to the working
-        directory for the accessory files specified in ENGINE_INPUT_EXTFILES.
-        """
-
-        if self.transport_mechanism == "SSH":
-            from ssh_transport import ssh_transport
-
-            # creates SSH transport
-            self.transport = ssh_transport(self.basename, self.compute_nodes, self.openmm_replicas)
-
-        elif self.transport_mechanism == "BOINC":
-            from boinc_transport import boinc_transport
-
-            # creates BOINC transport
-            self.transport = boinc_transport(self.basename, self.keywords, self.nreplicas, self.extfiles)
-
-        elif self.transport_mechanism == "LOCAL_OPENMM":
-            from local_openmm_transport import LocalOpenMMTransport
-
-            #creates local OpenMM transport
-            self.transport = LocalOpenMMTransport(self.basename, self.openmm_contexts, self.openmm_replicas)
-
-        else:
-            self._exit("Job transport is not specified.")
-
-        replica_dirs_exist = True
-        for k in range(self.nreplicas):
-            repl_dir = 'r%d'%k
-            if not os.path.exists(repl_dir):
-                replica_dirs_exist = False
-
-        if replica_dirs_exist:
-            setup = False
-        else:
-            setup = True
-
-        if not setup:
-            #check that output files exist and are not empty
-            #in each replica directory
-            for k in range(self.nreplicas):
-                out_exist = False
-                repl_dir = 'r%d' %k
-                all_files = os.listdir(repl_dir)
-                for f in all_files:
-                    if f.endswith(".out") and os.path.getsize("%s/%s" % (repl_dir,f)) > 0:
-                        out_exist = True
-                        break
-                if not out_exist:
-                    setup = True
-                    break
-
-        if setup:
-            # create status table
-            self.status = [{'stateid_current': k, 'running_status': 'W',
-                            'cycle_current': 1} for k in range(self.nreplicas)]
-
-            if not self.transport_mechanism == "LOCAL_OPENMM":
-                # create replicas directories r1, r2, etc.
-                for k in range(self.nreplicas):
-                    repl_dir = 'r%d'%k
-                    if not os.path.exists(repl_dir):
-                        os.mkdir('r%d'%k)
-                # create links for external files
-                if self.extfiles is not None:
-                    for file in self.extfiles:
-                        for k in range(self.nreplicas):
-                            self._linkReplicaFile(file,file,k)
-                # create input files no. 1
-                for k in range(self.nreplicas):
-                    self._buildInpFile(k)
-
-            # save status tables
-            self._write_status()
-            self.updateStatus()
-
-        else:
-            #this is a restart
-            self._read_status()
-            for replica in self.openmm_replicas:
-                self.status[replica._id]['cycle_current'] = replica.get_cycle()
-                self.status[replica._id]['stateid_current'] = replica.get_stateid()
-                self.logger.info("Replica %d Cycle %d Stateid %d" % (replica._id, self.status[replica._id]['cycle_current'], self.status[replica._id]['stateid_current']))
-            self.updateStatus(restart=True)
-            if self.transport_mechanism == "BOINC":
-                # restart BOINC workunit id list
-                self.transport.restart()
-
-        self._write_status()
         self.print_status()
-
-        #at this point all replicas should be in wait state
-        for k in range(self.nreplicas):
-            if self.status[k]['running_status'] != 'W':
-                _exit('Internal error after restart. Not all jobs are in wait '
-                      'state.')
-
+        
     def scheduleJobs(self):
         # Gets the wall clock time for a replica to complete a cycle
         # If unspecified it is estimated as 10% of job wall clock time
@@ -451,7 +260,7 @@ class async_re(object):
         start_time = time.time()
         end_time = (start_time + 60*(self.walltime - replica_run_time) -
                     cycle_time - 10)
-        last_checkpoint_time = None
+        last_checkpoint_time = start_time
 
         while time.time() < end_time and self.transport.numNodesAlive() > 0 :
             current_time = time.time()
@@ -471,7 +280,7 @@ class async_re(object):
             self._write_status()
             self.print_status()
 
-            if last_checkpoint_time == None or current_time - last_checkpoint_time > checkpoint_time:
+            if current_time - last_checkpoint_time > checkpoint_time:
                 self.logger.info("Checkpointing ...")
                 self.checkpointJob()
                 last_checkpoint_time = current_time
@@ -506,27 +315,10 @@ class async_re(object):
         pass
 
     def _write_status(self):
-        """
-        Pickle the current state of the RE job and write to in BASENAME.stat.
-        """
-        #disable ctrl-c
-        s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-
-        status_file = '%s.stat'%self.basename
-        f = _open(status_file,'wb')
-        pickle.dump(self.status,f)
-        f.close()
-
-        signal.signal(signal.SIGINT, s)
+        pass
 
     def _read_status(self):
-        """
-        Unpickle and load the current state of the RE job from BASENAME.stat.
-        """
-        status_file = '%s.stat'%self.basename
-        f = _open(status_file,'rb')
-        self.status = pickle.load(f)
-        f.close()
+        pass
 
     def print_status(self):
         """
@@ -548,42 +340,29 @@ class async_re(object):
         ofile.write(log)
         ofile.close()
 
-    def updateStatus(self, restart = False):
+    def _buildInpFile(self, repl):
+        pass
+        
+    def updateStatus(self):
         """Scan the replicas and update their states."""
         self.transport.poll()
         for k in range(self.nreplicas):
-            self._updateStatus_replica(k,restart)
+            self._updateStatus_replica(k)
         self._write_status()
 
-    def _updateStatus_replica(self, replica, restart):
-        """
-        Update the status of the specified replica. If it has completed a cycle
-        the input file for the next cycle is prepared and the replica is placed
-        in the wait state.
-        """
+    def _updateStatus_replica(self, replica):
         this_cycle = self.status[replica]['cycle_current']
-        if restart:
-            if self.status[replica]['running_status'] == 'R':
+        if self.status[replica]['running_status'] == 'R':
+            if self.transport.isDone(replica,this_cycle):
+                self.status[replica]['running_status'] = 'S'
+                #MD engine modules implement ways to check for completion.
+                #by testing existence of output file, etc.
                 if self._hasCompleted(replica,this_cycle):
                     self.status[replica]['cycle_current'] += 1
                 else:
                     self.logger.warning('_updateStatus_replica(): restarting replica %s (cycle %s)',
                                         replica, this_cycle)
-            self._buildInpFile(replica)
-            self.status[replica]['running_status'] = 'W'
-        else:
-            if self.status[replica]['running_status'] == 'R':
-               if self.transport.isDone(replica,this_cycle):
-                    self.status[replica]['running_status'] = 'S'
-                     #MD engine modules implement ways to check for completion.
-                     #by testing existence of output file, etc.
-                    if self._hasCompleted(replica,this_cycle):
-                        self.status[replica]['cycle_current'] += 1
-                    else:
-                        self.logger.warning('_updateStatus_replica(): restarting replica %s (cycle %s)',
-                                            replica, this_cycle)
-                    self._buildInpFile(replica)
-                    self.status[replica]['running_status'] = 'W'
+                self.status[replica]['running_status'] = 'W'
         self.update_state_of_replica(replica)
 
     def _njobs_to_run(self):
@@ -645,12 +424,9 @@ class async_re(object):
 
         if self.verbose:
             self.logger.debug('Initiating exchanges amongst %d replicas:', nreplicas_to_exchange)
-
+        
         exchange_start_time = time.time()
-        # backtrack cycle of waiting replicas
-        for k in replicas_to_exchange:
-            self.status[k]['cycle_current'] -= 1
-            self.status[k]['running_status'] = 'E'
+
         # Matrix of replica energies in each state.
         # The computeSwapMatrix() function is defined by application
         # classes (Amber/US, Impact/BEDAM, etc.)
@@ -662,63 +438,23 @@ class async_re(object):
         matrix_time = time.time() - matrix_start_time
 
         sampling_start_time = time.time()
-        # Perform an exchange for each of the n replicas, m times
-        if self.nexchg_rounds >= 0:
-            mreps = self.nexchg_rounds
-        else:
-            mreps = nreplicas_to_exchange**(-self.nexchg_rounds)
 
-        for reps in range(mreps):
-            if self.exchangeBySet:
-                for repl_i in replicas_to_exchange:
-                    sid_i = self.status[repl_i]['stateid_current']
-                    curr_states = [self.status[repl_j]['stateid_current']
-                                   for repl_j in replicas_to_exchange]
-                    if self.exchangeMethod == 'restrained_gibbs' :
-                        repl_j = pairwise_independence_sampling(repl_i,sid_i,
-                                                        replicas_to_exchange,
-                                                        curr_states,
-                                                        swap_matrix)
-
-                    elif self.exchangeMethod == 'pairwise_metropolis':
-                        repl_j = pairwise_metropolis_sampling(repl_i,sid_i,
-                                                        replicas_to_exchange,
-                                                        curr_states,
-                                                        swap_matrix)
-                    else :
-                        self._exit("unknown exchange method %s" % self.exchangeMethod)
-                    if repl_j != repl_i:
-                        # exchange successfull
-                        sid_i = self.status[repl_i]['stateid_current']
-                        sid_j = self.status[repl_j]['stateid_current']
-                        self.status[repl_i]['stateid_current'] = sid_j
-                        self.status[repl_j]['stateid_current'] = sid_i
-                        self.logger.info("Replica %d new state %d" % (repl_i, sid_j))
-                        self.logger.info("Replica %d new state %d" % (repl_j, sid_i))
-            else:
-                repl_i = choice(replicas_to_exchange)
+        for repl_i in replicas_to_exchange:
+            #repl_i = choice(replicas_to_exchange)
+            sid_i = self.status[repl_i]['stateid_current']
+            curr_states = [self.status[repl_j]['stateid_current']
+                           for repl_j in replicas_to_exchange]
+            repl_j = pairwise_independence_sampling(repl_i,sid_i,
+                                                    replicas_to_exchange,
+                                                    curr_states,
+                                                    swap_matrix)
+            if repl_j != repl_i:
                 sid_i = self.status[repl_i]['stateid_current']
-                curr_states = [self.status[repl_j]['stateid_current']
-                               for repl_j in replicas_to_exchange]
-                if self.exchangeMethod == 'pairwise_metropolis':
-                    repl_j = pairwise_metropolis_sampling(repl_i,sid_i,
-                                                        replicas_to_exchange,
-                                                        curr_states,
-                                                        swap_matrix)
-                elif self.exchangeMethod == 'restrained_gibbs' :
-                    repl_j = pairwise_independence_sampling(repl_i,sid_i,
-                                                        replicas_to_exchange,
-                                                        curr_states,
-                                                        swap_matrix)
-                else:
-                    self._exit("unknown exchange method %s" % self.exchangeMethod)
-                if repl_j != repl_i:
-                    sid_i = self.status[repl_i]['stateid_current']
-                    sid_j = self.status[repl_j]['stateid_current']
-                    self.status[repl_i]['stateid_current'] = sid_j
-                    self.status[repl_j]['stateid_current'] = sid_i
-                    self.logger.info("Replica %d new state %d" % (repl_i, sid_j))
-                    self.logger.info("Replica %d new state %d" % (repl_j, sid_i))
+                sid_j = self.status[repl_j]['stateid_current']
+                self.status[repl_i]['stateid_current'] = sid_j
+                self.status[repl_j]['stateid_current'] = sid_i
+                self.logger.info("Replica %d new state %d" % (repl_i, sid_j))
+                self.logger.info("Replica %d new state %d" % (repl_j, sid_i))
 
         # Uncomment to debug Gibbs sampling:
         # Actual and observed populations of state permutations should match.
@@ -727,69 +463,8 @@ class async_re(object):
         # self._debug_validate_state_populations(replicas_to_exchange,
         #                                        states_to_exchange,U)
         sampling_time = time.time() - sampling_start_time
-        # Write new input files.
-        for k in replicas_to_exchange:
-            # Create new input files for the next cycle and place replicas back
-            # into "W" (wait) state.
-            self.status[k]['cycle_current'] += 1
-            self._buildInpFile(k)
-            self.status[k]['running_status'] = 'W'
 
-        total_time = time.time() - exchange_start_time
-
-        if self.verbose:
-            fmt = '%30s: %10.2f s'
-            line = '-'*40
-            self.logger.debug(line)
-            self.logger.debug(fmt, 'Swap matrix computation time', matrix_time)
-            self.logger.debug(fmt, 'Gibbs sampling time', sampling_time)
-            self.logger.debug(line)
-            self.logger.debug(fmt, 'Total exchange time', total_time)
-
-    # see tempt and bedamtempt child classes for specific implementations
+    # see children classes for specific implementations
     def update_state_of_replica(self, repl):
         pass
 
-    def _debug_collect_state_populations(self, replicas):
-        """
-        Calculate the empirically observed distribution of state permutations.
-        Permutations not observed will NOT be counted and will need to be
-        added later for proper comparison to the exact distribution.
-        """
-        try:
-            self.nperm
-        except (NameError,AttributeError):
-            self.nperm = {}
-        curr_states = [self.status[i]['stateid_current'] for i in replicas]
-        curr_perm = str(zip(replicas,curr_states))
-        if self.nperm.has_key(curr_perm):
-            self.nperm[curr_perm] += 1
-        else:
-            self.nperm[curr_perm] = 1
-
-    def _debug_validate_state_populations(self, replicas, states, U):
-        """
-        Calculate the exact state permutation distribution and compare it to
-        the observed distribution. The similarity of these distributions is
-        measured via the Kullback-Liebler divergence.
-        """
-        empirical = sample_to_state_perm_distribution(self.nperm,replicas,
-                                                      states)
-        exact = state_perm_distribution(replicas,states,U)
-        line = '-'*80
-        double_line = '='*80
-        fmt = '{0:>8} {0:>9.4f} {0:>9.4f} {}'
-
-        msg = ['\n{:>8} {:<9} {:<9} {}'.format('', 'empirical', 'exact', 'state permutation')]
-        msg.append(line)
-        if len(empirical.keys()) > len(exact.keys()):
-            perms = empirical.keys()
-        else:
-            perms = exact.keys()
-        for k,perm in enumerate(perms):
-            msg.append(fmt.format(k+1, empirical[perm], exact[perm], perm))
-        msg.append(line)
-        dkl = state_perm_divergence(empirical,exact)
-        msg.append('Kullback-Liebler Divergence = {}'.format(dkl))
-        msg.append(double_line)
-        self.logger.debug(msg)

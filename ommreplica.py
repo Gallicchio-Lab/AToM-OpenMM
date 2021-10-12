@@ -9,41 +9,44 @@ from simtk import openmm as mm
 from simtk.openmm.app import *
 from simtk.openmm import *
 from simtk.unit import *
-from simtk.openmm.app.desmonddmsfile import *
 from datetime import datetime
+
+from atmmetaforce import *
+from ommworker import *
       
 class OMMReplica(object):
     #
-    # Holds and manages OpenMM system for a replica
+    # Holds and manages OpenMM state for a replica
     #
-    def __init__(self, replica_id, basename):
+    def __init__(self, replica_id, basename, worker):
         self._id = replica_id
         self.basename = basename
-
+        self.worker = worker
+        self.context = worker.context
+        self.ommsystem = worker.ommsystem
         self.pot = None
         self.par = None
-        self.is_energy_assigned = False
-        self.is_state_assigned = False
-        self.cycle = 0
+        self.cycle = 1
         self.stateid = None
         self.mdsteps = 0
 
+        state = self.context.getState(getPositions=True, getVelocities=True)
+        self.positions = state.getPositions()
+        self.velocities = state.getVelocities()
+        
         if not os.path.isdir('r%d' % self._id):
             os.mkdir('r%d' % self._id)
-
+            
         self.open_out()
-
-        self.open_dms()
-        
-        self.positions = copy.deepcopy(self.dms.positions)
-        self.velocities = copy.deepcopy(self.dms.velocities)        
-
+        #may override stateid, positions, etc.
+        self.load_checkpoint()
         self.open_dcd()
 
     def set_state(self, stateid, par):
         self.stateid = int(stateid)
         self.par = par
         self.is_state_assigned = True
+        self.update_context_from_state()
         
     def get_state(self):
         return (self.stateid, self.par)
@@ -53,7 +56,6 @@ class OMMReplica(object):
 
     def set_energy(self, pot):
         self.pot = pot
-        self.is_energy_assigned = True
         
     def set_posvel(self, positions, velocities):
         self.positions = positions
@@ -63,52 +65,18 @@ class OMMReplica(object):
         outfilename =  'r%d/%s.out' % (self._id,self.basename)
         self.outfile = open(outfilename, 'a+')
 
-    def save_out(self):
-        pot_energy = self.pot
-        temperature = self.par[0]
-        self.outfile.write("%f %f\n" % (temperature, pot_energy))
+    def load_checkpoint(self):
+        ckptfile = 'r%d/%s_ckpt.xml' % (self._id,self.basename)
+        if os.path.isfile(ckptfile):
+            print("Loading checkpointfile %s" % ckptfile) 
+            self.worker.simulation.loadState(ckptfile)
+            self.update_state_from_context()
+
+    def save_checkpoint(self):
+        ckptfile = 'r%d/%s_ckpt.xml' % (self._id,self.basename)
+        self.update_context_from_state()
+        self.worker.simulation.saveState(ckptfile)
         
-    def open_dms(self):
-        input_file  = '%s_0.dms' % self.basename 
-
-        output_file  = 'r%d/%s_ckp.dms' % (self._id,self.basename)
-        if not os.path.isfile(output_file):
-            shutil.copyfile(input_file, output_file)
-
-        self.dms = DesmondDMSFile([output_file]) 
-
-        self.sql_conn = self.dms._conn[0]
-                
-        # check for tre_data table in dms file
-        tables = self.dms._tables[0]
-        conn = self.sql_conn
-        if 'tre_data' in tables:
-            # read tre_data table
-            q = """SELECT epot,temperature,cycle,stateid,mdsteps FROM tre_data WHERE id = 1"""
-            ans = conn.execute(q)
-            for (epot,temperature,cycle,stateid,mdsteps) in conn.execute(q):
-                self.pot = [epot]
-                self.par = [temperature]
-                self.cycle = cycle
-                self.stateid = stateid
-                self.mdsteps = mdsteps
-
-    def save_dms(self):
-        if self.is_state_assigned and self.is_energy_assigned:
-            conn = self.sql_conn
-            tables = self.dms._tables[0]
-            if 'tre_data' not in tables:
-                conn.execute("CREATE TABLE IF NOT EXISTS tre_data (id INTEGER PRIMARY KEY, epot REAL, temperature REAL, cycle INTEGER, stateid INTEGER, mdsteps INTEGER )")
-                conn.execute("INSERT INTO tre_data (epot,temperature,cycle,stateid,mdsteps) VALUES (0,0,0,0,0)")
-                conn.commit()
-                self.dms._tables[0] = self.dms._readSchemas(conn)
-            pot_energy =  float(self.pot[0])            
-            temperature = float(self.par[0])
-            conn.execute("UPDATE tre_data SET epot = %f, temperature = %f, cycle = %d, stateid = %d, mdsteps = %d WHERE id = 1" % (pot_energy, temperature, self.cycle, self.stateid, self.mdsteps))
-            conn.commit()
-            self.dms.setPositions(self.positions)
-            self.dms.setVelocities(self.velocities)
-
     def open_dcd(self):
         dcdfilename =  'r%d/%s.dcd' % (self._id,self.basename)
         append = os.path.isfile(dcdfilename)
@@ -117,7 +85,7 @@ class OMMReplica(object):
         else:
             mode = 'wb'
         self.dcdfile = open(dcdfilename, mode)
-        self.dcd = DCDFile(self.dcdfile, self.dms.topology, 0.001*picosecond, append=append)
+        self.dcd = DCDFile(self.dcdfile, self.worker.topology, self.ommsystem.MDstepsize, append=append)
 
     def save_dcd(self):
         self.dcd.writeModel(self.positions, unitCellDimensions=None, periodicBoxVectors=None)
@@ -137,44 +105,84 @@ class OMMReplica(object):
     def get_stateid(self):
         return self.stateid
 
-    #these are used with the ssh transport to read energies etc. from the output files
-    def _getOpenMMData(self,outfile):
-        """
-        Reads all of the Openmm simulation data values temperature, energies,
-        etc.
-        """
-        data = []
-        f = open(outfile, "r")
-        line = f.readline()
-        while line:
-            datablock = []
-            for word in line.split():
-                datablock.append(float(word))
-            data.append(datablock)
-            line = f.readline()
-        f.close()
-        return data
 
-    def set_statepot_from_outputfile(self, replica, cycle):
-        outfile = "r%d/%s_%d.out" % (replica, self.basename, cycle)
-        data = self._getOpenMMData(outfile)
-        # format is temperature, pot_energy
-        nr = len(data)
-        temperature = float(data[nr-1][0])
-        pot_energy = float(data[nr-1][1])
-        self.set_state(self.stateid, [temperature])
-        self.set_energy([pot_energy])
-        
-    def set_posvel_from_file(self, replica, cycle):
-        tfile = "r%d/%s_%d.dms" % (replica, self.basename, cycle)
-        dms = DesmondDMSFile([tfile])
-        self.positions = copy.deepcopy(dms.positions)
-        self.velocities = copy.deepcopy(dms.velocities)
-        dms.close()
+class OMMReplicaTRE(OMMReplica):
+    def save_out(self):
+        if self.pot and self.par:
+            pot_energy = self.pot['potential_energy']
+            temperature = self.par['temperature']
+            if self.outfile:
+                self.outfile.write("%f %f\n" % (temperature, pot_energy))
 
-    def write_posvel_to_file(self, replica, cycle):
-        tfile = "r%d/%s_%d.dms" % (replica, self.basename, cycle)
-        dms = DesmondDMSFile([tfile])
-        dms.setPositions(self.positions)
-        dms.setVelocities(self.velocities)
-        dms.close()
+    def update_state_from_context(self):
+        self.cycle = int(self.context.getParameter(self.ommsystem.parameter['cycle']))
+        self.stateid = int(self.context.getParameter(self.ommsystem.parameter['stateid']))
+        self.mdsteps = int(self.context.getParameter(self.ommsystem.parameter['mdsteps']))
+        if not self.par:
+            self.par = {}
+        self.par['temperature'] = self.context.getParameter(self.ommsystem.parameter['temperature'])*kelvin
+        if not self.pot:
+            self.pot = {}
+        self.pot['potential_energy'] = self.context.getParameter(self.ommsystem.parameter['potential_energy'])*kilojoules_per_mole
+        state = self.context.getState(getPositions=True, getVelocities=True)
+        self.positions = state.getPositions()
+        self.velocities = state.getVelocities()
+
+    def update_context_from_state(self):
+        self.context.setParameter(self.ommsystem.parameter['cycle'], self.cycle)
+        self.context.setParameter(self.ommsystem.parameter['stateid'], self.stateid)
+        self.context.setParameter(self.ommsystem.parameter['mdsteps'], self.mdsteps)
+        if self.par:
+            self.context.setParameter(self.ommsystem.parameter['temperature'], self.par['temperature']/kelvin)
+        if self.pot:
+            self.context.setParameter(self.ommsystem.parameter['potential_energy'], self.pot['potential_energy']/kilojoules_per_mole)
+
+class OMMReplicaATM(OMMReplica):
+    def save_out(self):
+        if self.pot and self.par:
+            pot_energy = self.pot['potential_energy']
+            pert_energy = self.pot['perturbation_energy']
+            temperature = self.par['temperature']
+            lmbd1 = self.par['lambda1']
+            lmbd2 = self.par['lambda2']
+            alpha = self.par['alpha']
+            u0 = self.par['u0']
+            w0 = self.par['w0']
+            if self.outfile:
+                self.outfile.write("%f %f %f %f %f %f %f %f\n" % (temperature/kelvin, lmbd1, lmbd2, alpha*kilocalories_per_mole, u0/kilocalories_per_mole, w0/kilocalories_per_mole, pot_energy/kilocalories_per_mole, pert_energy/kilocalories_per_mole))
+                self.outfile.flush()
+
+    def update_state_from_context(self):
+        self.cycle = int(self.context.getParameter(self.ommsystem.parameter['cycle']))
+        self.stateid = int(self.context.getParameter(self.ommsystem.parameter['stateid']))
+        self.mdsteps = int(self.context.getParameter(self.ommsystem.parameter['mdsteps']))
+        if not self.par:
+            self.par = {}
+        self.par['temperature'] = self.context.getParameter(self.ommsystem.parameter['temperature'])*kelvin
+        self.par['lambda1'] = self.context.getParameter(self.ommsystem.atmforce.Lambda1())
+        self.par['lambda2'] = self.context.getParameter(self.ommsystem.atmforce.Lambda2())
+        self.par['alpha'] = self.context.getParameter(self.ommsystem.atmforce.Alpha())/kilojoules_per_mole
+        self.par['u0'] = self.context.getParameter(self.ommsystem.atmforce.U0())*kilojoules_per_mole
+        self.par['w0'] = self.context.getParameter(self.ommsystem.atmforce.W0())*kilojoules_per_mole
+        if not self.pot:
+            self.pot = {}
+        self.pot['potential_energy'] = self.context.getParameter(self.ommsystem.parameter['potential_energy'])*kilojoules_per_mole
+        self.pot['perturbation_energy'] = self.context.getParameter(self.ommsystem.parameter['perturbation_energy'])*kilojoules_per_mole
+        state = self.context.getState(getPositions=True, getVelocities=True)
+        self.positions = state.getPositions()
+        self.velocities = state.getVelocities()
+
+    def update_context_from_state(self):
+        self.context.setParameter(self.ommsystem.parameter['cycle'], self.cycle)
+        self.context.setParameter(self.ommsystem.parameter['stateid'], self.stateid)
+        self.context.setParameter(self.ommsystem.parameter['mdsteps'], self.mdsteps)
+        if self.par:
+            self.context.setParameter(self.ommsystem.parameter['temperature'], self.par['temperature']/kelvin)
+            self.context.setParameter(self.ommsystem.atmforce.Lambda1(), self.par['lambda1'])
+            self.context.setParameter(self.ommsystem.atmforce.Lambda2(), self.par['lambda2'])
+            self.context.setParameter(self.ommsystem.atmforce.Alpha(), self.par['alpha']*kilojoules_per_mole)
+            self.context.setParameter(self.ommsystem.atmforce.U0(), self.par['u0']/kilojoules_per_mole)
+            self.context.setParameter(self.ommsystem.atmforce.W0(), self.par['w0']/kilojoules_per_mole)
+        if self.pot:
+            self.context.setParameter(self.ommsystem.parameter['potential_energy'], self.pot['potential_energy']/kilojoules_per_mole)
+            self.context.setParameter(self.ommsystem.parameter['perturbation_energy'], self.pot['perturbation_energy']/kilojoules_per_mole)

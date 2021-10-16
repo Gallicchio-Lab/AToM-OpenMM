@@ -1,0 +1,6 @@
+#!/bin/bash
+openmm_dir=$OPENMM_DIR
+export OPENMM_PLUGIN_DIR=${openmm_dir}/lib/plugins
+export LD_LIBRARY_PATH=${openmm_dir}/lib:${openmm_dir}/lib/plugins:$LD_LIBRARY_PATH
+export PYTHONPATH=${openmm_dir}/lib/python3.7/site-packages:$PYTHONPATH
+python "$@"

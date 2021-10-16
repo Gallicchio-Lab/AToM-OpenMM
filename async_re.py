@@ -133,9 +133,9 @@ class async_re(object):
         # Required Options
         #
         # basename for the job
-        self.basename = self.keywords.get('ENGINE_INPUT_BASENAME')
+        self.basename = self.keywords.get('BASENAME')
         if self.basename is None:
-            self._exit('ENGINE_INPUT_BASENAME needs to be specified')
+            self._exit('BASENAME needs to be specified')
 
         #job transport mechanism
         self.transport_mechanism = self.keywords.get('JOB_TRANSPORT')
@@ -212,7 +212,7 @@ class async_re(object):
 
         self.implicitsolvent =  self.keywords.get('IMPLICITSOLVENT')
         self.totalsteps = self.keywords.get('PRODUCTION_STEPS')
-        self.jobname = self.keywords.get('ENGINE_INPUT_BASENAME')
+        self.jobname = self.keywords.get('BASENAME')
         self.stepgap = self.keywords.get('PRNT_FREQUENCY')
 
     def setupJob(self):

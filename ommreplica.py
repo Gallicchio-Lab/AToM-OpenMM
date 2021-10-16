@@ -88,7 +88,10 @@ class OMMReplica(object):
         self.dcd = DCDFile(self.dcdfile, self.worker.topology, self.ommsystem.MDstepsize, append=append)
 
     def save_dcd(self):
-        self.dcd.writeModel(self.positions, unitCellDimensions=None, periodicBoxVectors=None)
+        #boxsize options works only for NVT because the boxsize of the service worker
+        #is not updated from the compute worker
+        boxsize = self.worker.simulation.context.getState().getPeriodicBoxVectors()
+        self.dcd.writeModel(self.positions, periodicBoxVectors=boxsize)
         
     def set_mdsteps(self, mdsteps):
         self.mdsteps = mdsteps
@@ -112,7 +115,7 @@ class OMMReplicaTRE(OMMReplica):
             pot_energy = self.pot['potential_energy']
             temperature = self.par['temperature']
             if self.outfile:
-                self.outfile.write("%f %f\n" % (temperature, pot_energy))
+                self.outfile.write("%d %f %f\n" % (self.stateid, temperature, pot_energy))
 
     def update_state_from_context(self):
         self.cycle = int(self.context.getParameter(self.ommsystem.parameter['cycle']))
@@ -149,7 +152,7 @@ class OMMReplicaATM(OMMReplica):
             u0 = self.par['u0']
             w0 = self.par['w0']
             if self.outfile:
-                self.outfile.write("%f %f %f %f %f %f %f %f\n" % (temperature/kelvin, lmbd1, lmbd2, alpha*kilocalories_per_mole, u0/kilocalories_per_mole, w0/kilocalories_per_mole, pot_energy/kilocalories_per_mole, pert_energy/kilocalories_per_mole))
+                self.outfile.write("%d %f %f %f %f %f %f %f %f\n" % (self.stateid, temperature/kelvin, lmbd1, lmbd2, alpha*kilocalories_per_mole, u0/kilocalories_per_mole, w0/kilocalories_per_mole, pot_energy/kilocalories_per_mole, pert_energy/kilocalories_per_mole))
                 self.outfile.flush()
 
     def update_state_from_context(self):

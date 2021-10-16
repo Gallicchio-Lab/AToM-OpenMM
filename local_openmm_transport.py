@@ -188,6 +188,9 @@ class LocalOpenMMTransport(Transport):
         #update positions and velocities of openmm replica
         (pos,vel) = job['openmm_worker'].get_posvel()
         ommreplica.set_posvel(pos,vel)
+
+        #should also update boxsize
+
         #update energies of openmm replica
         pot = job['openmm_worker'].get_energy()
         ommreplica.set_energy(pot)

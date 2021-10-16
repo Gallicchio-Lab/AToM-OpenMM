@@ -111,13 +111,13 @@ class OMMSystemAmberABFE(OMMSystem):
             msg = "Error: LIGAND_ATOMS is required"
             self._exit(msg)
         
-        cm_lig_atoms = self.keywords.get('REST_LIGAND_CMLIG_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
+        cm_lig_atoms = self.keywords.get('LIGAND_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
         if cm_lig_atoms:
             lig_atom_restr = [int(i) for i in cm_lig_atoms]
         else:
             lig_atom_restr = None
 
-        cm_rcpt_atoms = self.keywords.get('REST_LIGAND_CMREC_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
+        cm_rcpt_atoms = self.keywords.get('RCPT_CM_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
         if cm_rcpt_atoms:
             rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
         else:

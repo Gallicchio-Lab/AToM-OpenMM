@@ -184,7 +184,8 @@ class OMMWorker(object):
         self.context.setPositions(self.positions)
         if self.boxvectors is not None:
             self.context.setPeriodicBoxVectors(*self.boxvectors)
-        
+        self.simulation.reporters = []
+
         #one preliminary energy evaluation seems to be required to init the energy routines
         if self.compute:
             state = self.simulation.context.getState(getEnergy = True)#, groups = {1,3})
@@ -215,8 +216,6 @@ class OMMWorker(object):
         self._openmm_worker_body()
         self._openmm_worker_makecontext()
         
-        self.simulation.reporters = []
-
         self.positions = None
         self.velocities = None
 

@@ -26,7 +26,7 @@ The resulting structure, stored in the `temoa-g1_0.xml` file is the input of the
 
 ### Replica Exchange
 
-#### Leg 1 - from the bound state to the alchemical intermediate
+#### Leg 1 - From the bound state to the alchemical intermediate
 
 Copy the input files into the simulation directory
 ```
@@ -52,9 +52,33 @@ cd asyncre-leg1/
 python abfe_explicit.py temoa-g1_asyncre.cntl
 ```
 
-You should see the contents of the control file echo-ed back and messages indicating that replica are dispatched to the GPU and that replicas change alchemical states by exchanging them with other replicas. The job is set to run for two hours.
+You should see the contents of the control file echo-ed back and messages indicating that replica are dispatched to the GPU and that replicas change alchemical states by exchanging them with other replicas. 
 
-#### Leg 2 - from the unbound state to the alchemical intermediate
+The job is set to run for two hours. The amount of samples collected during this time will depend on the speed of your GPU. To reproduce the equilibrated free energy values in the [paper](https://pubs.acs.org/doi/10.1021/acs.jctc.1c00266) a run of 12 to 24 hours on one GPU would be probably required. The trajectory data for each replica is stored in the `r0`, `r1`, etc. subfolders. These folders contain a `.out` file with one line per sample with perturbation energy and other information, a `.dcd` trajectory file and a checkpoint file to restart the replica exchange simulation. 
+
+The `.out` file of each replica is in the following sample format
+```
+10 300.000000 0.500000 0.500000 0.100000 30.000000 0.000000 -27850.664985 10.090523
+10 300.000000 0.500000 0.500000 0.100000 30.000000 0.000000 -27867.121487 4.324510
+9 300.000000 0.400000 0.500000 0.100000 40.000000 0.000000 -28118.427490 24.677342
+9 300.000000 0.400000 0.500000 0.100000 40.000000 0.000000 -28019.335148 27.097275
+```
+where each line is a sample (saved every 5ps in this case), the first column is the alchemical state id (λ=0 is state 0 and λ=1/2 is state 10 in this case), the second column is the set temperature, the third to the to seventh column hold the softplus alchemical parameters λ1, λ2, α, u0, and w0 (see the [paper](https://pubs.acs.org/doi/10.1021/acs.jctc.1c00266) for details), the 8th column holds the potential energy and the last column is the perturbation energy which is used to compute the free energy change (see below).
+
+The trajectories can be viewed with VMD. For example this will load the trajectory for replica 3 in VMD:
+```
+cd $HOME/ABFE/temoa-g1
+vmd -f temoa-g1_0.pdb asyncre-leg1/r3/temoa-g1.dcd
+```
+The output files and the trajectory files can be viewed while replica exchange is running.
+
+Hit `ctrl-C` in the window that runs replica exchange to kill the calculation prematurely. It might take a few seconds for the job to clean up and terminate. The replica exchange job can be restarted by re-issuing the same command as above
+```
+python abfe_explicit.py temoa-g1_asyncre.cntl
+```
+it will restart from the last saved checkpoint. In this example checkpoint files are saved every 10 minutes.
+
+#### Leg 2 - From the unbound state to the alchemical intermediate
 
 The leg 2 calculation can run in parallel to the leg 1 calculation if you have multiple computing nodes or GPU devices available. Copy the input files to the replica exchange folder for leg 2:
 ```
@@ -64,10 +88,11 @@ cp temoa-g1_0_displaced.xml asyncre-leg2/temoa-g1_0.xml
 cp ../../scripts/nodefile asyncre-leg2/
 ```
 Notice that this time we copied the structure with the ligand displaced. Then run replica exchange as before
-
-Now go the replica exchange folder for leg 1 and run replica exchange
 ```
 cd asyncre-leg2/
 python abfe_explicit.py temoa-g1_asyncre.cntl
 ```
+
+#### Free Energy Analysis
+
 

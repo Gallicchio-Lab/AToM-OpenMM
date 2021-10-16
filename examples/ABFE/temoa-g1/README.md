@@ -13,4 +13,6 @@ Mininize, thermalize, relax, and equilibrate the complex:
 ```
 python mintherm.py && python npt.py && python equil.py
 ```
-`mintherm` and `npt` equilibrate the solvent keeping the complex restrained. `equil` equilibrates the whole system keeping only the lower cup of the host loosely restrained.
+`mintherm` and `npt` equilibrate the solvent keeping the complex restrained. `equil` equilibrates the whole system keeping only the lower cup of the host loosely restrained as in the original work. Each step creates an OpenMM checkpoint file in XML format to start the subsequent step. Each step also generates a PDB file for visualization.
+
+The next step is specific to the ATM method. ATM computes the free energy in two legs that connect the bound and unbound state to the so-called alchemical intermediate that corresponds to an unphysical state which is half bound and half unbound. Check out the [paper](https://pubs.acs.org/doi/10.1021/acs.jctc.1c00266) for more information. 

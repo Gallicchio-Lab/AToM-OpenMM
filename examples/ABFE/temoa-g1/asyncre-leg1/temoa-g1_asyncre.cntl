@@ -23,7 +23,7 @@ DISPLACEMENT = '22.00, 22.00, 22.00'
 LIGOFFSET = '0., 0., 0.'
 
 #Execution time in minutes
-WALL_TIME = 1300
+WALL_TIME = 120
 
 #Frequency of replica exchange attempts in seconds
 CYCLE_TIME = 10

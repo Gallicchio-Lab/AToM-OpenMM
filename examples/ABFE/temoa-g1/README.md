@@ -46,13 +46,13 @@ localhost,0:0,1,OpenCL,,/tmp
 localhost,0:1,1,OpenCL,,/tmp
 ```
 
-Now go the replica exchange folder for leg 1 and run replica exchange
+Now go to the replica exchange folder for leg 1 and run replica exchange
 ```
 cd asyncre-leg1/
 python abfe_explicit.py temoa-g1_asyncre.cntl
 ```
 
-You should see the contents of the control file echo-ed back and messages indicating that replica are dispatched to the GPU and that replicas change alchemical states by exchanging them with other replicas. 
+You should see the contents of the control file echo-ed back and messages indicating that replicas are dispatched to the GPUs and that replicas change alchemical states by exchanging them with other replicas. 
 
 The job is set to run for two hours. The amount of samples collected during this time will depend on the speed of your GPU. To reproduce the equilibrated free energy values in the [paper](https://pubs.acs.org/doi/10.1021/acs.jctc.1c00266) a run of 12 to 24 hours on one GPU would be probably required. The trajectory data for each replica is stored in the `r0`, `r1`, etc. subfolders. These folders contain a `.out` file with one line per sample with perturbation energy and other information, a `.dcd` trajectory file and a checkpoint file to restart the replica exchange simulation. 
 
@@ -63,7 +63,7 @@ The `.out` file of each replica is in the following sample format
 9 300.000000 0.400000 0.500000 0.100000 40.000000 0.000000 -28118.427490 24.677342
 9 300.000000 0.400000 0.500000 0.100000 40.000000 0.000000 -28019.335148 27.097275
 ```
-where each line is a sample (saved every 5ps in this case), the first column is the alchemical state id (λ=0 is state 0 and λ=1/2 is state 10 in this case), the second column is the set temperature, the third to the to seventh column hold the softplus alchemical parameters λ1, λ2, α, u0, and w0 (see the [paper](https://pubs.acs.org/doi/10.1021/acs.jctc.1c00266) for details), the 8th column holds the potential energy and the last column is the perturbation energy which is used to compute the free energy change (see below).
+where each line is a sample (saved every 5ps in this case), the first column is the alchemical state id (λ=0 is state 0 and λ=1/2 is state 10 in this case), the second column is the set temperature, the third to the to seventh columns hold the softplus alchemical parameters λ1, λ2, α, u0, and w0 (see the [paper](https://pubs.acs.org/doi/10.1021/acs.jctc.1c00266) for details), the 8th column holds the potential energy and the last column is the perturbation energy which is used to compute the free energy change (see below).
 
 The trajectories can be viewed with VMD. For example this will load the trajectory for replica 3 in VMD:
 ```

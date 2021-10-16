@@ -3,7 +3,7 @@ ASyncRE-OpenMM
 
 ASynchronous Replica Exchange for OpenMM (ASyncRE-OpenMM) is an extensible Python package enabling asynchronous parallel replica exchange molecular simulations with OpenMM. 
 
-This version of ASyncRE is tailored to Alchemical Transfer Method alchemical calculations using the (ATMetaForce plugin)[https://github.com/Gallicchio-Lab/openmm-atmmetaforce-plugin]
+This version of ASyncRE is tailored to Alchemical Transfer Method alchemical calculations using the [ATMetaForce plugin](https://github.com/Gallicchio-Lab/openmm-atmmetaforce-plugin)
 
 Credits
 -------

@@ -9,8 +9,11 @@ See [Azimi, Wu, Khuttan, Kurtzman, Deng and Gallicchio.Application of the Alchem
 
 The starting point are the topology and coordinate files of the TEMOA-G1 complex in a water solvent box in the Amber files `temoa-g1.prmtop` and `temoa-g1.inpcrd` provided in this folder. How to prepare systems in Amber format is beyond the scope of this tutorial. We used the `Antechamber` and `tleap` programs of the [`AmberTools` suite version 19](https://ambermd.org/) using the GAFF force field and the TIP3P water model.
 
+We assume in this tutorial that this ABFE folder of the examples directory has been copied under `$HOME/ABFE`. Adjust the pathnames as needed.
+
 Mininize, thermalize, relax, and equilibrate the complex:
 ```
+cd $HOME/ABFE/temoa-g1
 python mintherm.py && python npt.py && python equil.py
 ```
 `mintherm` and `npt` equilibrate the solvent keeping the complex restrained. `equil` equilibrates the whole system keeping only the lower cup of the host loosely restrained as in the original work. Each step creates an OpenMM checkpoint file in XML format to start the subsequent step. Each step also generates a PDB file for visualization.
@@ -33,15 +36,38 @@ Copy also the `nodefile` from the scripts directory
 ```
 cp ../../scripts/nodefile asyncre-leg1/
 ```
-This `nodefile` assumes one GPU on the system (on OpenCL platform 0 with device id 0). It looks like:
+This `nodefile` assumes one GPU on the system (on the OpenCL platform 0 with device id 0). It looks like:
 ```
 localhost,0:0,1,OpenCL,,/tmp
 ```
-The critical bit is the `0:0` item in the format `<OpenCL platform id>:<device id>'. The other items are in the nodefile specification are for future use and are ignored. You can add more GPUs if you have them. For example, create this nodefile to use four GPUs with device ids 0, 1, 2, and 3:
+The critical bit is the `0:0` item in the format `<OpenCL platform id>:<device id>'. The other items are in the nodefile specification are for future use and are ignored. You can add more GPUs if you have them. For example, create this nodefile to use two GPUs with device ids 0, and 1:
 ```
 localhost,0:0,1,OpenCL,,/tmp
 localhost,0:1,1,OpenCL,,/tmp
-localhost,0:2,1,OpenCL,,/tmp
-localhost,0:3,1,OpenCL,,/tmp
+```
+
+Now go the replica exchange folder for leg 1 and run replica exchange
+```
+cd asyncre-leg1/
+python abfe_explicit.py temoa-g1_asyncre.cntl
+```
+
+You should see the contents of the control file echo-ed back and messages indicating that replica are dispatched to the GPU and that replicas change alchemical states by exchanging them with other replicas. The job is set to run for two hours.
+
+#### Leg 2 - from the unbound state to the alchemical intermediate
+
+The leg 2 calculation can run in parallel to the leg 1 calculation if you have multiple computing nodes or GPU devices available. Copy the input files to the replica exchange folder for leg 2:
+```
+cd $HOME/ABFE/temoa-g1
+cp temoa-g1.prmtop temoa-g1.inpcrd asyncre-leg2/
+cp temoa-g1_0_displaced.xml asyncre-leg2/temoa-g1_0.xml
+cp ../../scripts/nodefile asyncre-leg2/
+```
+Notice that this time we copied the structure with the ligand displaced. Then run replica exchange as before
+
+Now go the replica exchange folder for leg 1 and run replica exchange
+```
+cd asyncre-leg2/
+python abfe_explicit.py temoa-g1_asyncre.cntl
 ```
 

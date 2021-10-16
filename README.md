@@ -14,6 +14,8 @@ Authors:
 
 Emilio Gallicchio <egallicchio@brooklyn.cuny.edu>
 
+Baofeng Zhang BZhang@brooklyn.cuny.edu
+
 Rajat Pal <rajatfor2014@gmail.com>
 
 The asynchronous replica exchange method was first implemented in the [AsyncRE](https://github.com/ComputationalBiophysicsCollaborative/AsyncRE) package for the IMPACT program.

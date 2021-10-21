@@ -65,4 +65,20 @@ cd asyncre-leg2/
 python rbfe_explicit.py temoa-g1-g4_asyncre.cntl
 ```
 
+#### Free Energy Analysis
 
+The relative binding free energy (ΔΔGb = ΔGb(TEMOA-G4) - ΔG(TEMOA-G1)) between TEMOA-G4 and TEMOA-G1 is the free energy change in leg1 minus the free energy change in leg2. For leg 1:
+```
+cd $HOME/examples/RBFE/temoa-g1-g4/asyncre-leg1
+./analyze.sh 20
+```
+and leg 2:
+```
+cd $HOME/examples/RBFE/temoa-g1-g4/asyncre-leg2
+./analyze.sh 20
+```
+Each should print something like:
+```
+DGb = 14.50378 +- 0.3484641 DE = -3.317698 +- 1.395722  range: 20 39
+```
+Take the differences of the DGb values for the two legs to get an estimate of the relative binding free energy. The simulations here are just short examples. See the [paper](https://arxiv.org/abs/2107.05153) for more details.

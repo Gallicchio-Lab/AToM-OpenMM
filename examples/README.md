@@ -17,5 +17,5 @@ We also assume that the [ATMMetaForce OpenMM plugin](https://github.com/Gallicch
 
 A sample `runopenmm` script is provided in the  [scripts/]( https://github.com/Gallicchio-Lab/async_re-openmm/tree/master/examples/scripts) to get you started if needed. It requires you to define the environment variable `OPENMM_DIR` pointing to the OpenMM installation on your system. It also assumes that the python OpenMM bindings have been stored under the same folder and that you are using python 3.7.
 
-Free energy analysis requires R with th UWHAM R module. To install the UWHAM module run `install.packages("UWHAM")` in R.
+Free energy analysis requires R with the UWHAM R module. To install the UWHAM module run `install.packages("UWHAM")` in R.
 

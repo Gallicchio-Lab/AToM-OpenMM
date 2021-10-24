@@ -178,7 +178,7 @@ EOF
     sed -i "s#<RECEPTOR>#${rcptpdb}# ;  s#<LIG1MOL2>#${lig1mol2}# ; s#<LIG1FRCMOD>#${lig1frcmod}# ; s#<LIG2MOL2>#${lig2mol2}# ; s#<LIG2FRCMOD>#${lig2frcmod}# ; s#<DISPLACEMENT>#${displs}# ; s#<JOBNAME>#${jobnameleg1}#g " tleap.cmd || exit 1
     echo "tleap -f tleap.cmd"
     tleap -f tleap.cmd || exit 1
-    
+
     #builds mintherm, npt, and equilibration scripts
     replstring="s#<JOBNAME>#${jobnameleg1}# ; s#<DISPLX>#${displacement[0]}# ; s#<DISPLY>#${displacement[1]}# ; s#<DISPLZ>#${displacement[2]}# ; s#<REFERENCEATOMS1>#${ref_atoms1}# ; s#<REFERENCEATOMS2>#${ref_atoms2}# ; s#<VSITERECEPTORATOMS>#${vsite_rcpt_atoms}# ; s#<RESTRAINEDATOMS>#${restr_atoms}# ; s#<LIG1RESID>#${ligresid[0]}# ; s#<LIG2RESID>#${ligresid[1]}# ; s#<LIG1ATOMS>#${lig1_atoms}# ; s#<LIG2ATOMS>#${lig2_atoms}#" 
     sed "${replstring}" < ${work_dir}/scripts/mintherm_template.py > ${jobnameleg1}_mintherm.py || exit 1

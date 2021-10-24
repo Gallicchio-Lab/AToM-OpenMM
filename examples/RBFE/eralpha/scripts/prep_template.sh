@@ -21,5 +21,7 @@ for pair in <LEG1PAIRS> ; do
     ../../scripts/runopenmm ${jobname1}_mintherm.py || exit 1
     ../../scripts/runopenmm ${jobname1}_equil.py || exit 1
     cp ${jobname1}_0_displaced.xml ../${jobname2}/${jobname2}_0.xml || exit 1
+    cp ${jobname1}.prmtop ../${jobname2}/${jobname2}.prmtop || exit 1
+    cp ${jobname1}.inpcrd ../${jobname2}/${jobname2}.inpcrd || exit 1
     cd ..
 done

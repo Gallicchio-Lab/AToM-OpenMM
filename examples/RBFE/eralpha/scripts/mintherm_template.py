@@ -15,15 +15,13 @@ start=datetime.now()
 
 jobname = "<JOBNAME>"
 
-lig1_resid = <LIG1RESID>
-lig2_resid = <LIG2RESID>
 displ = [ <DISPLX>, <DISPLY>, <DISPLZ> ]
-
 displacement      = [  displ[i] for i in range(3) ] * angstrom
 lig1_restr_offset = [  0.       for i in range(3) ] * angstrom
 lig2_restr_offset = [  displ[i] for i in range(3) ] * angstrom
 
-#the workflow sets atom indexes starting with 1, subtract 1 to start from zero
+lig1_atoms = [ <LIG1ATOMS> ]
+lig2_atoms = [ <LIG2ATOMS> ]
 refatoms_lig1 = [ <REFERENCEATOMS1> ]
 refatoms_lig2 = [ <REFERENCEATOMS2> ]
 rcpt_cm_atoms = [ <VSITERECEPTORATOMS> ]
@@ -51,21 +49,9 @@ system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=1*nanometer,
 #sorts Forces into groups 
 atm_utils = ATMMetaForceUtils(system)
 
-#list of receptor atoms and ligands
-lig1_atoms = []
-for at in prmtop.topology.atoms():
-    if int(at.residue.id) == lig1_resid:
-        lig1_atoms.append(at.index)
-        
-lig2_atoms = []
-for at in prmtop.topology.atoms():
-    if int(at.residue.id) == lig2_resid:
-        lig2_atoms.append(at.index)
-
+#Vsite restraints
 lig1_cm_atoms = lig1_atoms
 lig2_cm_atoms = lig2_atoms
-
-#Vsite restraints
 kf = 25.0 * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
 r0 = 5 * angstrom #radius of Vsite sphere
 atm_utils.addRestraintForce(lig_cm_particles = lig1_cm_atoms,
@@ -99,8 +85,9 @@ fc = 25.0 * kilocalorie_per_mole/angstrom**2
 tol = 0.5 * angstrom
 hydrogen = Element.getByAtomicNumber(1)
 posrestr_atoms = []
+last_not_solvent_atom = lig2_atoms[len(lig2_atoms)-1]
 for at in prmtop.topology.atoms():
-    if int(at.residue.id) <= lig2_resid:
+    if at.index <= last_not_solvent_atom:
         posrestr_atoms.append(at.index)
 atm_utils.addPosRestraints(posrestr_atoms, inpcrd.positions, fc, tol)
 

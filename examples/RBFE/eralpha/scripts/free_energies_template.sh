@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for pair in <LIG1PAIRS>  ; do
+for pair in <LEG1PAIRS>  ; do
     mols_t=$(echo $pair | tr '-' ' ' )
     read -ra mols <<< $mols_t
     leg1=${mols[0]}-${mols[1]}

@@ -3,7 +3,7 @@
 basename=eralpha
 
 #path of working directory
-work_dir=$HOME/${basename}
+work_dir=$HOME/examples/RBFE/asyncre/${basename}
 
 #path of script directory
 scripts_dir=${work_dir}/scripts

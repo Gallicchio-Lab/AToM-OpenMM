@@ -34,7 +34,7 @@ The `run.sh` shell scripts are formatted for optionally running them on a `slurm
 
 Each replica exchange calculation is set to run for 2 hours on 1 GPU. Much longer running times (24 hours or more) are needed to approach convergence depending on the speed of the GPU. More GPUs can be deployed by editing the `nodefile` or the `run_template.sh` files in `$HOME/examples/RBFE/asyncre/scripts`.
 
-#### Free Energy Analysis
+### Free Energy Analysis
 
 The relative binding free energy (ΔΔGb = ΔGb(B) - ΔG(A)) between each ligand pair A and B is the free energy change in the corresponding leg 1 minus the free energy change in leg 2. Run the automated script in the `complexes` directory:
 ```

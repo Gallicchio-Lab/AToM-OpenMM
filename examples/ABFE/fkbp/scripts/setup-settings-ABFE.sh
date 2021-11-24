@@ -16,7 +16,7 @@ displacement=("22.0" "22.0" "22.0")
 vsite_rcpt_residues=(26 36 37 42 46 48 54 55 56 82)
 
 #SLURM job settings
-partition=project
+partition=<SLURM QUEUE>
 qos=maxjobs
-account=insite
-asyncre_dir=/projects2/insite/rajat.pal/software/asyncre-new/async_re-openmm
+account=<SLURM_ACCOUNT>
+asyncre_dir=<location of AsyncRE installation>

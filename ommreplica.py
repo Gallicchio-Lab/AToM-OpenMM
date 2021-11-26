@@ -189,3 +189,5 @@ class OMMReplicaATM(OMMReplica):
         if self.pot:
             self.context.setParameter(self.ommsystem.parameter['potential_energy'], self.pot['potential_energy']/kilojoules_per_mole)
             self.context.setParameter(self.ommsystem.parameter['perturbation_energy'], self.pot['perturbation_energy']/kilojoules_per_mole)
+        self.context.setPositions(self.positions)
+        self.context.setVelocities(self.velocities)

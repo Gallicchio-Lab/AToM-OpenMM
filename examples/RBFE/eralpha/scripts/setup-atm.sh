@@ -129,7 +129,7 @@ for l in `seq 0 $n` ; do
 	if [ ! -f ${lig}-p.mol2 ] ; then
 	    charge=$( awk 'BEGIN{charge = 0} ; NF == 9 {charge += $9} ; END {print int(charge)}' < ${lig}.mol2 )
 	    echo "antechamber -pl 15 -fi mol2 -fo mol2 -i ${lig}.mol2 -o ${lig}-p.mol2 -c bcc -at gaff2 -nc ${charge} "
-	    antechamber -pl 15 -fi mol2 -fo mol2 -i ${lig}.mol2 -o ${lig}-p.mol2 -c bcc -at gaff2 || exit 1
+	    antechamber -pl 15 -fi mol2 -fo mol2 -i ${lig}.mol2 -o ${lig}-p.mol2 -c bcc -at gaff2 -nc ${charge} || exit 1
 	    echo "parmchk2 -i ${lig}-p.mol2 -o ${lig}-p.frcmod -f mol2"
 	    parmchk2 -i ${lig}-p.mol2 -o ${lig}-p.frcmod -f mol2 || exit 1
 	fi

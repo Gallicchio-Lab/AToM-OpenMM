@@ -90,7 +90,10 @@ class OMMSystemAmberABFE(OMMSystem):
         self.parameter['temperature'] = 'RETemperature'
         self.parameter['potential_energy'] = 'REPotEnergy'
         self.parameter['perturbation_energy'] = 'REPertEnergy'
+        self.parameter['atmintermediate'] = 'REAlchemicalIntermediate'
         self.atmforce = None
+        self.lig_atoms = None
+        self.displ = None
         
     def create_system(self):
 
@@ -104,49 +107,51 @@ class OMMSystemAmberABFE(OMMSystem):
         
         atm_utils = ATMMetaForceUtils(self.system)
         
-        lig_atoms = self.keywords.get('LIGAND_ATOMS')   #indexes of ligand atoms
-        if lig_atoms:
-            lig_atoms = [int(i) for i in lig_atoms]
+        lig_atoms_in = self.keywords.get('LIGAND_ATOMS')   #indexes of ligand atoms
+        if lig_atoms_in is not None:
+            self.lig_atoms = [int(i) for i in lig_atoms_in]
         else:
             msg = "Error: LIGAND_ATOMS is required"
             self._exit(msg)
         
         cm_lig_atoms = self.keywords.get('LIGAND_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
-        if cm_lig_atoms:
+        if cm_lig_atoms is not None:
             lig_atom_restr = [int(i) for i in cm_lig_atoms]
         else:
             lig_atom_restr = None
 
         cm_rcpt_atoms = self.keywords.get('RCPT_CM_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
-        if cm_rcpt_atoms:
+        if cm_rcpt_atoms is not None:
             rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
         else:
             rcpt_atom_restr = None
 
         cmrestraints_present = (cm_rcpt_atoms is not None) and (cm_lig_atoms is not None)
-        
+
+        self.vsiterestraintForce = None
         if cmrestraints_present:
             cmkf = float(self.keywords.get('CM_KF'))
             kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
             cmtol = float(self.keywords.get('CM_TOL'))
             r0 = cmtol * angstrom #radius of Vsite sphere
             ligoffset = self.keywords.get('LIGOFFSET')
-            if ligoffset:
+            if ligoffset is not None:
                 ligoffset = [float(offset) for offset in ligoffset.split(',')]*angstrom
-            atm_utils.addRestraintForce(lig_cm_particles = lig_atom_restr,
-                                        rcpt_cm_particles = rcpt_atom_restr,
-                                        kfcm = kf,
-                                        tolcm = r0,
-                                        offset = ligoffset)
+            self.vsiterestraintForce = atm_utils.addRestraintForce(lig_cm_particles = lig_atom_restr,
+                                                                   rcpt_cm_particles = rcpt_atom_restr,
+                                                                   kfcm = kf,
+                                                                   tolcm = r0,
+                                                                   offset = ligoffset)
 
         #indexes of the atoms whose position is restrained near the initial positions
         #by a flat-bottom harmonic potential. 
         posrestr_atoms_list = self.keywords.get('POS_RESTRAINED_ATOMS')
-        if posrestr_atoms_list:
+        self.posrestrForce = None
+        if posrestr_atoms_list is not None:
             posrestr_atoms = [int(i) for i in posrestr_atoms_list]
             fc = float(self.keywords.get('POSRE_FORCE_CONSTANT')) * kilocalorie_per_mole
             tol = float(self.keywords.get('POSRE_TOLERANCE')) * angstrom
-            atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
+            self.posrestrForce = atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
             
         #these define the state and will be overriden in set_state()
         temperature = 300 * kelvin
@@ -156,11 +161,12 @@ class OMMSystemAmberABFE(OMMSystem):
         alpha = 0.0 / kilocalorie_per_mole
         u0 = 0.0 * kilocalorie_per_mole
         w0coeff = 0.0 * kilocalorie_per_mole
+        alchemical_direction = 1.0
 
         #soft-core parameters are fixed (the same in all states)
         umsc = float(self.keywords.get('UMAX')) * kilocalorie_per_mole
         ubcore = self.keywords.get('UBCORE')
-        if ubcore:
+        if ubcore is not None:
             ubcore = float(ubcore) * kilocalorie_per_mole
         else:
             ubcore = 0.0 * kilocalorie_per_mole
@@ -173,11 +179,11 @@ class OMMSystemAmberABFE(OMMSystem):
             self._exit(msg)
         
         #create ATM Force
-        self.atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore)
+        self.atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, alchemical_direction)
 
         for i in range(self.topology.getNumAtoms()):
             self.atmforce.addParticle(i, 0., 0., 0.)
-        for i in lig_atoms:
+        for i in self.lig_atoms:
             self.atmforce.setParticleParameters(i, i, self.displ[0], self.displ[1], self.displ[2] )
         self.atmforce.setForceGroup(3)
         self.system.addForce(self.atmforce)
@@ -199,8 +205,8 @@ class OMMSystemAmberABFE(OMMSystem):
         self.integrator = LangevinIntegrator(temperature/kelvin, self.frictionCoeff/(1/picosecond), self.MDstepsize/ picosecond )
         self.integrator.setIntegrationForceGroups({1,3})
 
-        #these are the global parameters specified in the cntl files that need to be reset after reading the first
-        #configuration
+        #these are the global parameters specified in the cntl files that need to be reset
+        #by the worker after reading the first configuration
         self.cparams["ATMUmax"] = umsc/kilojoules_per_mole
         self.cparams["ATMUbcore"] = ubcore/kilojoules_per_mole
         self.cparams["ATMAcore"] = acore
@@ -214,6 +220,11 @@ class OMMSystemAmberRBFE(OMMSystem):
         self.parameter['temperature'] = 'RETemperature'
         self.parameter['potential_energy'] = 'REPotEnergy'
         self.parameter['perturbation_energy'] = 'REPertEnergy'
+        self.parameter['atmintermediate'] = 'REAlchemicalIntermediate'
+        self.atmforce = None
+        self.lig1_atoms = None
+        self.lig2_atoms = None
+        self.displ = None
         
     def create_system(self):
 
@@ -226,42 +237,42 @@ class OMMSystemAmberRBFE(OMMSystem):
 
         atm_utils = ATMMetaForceUtils(self.system)
 
-        lig1_atoms = self.keywords.get('LIGAND1_ATOMS')   #indexes of ligand1 atoms
-        lig2_atoms = self.keywords.get('LIGAND2_ATOMS')   #indexes of ligand2 atoms        
-        if lig1_atoms:
-            lig1_atoms = [int(i) for i in lig1_atoms]
+        lig1_atoms_in = self.keywords.get('LIGAND1_ATOMS')   #indexes of ligand1 atoms
+        lig2_atoms_in = self.keywords.get('LIGAND2_ATOMS')   #indexes of ligand2 atoms
+        if lig1_atoms_in is not None:
+            self.lig1_atoms = [int(i) for i in lig1_atoms_in]
         else:
             msg = "Error: LIGAND1_ATOMS is required"
             self._exit(msg)        
-        if lig2_atoms:
-            lig2_atoms = [int(i) for i in lig2_atoms]
+        if lig2_atoms_in is not None:
+            self.lig2_atoms = [int(i) for i in lig2_atoms_in ]
         else:
             msg = "Error: LIGAND2_ATOMS is required"
             self._exit(msg)
         
         #ligand 1 Vsite restraint
         cm_lig1_atoms = self.keywords.get('REST_LIGAND1_CMLIG_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
-        if cm_lig1_atoms:
+        if cm_lig1_atoms is not None:
             lig1_atom_restr = [int(i) for i in cm_lig1_atoms]
         else:
             lig1_atom_restr = None
         
         #ligand 2 Vsite restraint
         cm_lig2_atoms = self.keywords.get('REST_LIGAND2_CMLIG_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
-        if cm_lig2_atoms:
+        if cm_lig2_atoms is not None:
             lig2_atom_restr = [int(i) for i in cm_lig2_atoms]
         else:
             lig2_atom_restr = None
         
         #Vsite restraint receptor atoms
         cm_rcpt_atoms = self.keywords.get('REST_LIGAND_CMREC_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
-        if cm_rcpt_atoms:
+        if cm_rcpt_atoms is not None:
             rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
         else:
             rcpt_atom_restr = None
 
         #set displacements and offsets for ligand 1 and ligand 2
-        if self.keywords.get('DISPLACEMENT'):
+        if self.keywords.get('DISPLACEMENT') is not None:
             self.displ = [float(displ) for displ in self.keywords.get('DISPLACEMENT').split(',')]*angstrom
             self.lig1offset = [float(0.0*offset) for offset in self.displ/angstrom]*angstrom
             self.lig2offset = [float(offset) for offset in self.displ/angstrom]*angstrom
@@ -271,6 +282,8 @@ class OMMSystemAmberRBFE(OMMSystem):
             
         cmrestraints_present = (rcpt_atom_restr is not None) and (lig1_atom_restr is not None) and (lig2_atom_restr is not None)
 
+        self.vsiterestraintForce1 = None
+        self.vsiterestraintForce2 = None
         if cmrestraints_present:
             cmkf = float(self.keywords.get('CM_KF'))
             kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
@@ -278,12 +291,12 @@ class OMMSystemAmberRBFE(OMMSystem):
             r0 = cmtol * angstrom #radius of Vsite sphere            
             
             #Vsite restraints for ligands 1 and 2
-            atm_utils.addRestraintForce(lig_cm_particles = lig1_atom_restr,
+            self.vsiterestraintForce1 = atm_utils.addRestraintForce(lig_cm_particles = lig1_atom_restr,
                                         rcpt_cm_particles = rcpt_atom_restr,
                                         kfcm = kf,
                                         tolcm = r0,
                                         offset = self.lig1offset)
-            atm_utils.addRestraintForce(lig_cm_particles = lig2_atom_restr,
+            self.vsiterestraintForce2 = atm_utils.addRestraintForce(lig_cm_particles = lig2_atom_restr,
                                         rcpt_cm_particles = rcpt_atom_restr,
                                         kfcm = kf,
                                         tolcm = r0,
@@ -292,11 +305,11 @@ class OMMSystemAmberRBFE(OMMSystem):
         #reference atoms for alignment force
         refatoms1_cntl = self.keywords.get('ALIGN_LIGAND1_REF_ATOMS')
         self.refatoms1 = [int(refatoms1) for refatoms1 in refatoms1_cntl]
-        lig1_ref_atoms  = [ self.refatoms1[i]+lig1_atoms[0] for i in range(3)]
+        lig1_ref_atoms  = [ self.refatoms1[i]+self.lig1_atoms[0] for i in range(3)]
         
         refatoms2_cntl = self.keywords.get('ALIGN_LIGAND2_REF_ATOMS')
         self.refatoms2 = [int(refatoms2) for refatoms2 in refatoms2_cntl]
-        lig2_ref_atoms  = [ self.refatoms2[i]+lig2_atoms[0] for i in range(3)]
+        lig2_ref_atoms  = [ self.refatoms2[i]+self.lig2_atoms[0] for i in range(3)]
         
         #add alignment force
         atm_utils.addAlignmentForce(liga_ref_particles = lig1_ref_atoms,
@@ -309,11 +322,12 @@ class OMMSystemAmberRBFE(OMMSystem):
         #indexes of the atoms whose position is restrained near the initial positions
         #by a flat-bottom harmonic potential. 
         posrestr_atoms_list = self.keywords.get('POS_RESTRAINED_ATOMS')
-        if posrestr_atoms_list:
+        self.posrestrForce = None
+        if posrestr_atoms_list is not None:
             posrestr_atoms = [int(i) for i in posrestr_atoms_list]
             fc = float(self.keywords.get('POSRE_FORCE_CONSTANT')) * kilocalorie_per_mole
             tol = float(self.keywords.get('POSRE_TOLERANCE')) * angstrom
-            atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
+            self.posrestrForce = atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
             
         #these define the state and will be overriden in set_state()
         temperature = 300 * kelvin
@@ -338,9 +352,9 @@ class OMMSystemAmberRBFE(OMMSystem):
 
         for i in range(self.topology.getNumAtoms()):
             self.atmforce.addParticle(i, 0., 0., 0.)
-        for i in lig1_atoms:
+        for i in self.lig1_atoms:
             self.atmforce.setParticleParameters(i, i, self.displ[0], self.displ[1], self.displ[2] )
-        for i in lig2_atoms:
+        for i in self.lig2_atoms:
             self.atmforce.setParticleParameters(i, i, -self.displ[0], -self.displ[1], -self.displ[2] )
 
         self.atmforce.setForceGroup(3)

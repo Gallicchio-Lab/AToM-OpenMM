@@ -83,6 +83,12 @@ class openmm_job(async_re):
                 for i in range(0,len(replica.velocities)):
                     replica.velocities[i] = scale*replica.velocities[i]
 
+        #additional operations if any
+        self._update_state_of_replica_addcustom(replica)
+
+    def _update_state_of_replica_addcustom(self, replica):
+        pass
+
     def _hasCompleted(self,replica,cycle):
         """
         Returns true if an OpenMM replica has successfully completed a cycle.
@@ -182,10 +188,12 @@ class openmm_job_TRE(openmm_job):
 class openmm_job_ATM(openmm_job):
     def _buildStates(self):
         self.stateparams = []
-        for (lambd,lambda1,lambda2,alpha,u0,w0) in zip(self.lambdas,self.lambda1s,self.lambda2s,self.alphas,self.u0s,self.w0coeffs):
+        for (lambd,direction,intermediate,lambda1,lambda2,alpha,u0,w0) in zip(self.lambdas,self.directions,self.intermediates,self.lambda1s,self.lambda2s,self.alphas,self.u0s,self.w0coeffs):
             for tempt in self.temperatures:
                 par = {}
                 par['lambda'] = float(lambd)
+                par['atmdirection'] = float(direction)
+                par['atmintermediate'] = float(intermediate)
                 par['lambda1'] = float(lambda1)
                 par['lambda2'] = float(lambda2)
                 par['alpha'] = float(alpha)/kilocalories_per_mole
@@ -206,13 +214,23 @@ class openmm_job_ATM(openmm_job):
             self._exit("TEMPERATURES needs to be specified")
         self.temperatures = self.keywords.get('TEMPERATURES').split(',')
 
+        #flag to identify the intermediate states, typically the one at lambda=1/2
+        self.intermediates = None
+        self.intermediates = self.keywords.get('INTERMEDIATE').split(',')
+
+        #direction of transformation at each lambda
+        #ABFE 1 from RA to R+A, -1 from R+A to A
+        #RBFE 1 from RA+B to RB+A, -1 from RB+A to RA+B
+        self.directions = None
+        self.directions = self.keywords.get('DIRECTION').split(',')
+
+        #parameters of the softplus alchemical potential
+        #lambda1 = lambda2 gives the linear potential
         self.lambda1s = None
         self.lambda2s = None
         self.alphas = None
         self.u0s = None
         self.w0coeffs = None
-
-        #ilogistic potential
         self.lambda1s = self.keywords.get('LAMBDA1').split(',')
         self.lambda2s = self.keywords.get('LAMBDA2').split(',')
         self.alphas = self.keywords.get('ALPHA').split(',')
@@ -258,6 +276,7 @@ class openmm_job_ATM(openmm_job):
         epot = pot['potential_energy']
         pertpot = pot['perturbation_energy']
         (stateid, par) = replica.get_state()
+        direction = par['atmdirection']
         lambda1 = par['lambda1']
         lambda2 = par['lambda2']
         alpha = par['alpha']
@@ -265,20 +284,37 @@ class openmm_job_ATM(openmm_job):
         w0 = par['w0']
         ebias = self._softplus(lambda1, lambda2, alpha, u0, w0, pertpot)
         pot['unbiased_potential_energy'] = epot - ebias
+        pot['direction'] = par['atmdirection']
+        pot['intermediate'] = par['atmintermediate']
         return pot
         
     def _reduced_energy(self, par, pot):
         temperature = par['temperature']
         beta = 1./(self.kb*temperature)
+        direction = par['atmdirection']
         lambda1 = par['lambda1']
         lambda2 = par['lambda2']
         alpha = par['alpha']
         u0 = par['u0']
         w0 = par['w0']
+        state_direction = par['atmdirection']
+        state_intermediate = par['atmintermediate']
         epot0 = pot['unbiased_potential_energy']
         pertpot = pot['perturbation_energy']
-        ebias = self._softplus(lambda1, lambda2, alpha, u0, w0, pertpot)
-        return beta*(epot0 + ebias)
+        replica_direction = pot['direction']
+        replica_intermediate = pot['intermediate']
+        if (replica_direction == state_direction) or (state_intermediate > 0 and replica_intermediate > 0):
+            ebias = self._softplus(lambda1, lambda2, alpha, u0, w0, pertpot)
+            return beta*(epot0 + ebias)
+        else:
+            #prevent exchange
+            large_energy = 1.e12
+            return large_energy
+
+    def _update_state_of_replica_addcustom(self, replica):
+        #changes the format of the positions in case of an exchange between replicas with two different directions 
+        #replica.convert_pos_into_direction_format()
+        pass
         
 class openmm_job_AmberTRE(openmm_job_TRE):
     def __init__(self, command_file, options):
@@ -287,7 +323,7 @@ class openmm_job_AmberTRE(openmm_job_TRE):
         prmtopfile = self.basename + ".prmtop"
         crdfile = self.basename + ".inpcrd"
 
-        if not self.stateparams:
+        if self.stateparams is None:
             self._buildStates()
 
         #builds service worker for replicas use
@@ -319,7 +355,7 @@ class openmm_job_AmberABFE(openmm_job_ATM):
         prmtopfile = self.basename + ".prmtop"
         crdfile = self.basename + ".inpcrd"
 
-        if not self.stateparams:
+        if self.stateparams is None:
             self._buildStates()
         
         #builds service worker for replicas use
@@ -351,7 +387,7 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
         prmtopfile = self.basename + ".prmtop"
         crdfile = self.basename + ".inpcrd"
 
-        if not self.stateparams:
+        if self.stateparams is None:
             self._buildStates()
         
         #builds service worker for replicas use

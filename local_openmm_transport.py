@@ -108,8 +108,8 @@ class LocalOpenMMTransport(Transport):
     def LaunchReplica(self, worker, replica, cycle, nsteps,
                       nheating = 0, ncooling = 0, hightemp = 0.0):
         (stateid, par) = replica.get_state()
-        worker.set_state(par)
         worker.set_posvel(replica.positions, replica.velocities)
+        worker.set_state(par)
         worker.run(nsteps, nheating, ncooling, hightemp)
 
     def ProcessJobQueue(self, mintime, maxtime):

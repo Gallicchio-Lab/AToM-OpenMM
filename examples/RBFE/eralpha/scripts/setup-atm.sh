@@ -136,70 +136,54 @@ for l in `seq 0 $n` ; do
     done
 
     #creates system in complexes folder
-    jobnameleg1=${receptor}-${lig1}-${lig2}
-    jobnameleg2=${receptor}-${lig2}-${lig1}
-    mkdir -p ${work_dir}/complexes/${jobnameleg1} || exit 1
-    mkdir -p ${work_dir}/complexes/${jobnameleg2} || exit 1
+    jobname=${receptor}-${lig1}-${lig2}
+    mkdir -p ${work_dir}/complexes/${jobname} || exit 1
+    cd ${work_dir}/complexes/${jobname}    || exit 1
     
-    cd ${work_dir}/complexes/${jobnameleg1}    || exit 1
-
-    (
-cat <<EOF
-  source leaprc.protein.ff14SB
-  source leaprc.gaff2
-  source leaprc.water.tip3p
-  RCPT = loadpdb "<RECEPTOR>"
-  LIG1 = loadmol2 "<LIG1MOL2>"
-  loadamberparams "<LIG1FRCMOD>"
-  LIG2 = loadmol2 "<LIG2MOL2>"
-  loadamberparams "<LIG2FRCMOD>"
-  translate LIG2 { <DISPLACEMENT> }
-  MOL = combine {RCPT LIG1 LIG2}
-  addions2 MOL Na+ 0
-  addions2 MOL Cl- 0
-  solvateBox MOL TIP3PBOX 10.0
-  saveamberparm MOL <JOBNAME>.prmtop <JOBNAME>.inpcrd
-  quit
-EOF
-) > tleap.cmd
-    
-    rcptpdb=${work_dir}/receptor/${receptor}.pdb
-    lig1mol2=${work_dir}/ligands/${lig1}-p.mol2
-    lig1frcmod=${work_dir}/ligands/${lig1}-p.frcmod
-    lig2mol2=${work_dir}/ligands/${lig2}-p.mol2
-    lig2frcmod=${work_dir}/ligands/${lig2}-p.frcmod
-
     displs=""
     for d in ${displacement[@]}; do
 	displs="$displs $d"
     done
     echo "Displacement vector: $displs"
 
-    sed -i "s#<RECEPTOR>#${rcptpdb}# ;  s#<LIG1MOL2>#${lig1mol2}# ; s#<LIG1FRCMOD>#${lig1frcmod}# ; s#<LIG2MOL2>#${lig2mol2}# ; s#<LIG2FRCMOD>#${lig2frcmod}# ; s#<DISPLACEMENT>#${displs}# ; s#<JOBNAME>#${jobnameleg1}#g " tleap.cmd || exit 1
-    echo "tleap -f tleap.cmd"
+    (
+cat <<EOF
+  source leaprc.protein.ff14SB
+  source leaprc.gaff2
+  source leaprc.water.tip3p
+  RCPT = loadpdb "${work_dir}/receptor/${receptor}.pdb"
+  LIG1 = loadmol2 "${work_dir}/ligands/${lig1}-p.mol2"
+  loadamberparams "${work_dir}/ligands/${lig1}-p.frcmod"
+  LIG2 = loadmol2 "${work_dir}/ligands/${lig2}-p.mol2"
+  loadamberparams "${work_dir}/ligands/${lig2}-p.frcmod"
+  translate LIG2 { ${displs}  }
+  MOL = combine {RCPT LIG1 LIG2}
+  addions2 MOL Na+ 0
+  addions2 MOL Cl- 0
+  solvateBox MOL TIP3PBOX 10.0
+  saveamberparm MOL ${jobname}.prmtop ${jobname}.inpcrd
+  savepdb MOL ${jobname}.pdb
+  quit
+EOF
+) > tleap.cmd
+
     tleap -f tleap.cmd || exit 1
 
     #builds mintherm, npt, and equilibration scripts
-    replstring="s#<JOBNAME>#${jobnameleg1}# ; s#<DISPLX>#${displacement[0]}# ; s#<DISPLY>#${displacement[1]}# ; s#<DISPLZ>#${displacement[2]}# ; s#<REFERENCEATOMS1>#${ref_atoms1}# ; s#<REFERENCEATOMS2>#${ref_atoms2}# ; s#<VSITERECEPTORATOMS>#${vsite_rcpt_atoms}# ; s#<RESTRAINEDATOMS>#${restr_atoms}# ; s#<LIG1RESID>#${ligresid[0]}# ; s#<LIG2RESID>#${ligresid[1]}# ; s#<LIG1ATOMS>#${lig1_atoms}# ; s#<LIG2ATOMS>#${lig2_atoms}#" 
-    sed "${replstring}" < ${work_dir}/scripts/mintherm_template.py > ${jobnameleg1}_mintherm.py || exit 1
-    sed "${replstring}" < ${work_dir}/scripts/equil_template.py > ${jobnameleg1}_equil.py || exit 1
-    sed "${replstring}" < ${work_dir}/scripts/asyncre_template.cntl > ${jobnameleg1}_asyncre.cntl || exit 1
-    #in leg2 the roles of the two ligands are reversed
-    replstring2="s#<JOBNAME>#${jobnameleg2}# ; s#<DISPLX>#${displacement[0]}# ; s#<DISPLY>#${displacement[1]}# ; s#<DISPLZ>#${displacement[2]}# ; s#<REFERENCEATOMS1>#${ref_atoms2}# ; s#<REFERENCEATOMS2>#${ref_atoms1}# ; s#<VSITERECEPTORATOMS>#${vsite_rcpt_atoms}# ; s#<RESTRAINEDATOMS>#${restr_atoms}# ; s#<LIG1RESID>#${ligresid[1]}# ; s#<LIG2RESID>#${ligresid[0]}# ; s#<LIG1ATOMS>#${lig2_atoms}# ; s#<LIG2ATOMS>#${lig1_atoms}#"
-    sed "${replstring2}" < ${work_dir}/scripts/asyncre_template.cntl > ${work_dir}/complexes/${jobnameleg2}/${jobnameleg2}_asyncre.cntl || exit 1
+    replstring="s#<JOBNAME>#${jobname}# ; s#<DISPLX>#${displacement[0]}# ; s#<DISPLY>#${displacement[1]}# ; s#<DISPLZ>#${displacement[2]}# ; s#<REFERENCEATOMS1>#${ref_atoms1}# ; s#<REFERENCEATOMS2>#${ref_atoms2}# ; s#<VSITERECEPTORATOMS>#${vsite_rcpt_atoms}# ; s#<RESTRAINEDATOMS>#${restr_atoms}# ; s#<LIG1RESID>#${ligresid[0]}# ; s#<LIG2RESID>#${ligresid[1]}# ; s#<LIG1ATOMS>#${lig1_atoms}# ; s#<LIG2ATOMS>#${lig2_atoms}#" 
+    sed "${replstring}" < ${work_dir}/scripts/mintherm_template.py > ${jobname}_mintherm.py || exit 1
+    sed "${replstring}" < ${work_dir}/scripts/equil_template.py > ${jobname}_equil.py || exit 1
+    sed "${replstring}" < ${work_dir}/scripts/asyncre_template.cntl > ${jobname}_asyncre.cntl || exit 1
 
     #copy runopenmm, nodefile, slurm files, etc
-    cp ${work_dir}/scripts/runopenmm ${work_dir}/scripts/nodefile ${work_dir}/complexes/${jobnameleg1}/
-    cp ${work_dir}/scripts/runopenmm ${work_dir}/scripts/nodefile ${work_dir}/complexes/${jobnameleg2}/
-    sed "s#<JOBNAME>#${jobnameleg1}#" < ${work_dir}/scripts/run_template.sh > ${work_dir}/complexes/${jobnameleg1}/run.sh
-    sed "s#<JOBNAME>#${jobnameleg2}#" < ${work_dir}/scripts/run_template.sh > ${work_dir}/complexes/${jobnameleg2}/run.sh
+    cp ${work_dir}/scripts/runopenmm ${work_dir}/scripts/nodefile ${work_dir}/complexes/${jobname}/
+    sed "s#<JOBNAME>#${jobname}#" < ${work_dir}/scripts/run_template.sh > ${work_dir}/complexes/${jobname}/run.sh
 
-    cp ${work_dir}/scripts/analyze.sh ${work_dir}/scripts/uwham_analysis.R ${work_dir}/complexes/${jobnameleg1}/
-    cp ${work_dir}/scripts/analyze.sh ${work_dir}/scripts/uwham_analysis.R ${work_dir}/complexes/${jobnameleg2}/
+    cp ${work_dir}/scripts/analyze.sh ${work_dir}/scripts/uwham_analysis.R ${work_dir}/complexes/${jobname}/
     
 done
 
 #prepare prep script
-sed "s#<RECEPTOR>#${receptor}# ; s#<LEG1PAIRS>#${ligpreppairs}# " < ${work_dir}/scripts/prep_template.sh > ${work_dir}/complexes/prep.sh
+sed "s#<RECEPTOR>#${receptor}# ; s#<LIGPAIRS>#${ligpreppairs}# " < ${work_dir}/scripts/prep_template.sh > ${work_dir}/complexes/prep.sh
 #prepare free energy calculation script
-sed "s#<RECEPTOR>#${receptor}# ; s#<LEG1PAIRS>#${ligpreppairs}# " < ${work_dir}/scripts/free_energies_template.sh > ${work_dir}/complexes/free_energies.sh
+sed "s#<RECEPTOR>#${receptor}# ; s#<LIGPAIRS>#${ligpreppairs}# " < ${work_dir}/scripts/free_energies_template.sh > ${work_dir}/complexes/free_energies.sh

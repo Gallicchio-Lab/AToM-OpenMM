@@ -5,22 +5,27 @@ JOB_TRANSPORT = 'LOCAL_OPENMM'
 
 #The basename of the job. Input amber files are expected to be called <jobname>.prmtop and <jobname>.inpcrd
 #The checkpoint file is expected to be called <jobname>_0.xml
-BASENAME = 'temoa-g1-g4'
+BASENAME = 'temoa-g1'
 
 #Arrays of thermodynamic states in temperature and alchemical space.
 TEMPERATURES = '300'
-LAMBDAS = '0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50'
-LAMBDA1 = '0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50'
-LAMBDA2 = '0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50'
-ALPHA =   '0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00'
-U0 =      '0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00'
-W0COEFF = '0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00'
+LAMBDAS =    '0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00'
+DIRECTION=   '   1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1'
+INTERMEDIATE='   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0'
+LAMBDA1 =    '0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.50, 0.40, 0.30, 0.20, 0.10, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00'
+LAMBDA2 =    '0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 0.40, 0.30, 0.20, 0.10, 0.00'
+ALPHA =      '0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10' 
+U0 =         '130., 120., 110., 100.,  90.,  80.,  70.,  60.,  50.,  40.,  30.,  30.,  40.,  50.,  60.,  70.,  80.,  90., 100., 110., 120., 130.'
+W0COEFF =    '0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00'
 
 #The displacement vector that brings the ligand from the binding site to a position in the bulk
 DISPLACEMENT = '22.00, 22.00, 22.00'
 
+#The position of the binding site restraint. In leg1 it is zero to center it on the receptor
+LIGOFFSET = '0., 0., 0.'
+
 #Execution time in minutes
-WALL_TIME = 120
+WALL_TIME = 240
 
 #Frequency of replica exchange attempts in seconds
 CYCLE_TIME = 10
@@ -44,13 +49,11 @@ PRNT_FREQUENCY = '5000'
 #frequency of saving trajectory frames. Must be a multiple of PRODUCTION_STEPS
 TRJ_FREQUENCY = '5000'
 
-#list of ligand atoms. The equil.py script prints these out.
-LIGAND2_ATOMS = 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216
-LIGAND1_ATOMS = 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233
+#list of ligand atoms. The mdlambda.py script prints these out.
+LIGAND_ATOMS = 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216
 
-#list of atoms of the ligand that define the centroid of the ligand. The equil.py script prints these out.
-LIGAND2_CM_ATOMS = 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216
-LIGAND1_CM_ATOMS = 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233
+#list of atoms of the ligand that define the centroid of the ligand. The mdlambda.py script prints these out.
+LIGAND_CM_ATOMS = 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216
 
 #list of atoms of the ligand that define the centroid of the ligand. The mdlambda.py script prints these out.
 RCPT_CM_ATOMS = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186, 187, 188, 189, 190, 191, 192, 193, 194, 195
@@ -59,15 +62,6 @@ RCPT_CM_ATOMS = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18
 CM_KF = 25.00
 CM_TOL = 5.00
 
-#alignment restraint settings, reference atoms are give in molecular indexes. Force constants
-#in kcal/(mol A^2) or kcal/(mol deg^2) or 
-ALIGN_LIGAND2_REF_ATOMS = 8, 6, 4 
-ALIGN_LIGAND1_REF_ATOMS = 3, 5, 1
-ALIGN_KF_SEP = 2.5
-ALIGN_K_THETA = 10.0
-ALIGN_K_PSI = 10.0
-
-
 #list of atoms that are restrained followed by the corresponding force constant and tolerance,
 #in kcal/(mol A^2) and angstroms, respectively
 POS_RESTRAINED_ATOMS = 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39
@@ -75,9 +69,9 @@ POSRE_FORCE_CONSTANT = 25.0
 POSRE_TOLERANCE = 0.5
 
 #softcore parameters in kcal/mol, acore is dimensionless
-UMAX = 100.00
+UMAX = 200.00
 ACORE = 0.062500
-UBCORE = 50.0
+UBCORE = 100.0
 
 #thermostat friction coefficient in 1/ps
 FRICTION_COEFF = 0.500000

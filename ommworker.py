@@ -68,7 +68,6 @@ class OMMWorker(object):
             self._openmm_worker_body()
             self._openmm_worker_makecontext()
 
-        
     def set_state(self, par):
         self._readySignal.wait()
         self._cmdq.put("SETSTATE")
@@ -167,7 +166,7 @@ class OMMWorker(object):
 
     def _openmm_worker_makecontext(self):
         self.platform_properties = {}
-        if self.platform_name:
+        if self.platform_name is not None:
             if self.platform_name == 'OpenCL':
                 self.platform = Platform.getPlatformByName(self.platform_name)
                 self.platform_properties["OpenCLPlatformIndex"] = str(self.platformId)
@@ -198,7 +197,7 @@ class OMMWorker(object):
         for param_name in self.ommsystem.cparams:
             self.context.setParameter(param_name, self.ommsystem.cparams[param_name])
         
-        if self.compute and self.platformId != None and self.deviceId != None:
+        if self.compute and self.platformId is not None and self.deviceId is not None:
             #sets up logfile
             self.wdir = "cntxt%d_%d" % (int(self.platformId),int(self.deviceId))
             if not os.path.isdir(self.wdir):
@@ -246,7 +245,7 @@ class OMMWorker(object):
 
                 self._openmm_worker_run()
 
-                if self.logfile_p:
+                if self.logfile_p is not None:
                     self.logfile_p.flush()
 
                 self._runningSignal.clear()
@@ -260,7 +259,7 @@ class OMMWorker(object):
                 self._outq.put(self.positions)
                 self._outq.put(self.velocities)
             elif command == "FINISH":
-                if self.outfile_p:
+                if self.outfile_p is not None:
                     self.outfile_p.close()
                 while not self._inq.empty():
                     self._inq.get()
@@ -300,6 +299,7 @@ class OMMWorkerATM(OMMWorker):
         self.simulation.context.setParameter(atmforce.Alpha(), self.par['alpha']*kilojoules_per_mole)
         self.simulation.context.setParameter(atmforce.U0(), self.par['u0'] /kilojoules_per_mole)
         self.simulation.context.setParameter(atmforce.W0(), self.par['w0'] /kilojoules_per_mole)
+        self.simulation.context.setParameter(atmforce.Direction(), self.par['atmdirection'] )
 
     def _worker_getenergy(self):
         state = self.simulation.context.getState(getEnergy = True, groups = {1,3})

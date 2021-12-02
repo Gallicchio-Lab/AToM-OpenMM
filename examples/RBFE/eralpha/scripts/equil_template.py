@@ -86,7 +86,7 @@ fc = 25.0 * kilocalorie_per_mole/angstrom**2
 tol = 1.5 * angstrom
 atm_utils.addPosRestraints(restrained_atoms, inpcrd.positions, fc, tol)
 
-#create ATM Force
+#create ATM Force (direction is 1 by default)
 atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore )
 #adds all atoms to the force with zero displacement
 for at in prmtop.topology.atoms():
@@ -174,17 +174,6 @@ simulation.topology.setPeriodicBoxVectors(boxsize)
 with open(jobname + '_0.pdb', 'w') as output:
   PDBFile.writeFile(simulation.topology, positions, output)
   
-#create a checkpoint file and a pdb file with the ligands swapped for leg 2
-positions = simulation.context.getState(getPositions=True).getPositions()
-for i in lig1_atoms:
-    positions[i] += displacement
-for i in lig2_atoms:
-    positions[i] -= displacement
-simulation.context.setPositions(positions)
-simulation.saveState(jobname + '_0_displaced.xml')
-with open(jobname + '_0_displaced.pdb', 'w') as output:
-  PDBFile.writeFile(simulation.topology, positions, output)
-    
 end=datetime.now()
 elapsed=end - start
 print("elapsed time="+str(elapsed.seconds+elapsed.microseconds*1e-6)+"s")

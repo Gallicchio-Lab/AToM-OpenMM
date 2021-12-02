@@ -212,10 +212,10 @@ ddgbind2 <- sqrt(ve[,mlam]+ve[,1])/bet
 dgbind2
 ddgbind2
 
-dgb <- dgbind1 - dgbind2
+dgb <- dgbind2 - dgbind1
 ddgb <- sqrt(ddgbind2*ddgbind2 + ddgbind1*ddgbind1)
 maxsamples <- min(maxtimeid, samplesperreplica)
-result <- sprintf("DDGb = %f +- %f range %d %d", dgb, ddgb, mintimeid, maxsamples)
+result <- sprintf("DGb = %f +- %f range %d %d", dgb, ddgb, mintimeid, maxsamples)
 write(result, "")
 #noquote(result)
 

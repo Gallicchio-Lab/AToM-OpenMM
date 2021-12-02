@@ -9,7 +9,5 @@
 #SBATCH --no-requeue
 #SBATCH -t 02:15:00
 
-if [ -n "$CUDA_VISIBLE_DEVICES" ] ; then
-    echo "localhost,0:$CUDA_VISIBLE_DEVICES,1,centos-OpenCL,,/tmp" > nodefile
-fi
-./runopenmm rbfe_explicit.py <JOBNAME>_asyncre.cntl
+echo "localhost,0:0,1,OpenCL,,/tmp" > nodefile
+../../scripts/runopenmm rbfe_explicit.py <JOBNAME>_asyncre.cntl

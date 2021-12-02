@@ -91,7 +91,7 @@ for at in prmtop.topology.atoms():
         posrestr_atoms.append(at.index)
 atm_utils.addPosRestraints(posrestr_atoms, inpcrd.positions, fc, tol)
 
-#create ATM Force
+#create ATM Force (direction is 1 by default)
 atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore )
 #adds all atoms to the force with zero displacement
 for at in prmtop.topology.atoms():

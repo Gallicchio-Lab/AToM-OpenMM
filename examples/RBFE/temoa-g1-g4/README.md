@@ -9,26 +9,22 @@ See [Solmaz Azimi, Sheenam Khuttan, Joe Z. Wu, Rajat K. Pal, and Emilio  Gallicc
 
 The starting point are the topology and coordinate files of a simulation box with the TEMOA host and the G1 and G4 guests in the Amber files `temoa-g1-g4.prmtop` and `temoa-g1-g4.inpcrd` provided in this folder. How to prepare systems in Amber format is beyond the scope of this tutorial. We used the `Antechamber` and `tleap` programs of the [`AmberTools` suite version 19](https://ambermd.org/) using the GAFF force field and the TIP3P water model. G1 was placed in the binding site of the host and G4 at some distance away in the bulk. See the [paper](https://arxiv.org/abs/2107.05153) for more information.
 
-We assume in this tutorial that the examples folder of this repo has been copied under `$HOME/examples`. Adjust the pathnames as needed.
+We assume in this tutorial that the examples directory of this repository has been copied under `$HOME/examples` and that the ASyncRE software is available under `$HOME/software/async_re-openmm`. Adjust the pathnames as needed. We are also assuming that OpenMM is launched by running the provided `runopenmm` script. See [examples/README](../../README.md).
+
 
 Mininize, thermalize, relax, and equilibrate the complex:
 ```
 cd $HOME/RBFE/temoa-g1-g4
-python mintherm.py && python npt.py && python equil.py
+../scripts/runopenmm mintherm.py && ../scripts/runopenmm  npt.py && ../scripts/runopenmm equil.py
 ```
 `mintherm` and `npt` equilibrate the solvent keeping the complex restrained. `equil` equilibrates the whole system keeping only the lower cup of the host loosely restrained as in the original work. Each step creates an OpenMM checkpoint file in XML format to start the subsequent step. Each step also generates a PDB file for visualization. All of these steps are performed at the alchemical intermediate state at λ=1/2.
 
-### Replica Exchange
+### Replica Exchange Production
 
-#### Leg 1 - from G1 bound to G4 unbound to the alchemical intermediate
-
-Copy the input files into the simulation directory
 ```
-cp temoa-g1-g4.prmtop temoa-g1-g4.inpcrd temoa-g1-g4_0.xml asyncre-leg1/
+Copy the `nodefile` from the scripts directory
 ```
-Copy also the `nodefile` from the scripts directory
-```
-cp ../../scripts/nodefile asyncre-leg1/
+cp ../scripts/nodefile .
 ```
 This `nodefile` assumes one GPU on the system (on the OpenCL platform 0 with device id 0). It looks like:
 ```
@@ -40,45 +36,27 @@ localhost,0:0,1,OpenCL,,/tmp
 localhost,0:1,1,OpenCL,,/tmp
 ```
 
-Now go the replica exchange folder for leg 1 and run replica exchange
+Now run replica exchange
 ```
-cd asyncre-leg1/
-python rbfe_explicit.py temoa-g1-g4_asyncre.cntl
+../scripts/runopenmm $HOME/software/async_re-openmm/rbfe_explicit.py temoa-g1-g4_asyncre.cntl
 ```
 
-You should see the contents of the control file echo-ed back and messages indicating that replica are dispatched to the GPU and that replicas change alchemical states by exchanging them with other replicas. The job is set to run for two hours.
-
-#### Leg 2 - from the unbound state to the alchemical intermediate
-
-The leg 2 calculation can run in parallel to the leg 1 calculation if you have multiple computing nodes or GPU devices available. Copy the input files to the replica exchange folder for leg 2:
-```
-cd $HOME/examples/RBFE/temoa-g1-g4
-cp temoa-g1-g4.prmtop temoa-g1-g4.inpcrd asyncre-leg2/
-cp temoa-g1-g4_0_displaced.xml asyncre-leg2/temoa-g1-g4_0.xml
-cp ../../scripts/nodefile asyncre-leg2/
-```
-Notice that this time we copied the structure with the ligand displaced. Then run replica exchange as before
-
-Now go the replica exchange folder for leg 2 and run replica exchange
-```
-cd asyncre-leg2/
-python rbfe_explicit.py temoa-g1-g4_asyncre.cntl
-```
+You should see the contents of the control file echo-ed back and messages indicating that replica are dispatched to the GPU and that replicas change alchemical states by exchanging them with other replicas. The job is set to run for 4 hours.
 
 #### Free Energy Analysis
 
-The relative binding free energy (ΔΔGb = ΔGb(TEMOA-G4) - ΔG(TEMOA-G1)) between TEMOA-G4 and TEMOA-G1 is the free energy change in leg1 minus the free energy change in leg2. For leg 1:
+Start by copying the necessary scripts to the simulation folder:
 ```
-cd $HOME/examples/RBFE/temoa-g1-g4/asyncre-leg1
+cd $HOME/examples/RBFE/temoa-g1-g4
+cp ../scripts/{analyze.sh,uwham_analysis.R} .
+```
+
+Then run the analyze script:
+```
 ./analyze.sh 20
 ```
-and leg 2:
+It should print something similar to this:
 ```
-cd $HOME/examples/RBFE/temoa-g1-g4/asyncre-leg2
-./analyze.sh 20
+DDGb = -3.50378 +- 0.3484641 range: 20 39
 ```
-Each should print something like:
-```
-DGb = 14.50378 +- 0.3484641 DE = -3.317698 +- 1.395722  range: 20 39
-```
-Take the differences of the DGb values for the two legs to get an estimate of the relative binding free energy. The simulations here are just short examples. See the [paper](https://arxiv.org/abs/2107.05153) for more details.
+The value shown is the relative binding free energy (ΔΔGb = ΔGb(TEMOA-G4) - ΔG(TEMOA-G1)) between TEMOA-G4 and TEMOA-G1. In this example 20 is the number of initial samples to discard for equilibration. 39 in this case is the number of samples per replica that has been collected. The simulations here are just short examples. See the [paper](https://arxiv.org/abs/2107.05153) for more details.

@@ -32,7 +32,7 @@ jobname=$(basename $PWD)
 if [ -f r0/${jobname}.out ] ; then
     
     R CMD BATCH -${jobname} -${discard_samples_low} -${discard_samples_high}  uwham_analysis.R || exit 1
-    res=`grep -e '^DDGb =' uwham_analysis.Rout` || exit 1
+    res=`grep -e '^DGb =' uwham_analysis.Rout` || exit 1
 
     echo ${res}
 else

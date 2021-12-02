@@ -9,18 +9,20 @@ BASENAME = 'temoa-g1-g4'
 
 #Arrays of thermodynamic states in temperature and alchemical space.
 TEMPERATURES = '300'
-LAMBDAS = '0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50'
-LAMBDA1 = '0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50'
-LAMBDA2 = '0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50'
-ALPHA =   '0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00'
-U0 =      '0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00'
-W0COEFF = '0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00'
+LAMBDAS =    '0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.00'
+DIRECTION=   '   1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1'
+INTERMEDIATE='   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0'
+LAMBDA1 =    '0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.50, 0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.00'
+LAMBDA2 =    '0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.50, 0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.00'
+ALPHA =      '0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00'
+U0 =         '0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00'
+W0COEFF =    '0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00'
 
 #The displacement vector that brings the ligand from the binding site to a position in the bulk
 DISPLACEMENT = '22.00, 22.00, 22.00'
 
 #Execution time in minutes
-WALL_TIME = 120
+WALL_TIME = 240
 
 #Frequency of replica exchange attempts in seconds
 CYCLE_TIME = 10
@@ -36,13 +38,13 @@ NODEFILE = 'nodefile'
 SUBJOBS_BUFFER_SIZE = '1.0'
 
 #MD steps per replica
-PRODUCTION_STEPS = '5000'
+PRODUCTION_STEPS = '20000'
 
 #frequency of printing information after a replica run. Must be a multiple of PRODUCTION_STEPS
-PRNT_FREQUENCY = '5000'
+PRNT_FREQUENCY = '20000'
 
 #frequency of saving trajectory frames. Must be a multiple of PRODUCTION_STEPS
-TRJ_FREQUENCY = '5000'
+TRJ_FREQUENCY = '20000'
 
 #list of ligand atoms. The equil.py script prints these out.
 LIGAND1_ATOMS = 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216

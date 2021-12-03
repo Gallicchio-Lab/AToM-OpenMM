@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 #SBATCH -J <JOBNAME>
-#SBATCH --partition=gpu-shared
+#SBATCH --partition=<PARTITION>
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus=1
@@ -10,4 +10,4 @@
 #SBATCH -t 02:15:00
 
 echo "localhost,0:0,1,OpenCL,,/tmp" > nodefile
-../../scripts/runopenmm rbfe_explicit.py <JOBNAME>_asyncre.cntl
+../../scripts/runopenmm <ASYNCRE_DIR>/rbfe_explicit.py <JOBNAME>_asyncre.cntl

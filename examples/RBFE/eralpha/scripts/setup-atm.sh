@@ -1,6 +1,8 @@
 #!/bin/bash
 
 #load settings
+work_dir=$(pwd)
+scripts_dir=${work_dir}/scripts
 . setup-settings.sh
 
 cd ${work_dir} || exit 1
@@ -177,7 +179,7 @@ EOF
 
     #copy runopenmm, nodefile, slurm files, etc
     cp ${work_dir}/scripts/runopenmm ${work_dir}/scripts/nodefile ${work_dir}/complexes/${jobname}/
-    sed "s#<JOBNAME>#${jobname}#" < ${work_dir}/scripts/run_template.sh > ${work_dir}/complexes/${jobname}/run.sh
+    sed "s#<JOBNAME>#${jobname}#;s#<ASYNCRE_DIR>#${asyncre_dir}#" < ${work_dir}/scripts/run_template.sh > ${work_dir}/complexes/${jobname}/run.sh
 
     cp ${work_dir}/scripts/analyze.sh ${work_dir}/scripts/uwham_analysis.R ${work_dir}/complexes/${jobname}/
     

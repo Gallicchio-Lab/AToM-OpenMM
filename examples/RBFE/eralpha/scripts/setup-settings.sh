@@ -2,11 +2,8 @@
 #basename for jobs
 basename=eralpha
 
-#path of working directory
-work_dir=$HOME/${basename}
-
-#path of script directory
-scripts_dir=${work_dir}/scripts
+#path to ASyncRE
+asyncre_dir=$HOME/software/async_re-openmm
 
 #basename of the receptor pdb file (processed for amber using pdb4amber)
 receptor=eralpha
@@ -21,3 +18,4 @@ displacement=("22.0" "22.0" "22.0")
 
 #residue ids of the receptor that define the center of the binding site
 vsite_rcpt_residues=(36 39 40 42 43 77 80 81 84 95 97 111 113 114 117 118 214 215 217 218)
+

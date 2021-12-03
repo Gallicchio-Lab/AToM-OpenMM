@@ -36,7 +36,7 @@ atm_utils = ATMMetaForceUtils(system)
 lig_cm_atoms = lig_atoms
 #vsite_restraints
 kf = 25.0 * kilocalorie_per_mole/angstrom**2
-r0 = 5.0 * angstrom # change it to s placeholder
+r0 = 6.0 * angstrom # change it to s placeholder
 
 atm_utils.addRestraintForce(lig_cm_particles = lig_cm_atoms,
                             rcpt_cm_particles = rcpt_cm_atoms,

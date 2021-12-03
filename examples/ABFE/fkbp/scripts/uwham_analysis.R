@@ -67,55 +67,76 @@ function (x, w, xaxis, xmin, xmax, ymax, bar = TRUE, add = FALSE,
   list(y = y, breaks = xaxis)
 }
 
+args <- commandArgs(trailingOnly = F)
+jobname <- sub("-","",args[length(args)-2])
+mintimeid <- strtoi(sub("-","",args[length(args)-1]))
+maxtimeid <- strtoi(sub("-","",args[length(args)  ]))
 
+mintimeid
+maxtimeid
 
-data.t <- read.table("repl.cycle.state.temp.lambda1.lambda2.alpha.u0.w0.epot.epert.dat")
-
-states =   data.t$V3
-temps =    data.t$V4
-lambda1s = data.t$V5
-lambda2s = data.t$V6
-alphas =   data.t$V7
-u0s =      data.t$V8
-w0s =      data.t$V9
-potEs =    data.t$V10
-eperts =   data.t$V11
-
-
-#parameters for ilogistic expected
+#define states
 tempt   <- c( 300 )
 bet     <- 1.0/(0.001986209*tempt)
-lambda1 <-c( 0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50)
-lambda2 <-c( 0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50)
-alpha   <-c( 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00)
-u0      <-c( 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00)
-w0coeff <-c( 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00)
+directn <-c(   1,    1,    1,    1,    1,    1,    1,    1,    1,    1,    1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1 )
+intermd <-c(   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    1,    1,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 )
+lambda1 <-c(0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.50, 0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.00 )
+lambda2 <-c(0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.50, 0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.00 )
+alpha   <-c(0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00 )
+u0      <-c(0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00 )
+w0      <-c(0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00 )
+
+nstates <- length(lambda1)
+leg1istate <- which(intermd==1)[1]
+leg2istate <- which(intermd==1)[2]
+
+colnames <- c("stateid", "temperature", "direction", "lambda1", "lambda2", "alpha", "u0", "w0", "potE", "pertE") 
+datafiles <- sprintf("r%d/%s.out",seq(0,length(lambda1)-1),jobname)
+nfiles <- length(datafiles)
+data <- read.table(datafiles[1])
+colnames(data) <- colnames
+data$timeid <- 1:length(data$stateid)
+for ( i in 2:nfiles) {
+    t <- read.table(datafiles[i])
+    colnames(t) <- colnames
+    t$timeid <- 1:length(t$stateid)
+    data <- rbind(data,t)
+}
+data$bet <- 1.0/(0.001986209*data$temperature)
+nsamples <- length(data$stateid)
+samplesperreplica <- as.integer(nsamples/nstates)
 
 
+#LEG1
+
+data1 <- subset(data, stateid <= leg1istate - 1 & timeid >= mintimeid & timeid <= maxtimeid  )
 mtempt <- length(bet)
-mlam <- length(lambda1)
+leg1stateids <- 1:leg1istate
+leg1stateids
+mlam <- length(leg1stateids)
+mlam
 m <- mlam*mtempt
-N <- length(data.t$V1)
+N <- length(data1$stateid)
 
 #extract U0 values as U-bias
 #this is relevant only if the states are at different temperatures
-e0 <- potEs
+e0 <- data1$potE
 for (i in 1:N) {
-    e0[i] <- e0[i] - bias.fcn(eperts[i],lambda1s[i],lambda2s[i],alphas[i],u0s[i],w0s[i])
+    e0[i] <- e0[i] - bias.fcn(data1$pertE[i],data1$lambda1[i],data1$lambda2[i],data1$alpha[i],data1$u0[i],data1$w0[i])
 }
 
 neg.pot <- matrix(0, N,m)
 sid <- 1
 # note the order of (be,te)
-for (be in 1:mlam) {
+for (be in leg1stateids  ) {
      for (te in 1:mtempt) {
-             neg.pot[,sid] <- npot.fcn(e0=e0,eperts,bet[te],lambda1[be],lambda2[be],alpha[be],u0[be],w0coeff[be])
+             neg.pot[,sid] <- npot.fcn(e0=e0,data1$pertE,bet[te],lambda1[be],lambda2[be],alpha[be],u0[be],w0[be])
              sid <- sid + 1
     }
 }
 
 #the alchemical state indexes start with 0, UWHAM's state labels start with 1
-statelabels <- states + 1
+statelabels <- data1$stateid + 1
 
 #runs UWHAM
 out <- uwham.r(label=statelabels, logQ=neg.pot,ufactormax=1,ufactormin=1)
@@ -124,37 +145,89 @@ ze <- matrix(out$ze, nrow=mtempt, ncol=mlam)
 ve <- matrix(out$ve, nrow=mtempt, ncol=mlam)
 sqrt(ve)/bet
 
-dgbind <- (-ze[,mlam]/bet[]) - (-ze[,1]/bet[])
-ddgbind <- sqrt(ve[,mlam]+ve[,1])/bet
+dgbind1 <- (-ze[,mlam]/bet[]) - (-ze[,1]/bet[])
+ddgbind1 <- sqrt(ve[,mlam]+ve[,1])/bet
 
-#average energy
-usl1 <- eperts[states == mlam - 1]
-de <- mean(usl1)
-sde <- sd(usl1)
-dde <- sde/sqrt(length(usl1))
-ub <- de + bet*sde*sde
-
-#DGbind as a function of temperature
-dgbind
-sink("result.log")
-cat("DGb = ", dgbind[1]," +- ",ddgbind[1]," DE = ", de, " +- ",dde,"\n")
-sink()
-
-#free energy profile at first temperature
-dglambda <- cbind(-ze[1,]/bet[1],sqrt(ve[1,])/bet[1])
-plot(-ze[1,]/bet[1], type="l")
-write(t(dglambda),file="dglambda.dat",ncol=2)
+dgbind1
+ddgbind1
 
 #get plain be histograms at first temperature
-umin <- min(eperts)
-umax <- max(eperts)
-hs <- hist(eperts[states == mlam-1 ],plot=FALSE,breaks=10);
+umin <- min(data1$pertE)
+umax <- max(data1$pertE)
+hs <- hist(data1$pertE[ data1$stateid == mlam-1 ],plot=FALSE,breaks=10);
 pmax = 1.2*max(hs$density)
-hs <- hist(eperts[states == 0 ],plot=FALSE,breaks=10);
 plot(hs$mids,hs$density,type="l",xlim=c(umin,umax),ylim=c(0,pmax));
-for ( i in 1:(mlam-1) ){ 
-    hs <- hist(eperts[states == i ],plot=FALSE,breaks=10);
+for ( i in 1:mlam ){ 
+    hs <- hist(data1$pertE[ data1$stateid == i-1 ],plot=FALSE,breaks=10);
     lines(hs$mids,hs$density);
     outp <- cbind(hs$mids,hs$density);
-    write(t(outp),file=sprintf("p-%d.dat",i),ncol=2)
+    write(t(outp),file=sprintf("p-%d.dat",i-1),ncol=2)
+}
+
+
+
+
+#LEG2
+
+data1 <- subset(data, stateid >= leg2istate - 1 & timeid >= mintimeid & timeid <= maxtimeid )
+mtempt <- length(bet)
+leg2stateids <- seq(from=nstates, to=leg2istate, by=-1)
+leg2stateids
+mlam <- length(leg2stateids )
+mlam
+m <- mlam*mtempt
+N <- length(data1$stateid)
+
+#extract U0 values as U-bias
+#this is relevant only if the states are at different temperatures
+e0 <- data1$potE
+for (i in 1:N) {
+    e0[i] <- e0[i] - bias.fcn(data1$pertE[i],data1$lambda1[i],data1$lambda2[i],data1$alpha[i],data1$u0[i],data1$w0[i])
+}
+
+neg.pot <- matrix(0, N,m)
+sid <- 1
+# note the order of (be,te)
+for (be in leg2stateids ) {
+     for (te in 1:mtempt) {
+             neg.pot[,sid] <- npot.fcn(e0=e0,data1$pertE,bet[te],lambda1[be],lambda2[be],alpha[be],u0[be],w0[be])
+             sid <- sid + 1
+    }
+}
+
+#the alchemical state indexes in leg2 run backward
+statelabels <- nstates - data1$stateid
+
+#runs UWHAM
+out <- uwham.r(label=statelabels, logQ=neg.pot,ufactormax=1,ufactormin=1)
+ze <- matrix(out$ze, nrow=mtempt, ncol=mlam)
+-ze/bet
+ve <- matrix(out$ve, nrow=mtempt, ncol=mlam)
+sqrt(ve)/bet
+
+
+dgbind2 <- (-ze[,mlam]/bet[]) - (-ze[,1]/bet[])
+ddgbind2 <- sqrt(ve[,mlam]+ve[,1])/bet
+
+dgbind2
+ddgbind2
+
+dgb <- dgbind2 - dgbind1
+ddgb <- sqrt(ddgbind2*ddgbind2 + ddgbind1*ddgbind1)
+maxsamples <- min(maxtimeid, samplesperreplica)
+result <- sprintf("DGb = %f +- %f range %d %d", dgb, ddgb, mintimeid, maxsamples)
+write(result, "")
+#noquote(result)
+
+#get plain be histograms at first temperature
+umin <- min(data1$pertE)
+umax <- max(data1$pertE)
+hs <- hist(data1$pertE[ data1$stateid == leg2istate - 1  ],plot=FALSE,breaks=10);
+pmax = 1.2*max(hs$density)
+plot(hs$mids,hs$density,type="l",xlim=c(umin,umax),ylim=c(0,pmax));
+for ( i in nstates:leg2istate ){ 
+    hs <- hist(data1$pertE[ data1$stateid == i-1 ],plot=FALSE,breaks=10);
+    lines(hs$mids,hs$density);
+    outp <- cbind(hs$mids,hs$density);
+    write(t(outp),file=sprintf("p-%d.dat",i-1),ncol=2)
 }

@@ -24,28 +24,17 @@ else
 fi
 
 
-datafilename=repl.cycle.state.temp.lambda1.lambda2.alpha.u0.w0.epot.epert.dat
-rm -f ${datafilename} || exit 1
+rm -f result.log Rplots.pdf p-*.dat || exit 1
 
+#get the jobname from the name of the current folder
+jobname=$(basename $PWD)
 
-for repl_dir in r? r?? ; do
-    repl=${repl_dir#r}
-    awk -v low=$discard_samples_low -v high=$discard_samples_high -v repl=$repl 'FNR >= low && FNR <= high {print repl, FNR, $0 }' $repl_dir/*.out || exit 1
-done >> $datafilename
+if [ -f r0/${jobname}.out ] ; then
+    
+    R CMD BATCH -${jobname} -${discard_samples_low} -${discard_samples_high}  uwham_analysis.R || exit 1
+    res=`grep -e '^DGb =' uwham_analysis.Rout` || exit 1
 
-maxsamples=$discard_samples_high
-for repl_dir in r? r?? ; do
-    repl=${repl_dir#r}
-    nsamples=`wc $repl_dir/*.out | awk 'FNR ==1 {print $1}'` || exit 1
-    if [ $maxsamples -gt $nsamples ] ; then
-	maxsamples=$nsamples
-    fi
-done
-
-
-rm -f result.log Rplots.pdf p-l*.dat || exit 1
-  
-R CMD BATCH uwham_analysis.R || exit 1
-res=`grep 'DGb =' result.log` || exit 1
-
-echo ${res} " range:" $discard_samples_low $maxsamples || exit 1
+    echo ${res}
+else
+    echo "One or more replica directories are missing" 
+fi

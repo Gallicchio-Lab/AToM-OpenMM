@@ -16,10 +16,8 @@ start=datetime.now()
 jobname = "<JOBNAME>"
 
 displ = [ <DISPLX>, <DISPLY>, <DISPLZ> ]
-off = [ <OFFX>, <OFFY>, <OFFZ> ]
 displacement      = [  displ[i] for i in range(3) ] * angstrom
-lig_restr_offset = [  off[i]       for i in range(3) ] * angstrom
-
+lig_restr_offset = [  0.       for i in range(3) ] * angstrom
 
 lig_atoms = [<LIGATOMS>]
 rcpt_cm_atoms = [<VSITERECEPTORATOMS>]
@@ -35,6 +33,7 @@ w0coeff = 0.0 * kilocalorie_per_mole
 umsc =  1000.0 * kilocalorie_per_mole
 ubcore = 500.0 * kilocalorie_per_mole
 acore = 0.062500
+direction = 1.0
 
 prmtop = AmberPrmtopFile(jobname + '.prmtop')
 inpcrd = AmberInpcrdFile(jobname + '.inpcrd')
@@ -43,29 +42,10 @@ system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=1*nanometer,
 atm_utils = ATMMetaForceUtils(system)
 
 
-#rcpt_atoms = []
-#rcpt_atoms = [at.index for at in prmtop.topology.atoms() if at.residue.name =='PA' or at.residue.name == 'PC' or at.residue.name == 'OL' or at.residue.name == 'CHL' ]
-
-"""
-kf = 25.0 * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
-r0 = 5 * angstrom #radius of Vsite sphere
-offz =  lig_restr_offset[2]
-zrestrforce = mm.CustomCentroidBondForce(2,"0.5*kf*( step(d)*max(0,d-r0)^2 + step(-d)*max(0,-d-r0)^2 ) ; d = z2 - offz - z1")
-system.addForce(zrestrforce)
-zrestrforce.addPerBondParameter("kf")
-zrestrforce.addPerBondParameter("r0")
-zrestrforce.addPerBondParameter("offz")
-zrestrforce.setForceGroup(1)
-zrestrforce.addGroup(rcpt_atoms)
-zrestrforce.addGroup(lig_atoms)
-zrestrforce.addBond([0,1], [kf, r0, offz ])
-"""
-
-
 lig_cm_atoms = lig_atoms
 
 kf = 25.0 * kilocalorie_per_mole/angstrom**2
-r0 = 5.0 * angstrom # change it to s placeholder
+r0 = 6.0 * angstrom # change it to s placeholder
 
 atm_utils.addRestraintForce(lig_cm_particles = lig_cm_atoms,
                             rcpt_cm_particles = rcpt_cm_atoms,
@@ -76,10 +56,9 @@ atm_utils.addRestraintForce(lig_cm_particles = lig_cm_atoms,
 #receptor positional restraints
 fc = 25.0 * kilocalorie_per_mole/angstrom**2
 tol = 1.5 * angstrom
-
 atm_utils.addPosRestraints(restrained_atoms, inpcrd.positions, fc, tol)
 
-#create ATM Force
+#create ATM Force (direction is 1 by default)
 atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore )
 
 for at in prmtop.topology.atoms():
@@ -89,7 +68,6 @@ for i in lig_atoms:
     atmforce.setParticleParameters(i, i, displ[0] * angstrom, displ[1] * angstrom, displ[2] * angstrom)
 
 atmforce.setForceGroup(3)
-
 system.addForce(atmforce)
 
 #add barostat
@@ -106,7 +84,6 @@ integrator = LangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond)
 integrator.setIntegrationForceGroups({1,3})
 
 platform_name = 'OpenCL'
-#platform_name = 'Reference'
 platform = Platform.getPlatformByName(platform_name)
 
 properties = {}
@@ -132,6 +109,7 @@ simulation.context.setParameter(atmforce.W0(), w0coeff /kilojoules_per_mole)
 simulation.context.setParameter(atmforce.Umax(), umsc /kilojoules_per_mole)
 simulation.context.setParameter(atmforce.Ubcore(), ubcore /kilojoules_per_mole)
 simulation.context.setParameter(atmforce.Acore(), acore)
+simulation.context.setParameter(atmforce.Direction(), direction)
 
 state = simulation.context.getState(getEnergy = True, groups = {1,3})
 print("Potential Energy =", state.getPotentialEnergy())
@@ -170,16 +148,9 @@ for i in range(loopStep):
 print( "SaveState ...")
 simulation.saveState(jobname + "_0.xml")
 
-#create a checkpoint with the ligands swapped for leg2
+#save a pdb file for visualization
 positions = simulation.context.getState(getPositions=True).getPositions()
-for i in lig_atoms:
-    positions[i] += displacement
-simulation.context.setPositions(positions)
-simulation.saveState(jobname + '_0_displaced.xml')
-
-#save a pdb file with the displaced ligand for visualization
-positions = simulation.context.getState(getPositions=True).getPositions()
-with open(jobname + '_0_displaced.pdb', 'w') as output:
+with open(jobname + '_0.pdb', 'w') as output:
   PDBFile.writeFile(simulation.topology, positions, output)
 
 end=datetime.now()

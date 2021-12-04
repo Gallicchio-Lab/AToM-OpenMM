@@ -14,7 +14,7 @@ We assume in this tutorial that the examples directory of this repository has be
 Minimize, thermalize, relax, and equilibrate the complex:
 ```
 cd $HOME/examples/ABFE/temoa-g1
-../scripts/runopenmm mintherm.py && python npt.py && python equil.py
+../scripts/runopenmm mintherm.py && ../scripts/runopenmm  npt.py && ../scripts/runopenmm equil.py
 ```
 `mintherm` and `npt` equilibrate the solvent keeping the complex restrained. `equil` equilibrates the whole system keeping only the lower cup of the host loosely restrained as in the original work. Each step creates an OpenMM checkpoint file in XML format to start the subsequent step. Each step also generates a PDB file for visualization.
 
@@ -26,7 +26,7 @@ The resulting structure, stored in the `temoa-g1_0.xml` file is the input of the
 
 ### Replica Exchange
 
-Copy also the `nodefile` from the scripts directory
+Copy the `nodefile` from the scripts directory
 ```
 cp $HOME/examples/ABFE/scripts/nodefile .
 ```
@@ -67,7 +67,7 @@ The output files and the trajectory files can be viewed while replica exchange i
 
 Hit `ctrl-C` in the window that runs replica exchange to kill the calculation prematurely. It might take a few seconds for the job to clean up and terminate. The replica exchange job can be restarted by re-issuing the same command as above
 ```
-python $HOME/software/async_re-openmm/abfe_explicit.py temoa-g1_asyncre.cntl
+../scripts/runopenmm $HOME/software/async_re-openmm/abfe_explicit.py temoa-g1_asyncre.cntl
 ```
 it will restart from the last saved checkpoint. In this example checkpoint files are saved every 10 minutes.
 
@@ -87,8 +87,8 @@ Then run the analyze script:
 ```
 It should print something similar to this:
 ```
-DGb = -7.30192 +- 0.2542844 range: 20 118
+DGb = -7.30192 +- 0.2542844 range: 20 38
 ```
-The first number is the estimate of the excess binding free energy in kcal/mol. In this example 20 is the number of initial samples to discard for equilibration. 118 in this case is the number of samples per replica that has been collected. 118 samples with 20 discarded, corresponding to 590 and 100 ps respectively, is way too short for serious production calculations. This is just an example.
+The first number is the estimate of the excess binding free energy in kcal/mol. In this example 20 is the number of initial samples to discard for equilibration. 38 in this case is the number of samples per replica that has been collected. 38 samples with 20 discarded, corresponds in this case to only ~100 ps of data, way too short to obtain a converged value. This is just an example.
 
 The standard binding free energy is obtained by adding the ideal component to the excess component. Again see the [paper](https://pubs.acs.org/doi/10.1021/acs.jctc.1c00266) for details.

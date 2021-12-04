@@ -3,7 +3,7 @@
 #load settings
 work_dir=$(pwd)
 scripts_dir=${work_dir}/scripts
-. setup-settings.sh
+. ${scripts_dir}/setup-settings.sh
 
 cd ${work_dir} || exit 1
 

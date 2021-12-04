@@ -5,12 +5,12 @@ In this tutorial we will calculate the relative binding free energies between fo
 
 ### System preparation
 
-We assume in this tutorial that the examples directory of this repository has been copied under `$HOME/examples` and that the ASyncRE software is available under `$HOME/software/async_re-openmm`. Adjust the pathnames as needed. We are also assuming that OpenMM is launched by running the provided `runopenmm` script (see below) and that the Ambertools executables are in the search path.
+We assume in this tutorial that the examples directory of this repository has been copied under `$HOME/examples` and that the ASyncRE software is available under `$HOME/software/async_re-openmm`. Adjust the pathname to the ASyncRE installation in `setup=settings.sh` as needed. We are also assuming that OpenMM is launched by running the provided `runopenmm` script (see below), that locates the OpenMM libraries under the OPENMM_DIR environment variable, and that the Ambertools executables are in the search path.
 
-Setup the simulation input files. The automated setup script below reads the parameters from the `setup-settings.sh` file. Modify the `work_dir` setting there if the simulation folder is different than the one assumed (`$HOME/examples/RBFE/asyncre`).
+Setup the simulation input files. The automated setup script below reads the parameters from the `setup-settings.sh` file.
 ```
-cd $HOME/examples/RBFE/eralpha/scripts
-bash ./setup-atm.sh
+cd $HOME/examples/RBFE/eralpha
+bash ./scripts/setup-atm.sh
 ```
 The automated script runs `antechamber` and `tleap` from the AmberTools package to prepare the ligands and the receptor and to solvated them in a solution box. `setup-settings.sh` also include the list of ligand pairs and their reference alignment atoms, the ATM displacement vector, and the list of residues of the receptor that define the binding site. The script assumes that the `mol2` files of the ligand are stored in the `ligands` subdirectory and the `pdb` file of the receptor is stored in the `receptor` subdirectory. It is assumed that the `pdb` file of the receptor is prepared for Amber (see the [Amber tutorials](https://ambermd.org/tutorials/)). The ligands are assumed to have been docked into the binding site.
 
@@ -30,9 +30,9 @@ Run replica exchange in each of the simulation folders. For example:
 cd $HOME/examples/RBFE/eralpha/complexes
 for i in eralpha-* ; do ( cd $i ; bash ./run.sh ) ; done
 ```
-The `run.sh` shell scripts are formatted for optionally running them on a `slurm` queuing system. Edit `run_template.sh` in `$HOME/examples/RBFE/asyncre/scripts` to adapt them to your cluster.
+The `run.sh` shell scripts are formatted for optionally running them on a `slurm` queuing system. Edit `run_template.sh` in `$HOME/examples/RBFE/eralpha/scripts` to adapt them to your cluster.
 
-Each replica exchange calculation is set to run for 2 hours on 1 GPU. Much longer running times (24 hours or more) are needed for this system to approach convergence depending on the speed of the GPU. More GPUs can be deployed by editing the `nodefile` or the `run_template.sh` files in `$HOME/examples/RBFE/asyncre/scripts`.
+Each replica exchange calculation is set to run for 2 hours on 1 GPU. Much longer running times (24 hours or more) are needed for this system to approach convergence depending on the speed of the GPU. More GPUs can be deployed by editing the `nodefile` or the `run_template.sh` files in `$HOME/examples/RBFE/eralpha/scripts`.
 
 ### Free Energy Analysis
 

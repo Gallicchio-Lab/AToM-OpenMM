@@ -72,10 +72,10 @@ if inpcrd.boxVectors is not None:
     simulation.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
 
 state = simulation.context.getState(getEnergy = True)
-print("Potential energy before minimization =", simulation.context.getState(getEnergy = True).getPotentialEnergy())
+pote = state.getPotentialEnergy()
 
-print("Running another minimization with user restraints...")
-simulation.minimizeEnergy()
+print( "LoadState ...")
+simulation.loadState(jobname + '_mintherm.xml')
 
 print("Equilibration ...")
 

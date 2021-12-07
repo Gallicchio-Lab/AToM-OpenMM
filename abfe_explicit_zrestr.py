@@ -65,14 +65,14 @@ class OMMSystemAmberABFE_zrestr(OMMSystemAmberABFE):
                 ligoffset = [float(offset) for offset in ligoffset.split(',')]*angstrom
                 offz = ligoffset[2]
             self.vsiterestraintForce = mm.CustomCentroidBondForce(2,"0.5*kf*( step(d)*max(0,d-r0)^2 + step(-d)*max(0,-d-r0)^2 ) ; d = z2 - offz - z1")
-            self.vsiterestrForce.addPerBondParameter("kf")
-            self.vsiterestrForce.addPerBondParameter("r0")
-            self.vsiterestrForce.addPerBondParameter("offz")
-            self.vsiterestrForce.setForceGroup(1)
-            self.vsiterestrForce.addGroup(rcpt_atom_restr)
-            self.vsiterestrForce.addGroup(lig_atom_restr)
-            self.vsiterestrForce.addBond([0,1], [kf, r0, offz ])
-            self.system.addForce(self.vsiterestrForce)
+            self.vsiterestraintForce.addPerBondParameter("kf")
+            self.vsiterestraintForce.addPerBondParameter("r0")
+            self.vsiterestraintForce.addPerBondParameter("offz")
+            self.vsiterestraintForce.setForceGroup(1)
+            self.vsiterestraintForce.addGroup(rcpt_atom_restr)
+            self.vsiterestraintForce.addGroup(lig_atom_restr)
+            self.vsiterestraintForce.addBond([0,1], [kf, r0, offz ])
+            self.system.addForce(self.vsiterestraintForce)
             
             #    atm_utils.addRestraintForce(lig_cm_particles = lig_atom_restr,
             #                            rcpt_cm_particles = rcpt_atom_restr,

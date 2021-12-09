@@ -75,7 +75,7 @@ for l in `seq 0 ${nlig_m1}` ; do
     cd ${work_dir}/ligands || exit 1
     
     if [ ! -f ${lig}-p.mol2 ] ; then
-	charge=$( awk 'BEGIN{charge = 0} ; NF == 9 {charge += $9} ; END {print int(charge)}' < ${lig}.mol2 )
+	charge=$( awk 'BEGIN{charge = 0} ; NF == 9 {charge += $9} ; END {if (charge >= 0) {print int(charge + 0.5)} else {print int(charge - 0.5)}}' < ${lig}.mol2 ) || exit 1
 	echo "charge: $charge"
 	echo "antechamber -pl 15 -fi mol2 -fo mol2 -i ${lig}.mol2 -o ${lig}-p.mol2 -c bcc -nc ${charge} -at gaff2"
 	antechamber -pl 15 -fi mol2 -fo mol2 -i ${lig}.mol2 -o ${lig}-p.mol2 -c bcc -nc ${charge} -at gaff2 || exit 1

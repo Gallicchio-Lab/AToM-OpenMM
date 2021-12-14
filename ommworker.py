@@ -34,6 +34,7 @@ class OMMWorker(object):
         self._startedSignal = self.ctx.Event()
         self._readySignal = self.ctx.Event()
         self._runningSignal = self.ctx.Event()
+        self._errorSignal = self.ctx.Event()
         self._cmdq = self.ctx.Queue()
         self._inq = self.ctx.Queue()
         self._outq = self.ctx.Queue()
@@ -129,7 +130,7 @@ class OMMWorker(object):
 
     # has worker died?
     def has_crashed(self):
-        return not self._p.is_alive()
+        return not self._p.is_alive() or self._errorSignal.is_set()
 
     # starts execution loop of the worker
     def run(self, nsteps, nheating = 0, ncooling = 0, hightemp = 0.0):
@@ -156,13 +157,18 @@ class OMMWorker(object):
         self.boxvectors = self.ommsystem.boxvectors
         
     def _openmm_worker_run(self):
-        if self.nheating > 0:
-            self.integrator.setTemperature(self.hightemp)
-            self.simulation.step(self.nheating)
-            self.simulation.step(self.ncooling)
-            production_temperature = self.par['temperature']
-            self.integrator.setTemperature(production_temperature)
-        self.simulation.step(self.nsteps)
+        try:
+            if self.nheating > 0:
+                self.integrator.setTemperature(self.hightemp)
+                self.simulation.step(self.nheating)
+                self.simulation.step(self.ncooling)
+                production_temperature = self.par['temperature']
+                self.integrator.setTemperature(production_temperature)
+            self.simulation.step(self.nsteps)
+            return 1
+        except:
+            print("MD error")
+            return None
 
     def _openmm_worker_makecontext(self):
         self.platform_properties = {}
@@ -211,6 +217,7 @@ class OMMWorker(object):
         self._startedSignal.clear()
         self._readySignal.clear()
         self._runningSignal.clear()
+        self._errorSignal.clear()
 
         self._openmm_worker_body()
         self._openmm_worker_makecontext()
@@ -243,13 +250,18 @@ class OMMWorker(object):
                 self.ncooling = int(self._inq.get())
                 self.hightemp = float(self._inq.get())
 
-                self._openmm_worker_run()
+                res = self._openmm_worker_run()
 
                 if self.logfile_p is not None:
                     self.logfile_p.flush()
 
                 self._runningSignal.clear()
                 self._readySignal.set()
+
+                if res is None:
+                    self._errorSignal.set()
+                    break
+
             elif command == "GETENERGY":
                 pot = self._worker_getenergy()
             elif command == "GETPOSVEL":
@@ -275,8 +287,8 @@ class OMMWorker(object):
                 while not self.cmdq.empty():
                     self._cmdq.get()
 
-        startedSignal.clear()
-        readySignal.clear()
+        self._startedSignal.clear()
+        self._readySignal.clear()
 
 class OMMWorkerTRE(OMMWorker):
     def _worker_setstate_fromqueue(self):

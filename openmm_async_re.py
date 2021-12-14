@@ -327,12 +327,12 @@ class openmm_job_AmberTRE(openmm_job_TRE):
             self._buildStates()
 
         #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberTRE(self.basename, self.keywords, prmtopfile, crdfile)
-        self.service_worker = OMMWorkerTRE(self.basename, ommsys, self.keywords, compute = False)
+        service_ommsys = OMMSystemAmberTRE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
+        self.service_worker = OMMWorkerTRE(self.basename, ommsys, self.keywords, compute = False, logger = self.logger)
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
-            replica = OMMReplicaTRE(i, self.basename, self.service_worker)
+            replica = OMMReplicaTRE(i, self.basename, self.service_worker, self.logger)
             if replica.stateid == None:
                 replica.set_state(i, self.stateparams[i])#initial setting
             self.openmm_replicas.append(replica)
@@ -345,8 +345,8 @@ class openmm_job_AmberTRE(openmm_job_TRE):
             matches = pattern.search(slot_id)
             platform_id = int(matches.group(1))
             device_id = int(matches.group(2))
-            ommsys = OMMSystemAmberTRE(self.basename, self.keywords, prmtopfile, crdfile)
-            self.openmm_workers.append(OMMWorkerTRE(self.basename, ommsys, self.keywords, self.gpu_platform_name, platform_id, device_id))
+            ommsys = OMMSystemAmberTRE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
+            self.openmm_workers.append(OMMWorkerTRE(self.basename, ommsys, self.keywords, self.gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
     
 class openmm_job_AmberABFE(openmm_job_ATM):
     def __init__(self, command_file, options):
@@ -359,12 +359,12 @@ class openmm_job_AmberABFE(openmm_job_ATM):
             self._buildStates()
         
         #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberABFE(self.basename, self.keywords, prmtopfile, crdfile)
-        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False)
+        service_ommsys = OMMSystemAmberABFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
+        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
-            replica = OMMReplicaATM(i, self.basename, self.service_worker)
+            replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger)
             if replica.stateid == None:
                 replica.set_state(i, self.stateparams[i])#initial setting
             self.openmm_replicas.append(replica)
@@ -377,8 +377,8 @@ class openmm_job_AmberABFE(openmm_job_ATM):
             matches = pattern.search(slot_id)
             platform_id = int(matches.group(1))
             device_id = int(matches.group(2))
-            ommsys = OMMSystemAmberABFE(self.basename, self.keywords, prmtopfile, crdfile) 
-            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, self.gpu_platform_name, platform_id, device_id))
+            ommsys = OMMSystemAmberABFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
+            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, self.gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
 
 class openmm_job_AmberRBFE(openmm_job_ATM):
     def __init__(self, command_file, options):
@@ -391,12 +391,12 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
             self._buildStates()
         
         #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile)
-        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False)
+        service_ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
+        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
-            replica = OMMReplicaATM(i, self.basename, self.service_worker)
+            replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger)
             if replica.stateid == None:
                 replica.set_state(i, self.stateparams[i])#initial setting
             self.openmm_replicas.append(replica)
@@ -409,8 +409,8 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
             matches = pattern.search(slot_id)
             platform_id = int(matches.group(1))
             device_id = int(matches.group(2))
-            ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile) 
-            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, self.gpu_platform_name, platform_id, device_id))
+            ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
+            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, self.gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
 
 
 

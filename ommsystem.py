@@ -18,7 +18,7 @@ from configobj import ConfigObj
 from atmmetaforce import *
 
 class OMMSystem(object):
-    def __init__(self, basename, keywords):
+    def __init__(self, basename, keywords, logger):
         self.system = None
         self.topology = None
         self.positions = None
@@ -26,6 +26,7 @@ class OMMSystem(object):
         self.integrator = None
         self.keywords = keywords
         self.basename = basename
+        self.logger = logger
 
         #parameters stored in the openmm state
         self.parameter = {}
@@ -36,20 +37,20 @@ class OMMSystem(object):
 
         #parameters from the cntl file
         self.cparams = {}
-        
+
         self.frictionCoeff = float(self.keywords.get('FRICTION_COEFF')) / picosecond
         self.MDstepsize = float(self.keywords.get('TIME_STEP')) * picosecond
-        
+
     def _exit(message):
         """Print and flush a message to stdout and then exit."""
-        print(message)
+        self.logger.error(message)
         sys.stdout.flush()
         sys.exit(1)
 
 #Temperature RE
 class OMMSystemAmberTRE(OMMSystem):
-    def __init__(self, basename, keywords, prmtopfile, crdfile):
-        super().__init__(basename, keywords)
+    def __init__(self, basename, keywords, prmtopfile, crdfile, logger):
+        super().__init__(basename, keywords, logger)
         self.prmtopfile = prmtopfile
         self.crdfile = crdfile
         self.parameter['temperature'] = 'RETemperature'
@@ -83,8 +84,8 @@ class OMMSystemAmberTRE(OMMSystem):
         self.integrator = LangevinIntegrator(temperature/kelvin, self.frictionCoeff/(1/picosecond), self.MDstepsize/ picosecond )
 
 class OMMSystemAmberABFE(OMMSystem):
-    def __init__(self, basename, keywords, prmtopfile, crdfile):
-        super().__init__(basename, keywords)
+    def __init__(self, basename, keywords, prmtopfile, crdfile, logger):
+        super().__init__(basename, keywords, logger)
         self.prmtopfile = prmtopfile
         self.crdfile = crdfile
         self.parameter['temperature'] = 'RETemperature'
@@ -213,8 +214,8 @@ class OMMSystemAmberABFE(OMMSystem):
 
         
 class OMMSystemAmberRBFE(OMMSystem):
-    def __init__(self, basename, keywords, prmtopfile, crdfile):
-        super().__init__(basename, keywords)
+    def __init__(self, basename, keywords, prmtopfile, crdfile, logger):
+        super().__init__(basename, keywords, logger)
         self.prmtopfile = prmtopfile
         self.crdfile = crdfile
         self.parameter['temperature'] = 'RETemperature'

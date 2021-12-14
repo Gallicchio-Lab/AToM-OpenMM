@@ -27,7 +27,7 @@ from local_openmm_transport import *
 
 import multiprocessing as mp
 
-__version__ = '0.2.0'
+__version__ = '0.2.2'
 
 
 class async_re(object):
@@ -37,6 +37,8 @@ class async_re(object):
     logging.config.fileConfig(os.path.join(os.path.dirname(__file__), "utils/logging.conf"))
 
     def __init__(self, command_file, options):
+        self._setLogger()
+
         self.command_file = command_file
         if not os.path.exists(self.command_file):
            self._exit('No such file: %s'%self.command_file)
@@ -44,7 +46,6 @@ class async_re(object):
         self.jobname = os.path.splitext(os.path.basename(command_file))[0]
         self.keywords = ConfigObj(self.command_file)
 
-        self._setLogger()
         self._checkInput()
         self._printStatus()
 
@@ -57,9 +58,9 @@ class async_re(object):
     def _exit(self, message):
         """Print and flush a message to stdout and then exit."""
         self._cleanup()
-        print(message)
+        self.logger.info(message)
         sys.stdout.flush()
-        print('Waiting for children to complete ...')
+        self.logger.info('Waiting for children to complete ...')
         while True:
             time.sleep(1)
             if not mp.active_children():

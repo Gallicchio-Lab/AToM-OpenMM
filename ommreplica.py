@@ -13,17 +13,18 @@ from datetime import datetime
 
 from atmmetaforce import *
 from ommworker import *
-      
+
 class OMMReplica(object):
     #
     # Holds and manages OpenMM state for a replica
     #
-    def __init__(self, replica_id, basename, worker):
+    def __init__(self, replica_id, basename, worker, logger):
         self._id = replica_id
         self.basename = basename
         self.worker = worker
         self.context = worker.context
         self.ommsystem = worker.ommsystem
+        self.logger = logger
         self.pot = None
         self.par = None
         self.cycle = 1
@@ -66,12 +67,12 @@ class OMMReplica(object):
         outfilename =  'r%d/%s.out' % (self._id,self.basename)
         self.outfile = open(outfilename, 'a+')
         if self.outfile is None:
-            print("Warning: unable to open outfile ", outfilename)
+            self.logger.warning("unable to open outfile %s" % outfilename)
 
     def load_checkpoint(self):
         ckptfile = 'r%d/%s_ckpt.xml' % (self._id,self.basename)
         if os.path.isfile(ckptfile):
-            print("Loading checkpointfile %s" % ckptfile) 
+            self.logger.info("Loading checkpointfile %s" % ckptfile) 
             self.worker.simulation.loadState(ckptfile)
             self.update_state_from_context()
 
@@ -161,9 +162,9 @@ class OMMReplicaATM(OMMReplica):
                 self.outfile.write("%d %f %f %f %f %f %f %f %f %f\n" % (self.stateid, temperature/kelvin, direction, lmbd1, lmbd2, alpha*kilocalories_per_mole, u0/kilocalories_per_mole, w0/kilocalories_per_mole, pot_energy/kilocalories_per_mole, pert_energy/kilocalories_per_mole))
                 self.outfile.flush()
             else:
-                print("Warning: unable to save output")
+                self.logger.warning("unable to save output")
         else:
-            print("Warning: unable to save output")
+            self.logger.warning("unable to save output")
 
     def update_state_from_context(self):
         self.cycle = int(self.context.getParameter(self.ommsystem.parameter['cycle']))

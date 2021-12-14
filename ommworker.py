@@ -29,7 +29,7 @@ class OMMWorker(object):
     #  _worker_setstate_fromqueue()
     #  _worker_getenergy()
     #  _openmm_worker_body()
-    def __init__(self, basename, ommsystem, keywords, platform_name = None , platform_id = None, device_id = None, compute = True):
+    def __init__(self, basename, ommsystem, keywords, platform_name = None , platform_id = None, device_id = None, compute = True, logger = None):
         self.ctx =  mp.get_context('spawn')
         self._startedSignal = self.ctx.Event()
         self._readySignal = self.ctx.Event()
@@ -45,6 +45,7 @@ class OMMWorker(object):
         self.keywords = keywords
         self.ommsystem = ommsystem
         self.compute = compute
+        self.logger = logger
         self.simulation = None
         self.context = None
         self.atmforce = None
@@ -167,7 +168,7 @@ class OMMWorker(object):
             self.simulation.step(self.nsteps)
             return 1
         except:
-            print("MD error")
+            self.logger.error("MD has crashed")
             return None
 
     def _openmm_worker_makecontext(self):
@@ -180,7 +181,7 @@ class OMMWorker(object):
             elif self.platform_name == "Reference":
                 self.platform = Platform.getPlatformByName(self.platform_name)
             else:
-                print("Unrecognized platform name")
+                self.logger.warning("Unrecognized platform name")
         else:
             self.platform = Platform.getPlatformByName('Reference')
 

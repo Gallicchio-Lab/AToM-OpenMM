@@ -261,7 +261,6 @@ class OMMWorker(object):
 
                 if res is None:
                     self._errorSignal.set()
-                    break
 
             elif command == "GETENERGY":
                 pot = self._worker_getenergy()

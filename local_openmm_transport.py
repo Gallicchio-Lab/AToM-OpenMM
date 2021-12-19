@@ -55,7 +55,7 @@ class LocalOpenMMTransport(Transport):
 
         self.ncrashes = [ 0 for k in range(self.nprocs)]
         self.disabled = [ False for k in range(self.nprocs)]
-        self.maxcrashes = 2
+        self.maxcrashes = 4
 
     def _clear_resource(self, replica):
         # frees up the node running a replica identified by replica id

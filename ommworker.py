@@ -30,14 +30,6 @@ class OMMWorker(object):
     #  _worker_getenergy()
     #  _openmm_worker_body()
     def __init__(self, basename, ommsystem, keywords, platform_name = None , platform_id = None, device_id = None, compute = True, logger = None):
-        self.ctx =  mp.get_context('spawn')
-        self._startedSignal = self.ctx.Event()
-        self._readySignal = self.ctx.Event()
-        self._runningSignal = self.ctx.Event()
-        self._errorSignal = self.ctx.Event()
-        self._cmdq = self.ctx.Queue()
-        self._inq = self.ctx.Queue()
-        self._outq = self.ctx.Queue()
         self.platform_name = platform_name
         self.platformId = platform_id
         self.deviceId = device_id
@@ -46,6 +38,17 @@ class OMMWorker(object):
         self.ommsystem = ommsystem
         self.compute = compute
         self.logger = logger
+        self.start_worker()
+
+    def start_worker(self):
+        self.ctx =  mp.get_context('spawn')
+        self._startedSignal = self.ctx.Event()
+        self._readySignal = self.ctx.Event()
+        self._runningSignal = self.ctx.Event()
+        self._errorSignal = self.ctx.Event()
+        self._cmdq = self.ctx.Queue()
+        self._inq = self.ctx.Queue()
+        self._outq = self.ctx.Queue()
         self.simulation = None
         self.context = None
         self.atmforce = None
@@ -57,7 +60,7 @@ class OMMWorker(object):
         self.logfile_p = None
         self.outfile_p = None
         self.nprnt = int(self.keywords.get('PRNT_FREQUENCY'))
-        if compute:
+        if self.compute:
             #compute workers are launched as subprocesses
             s = signal.signal(signal.SIGINT, signal.SIG_IGN) #so that children do not respond to ctrl-c
             self._p = self.ctx.Process(target=self.openmm_worker)
@@ -65,10 +68,12 @@ class OMMWorker(object):
             signal.signal(signal.SIGINT, s) #restore signal before start() of children
             self._p.start()
             self._readySignal.wait()
+            return self._p
         else:
             #the service worker needs only the context in this process
             self._openmm_worker_body()
             self._openmm_worker_makecontext()
+            return 1
 
     def set_state(self, par):
         self._readySignal.wait()

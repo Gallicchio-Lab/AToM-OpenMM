@@ -5,7 +5,7 @@ In this tutorial we will calculate the absolute binding free energies of the com
 
 ### System preparation
 
-We assume in this tutorial that the examples directory of this repository has been copied under `$HOME/examples` and that the ASyncRE software is available under `$HOME/software/async_re-openmm`. Adjust the pathname to the ASyncRE installation in `setup=settings.sh` as needed. We are also assuming that OpenMM is launched by running the provided `runopenmm` script (see below), that locates the OpenMM libraries under the OPENMM_DIR environment variable, and that the Ambertools executables are in the search path.
+We assume in this tutorial that the examples directory of this repository has been copied under `$HOME/examples` and that the ASyncRE software is available under `$HOME/software/async_re-openmm`. Adjust the pathname to the ASyncRE installation in `setup-settings.sh` as needed. We are also assuming that OpenMM is launched by running the provided `runopenmm` script (see below), that locates the OpenMM libraries under the OPENMM_DIR environment variable, and that the Ambertools executables are in the search path.
 
 Setup the simulation input files. The automated setup script below reads the parameters from the `setup-settings.sh` file.
 ```

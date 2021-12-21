@@ -74,7 +74,7 @@ class LocalOpenMMTransport(Transport):
             nodeid = job['nodeid']
 
         try:
-            if self.node_status[nodeid] > 0: #-1 signals a crashed node that should be left alone
+            if self.node_status[nodeid] is not None and self.node_status[nodeid] > 0: #-1 signals a crashed node that should be left alone
                 self.node_status[nodeid] = None
         except:
             self.logger.warning("clear_resource(): unable to query nodeid %d", nodeid)
@@ -84,29 +84,26 @@ class LocalOpenMMTransport(Transport):
 
     def numNodesAlive(self):
         alive = [node for node in range(self.nprocs)
-                     if self.node_status[node] == None or self.node_status[node] >= 0 ]
+                     if self.node_status[node] is None or self.node_status[node] >= 0 ]
         return len(alive)
 
     def _fixnodes(self):
-        try:
-            for nodeid in range(self.nprocs):
-                if self.node_status[nodeid] < 0 and not self.disabled[nodeid]:
-                    if self.ncrashes[nodeid] <= self.maxcrashes:
-                        self.ncrashes[nodeid] += 1
-                        self.logger.warning("fixnodes(): attempting to restart nodeid %d", nodeid)
-                        res = self.openmm_workers[nodeid].start_worker()
-                        if res is not None:
-                            self.node_status[nodeid] = None
-                    else:
-                        self.logger.warning("fixnodes(): node %d has crashed too many times; it will not be restarted.", nodeid)
-                        self.disabled[nodeid] = True
-        except:
-            self.logger.warning("fixnodes(): unable to query nodes")
+        for nodeid in range(self.nprocs):
+            if self.node_status[nodeid] is not None and self.node_status[nodeid] < 0 and not self.disabled[nodeid]:
+                if self.ncrashes[nodeid] <= self.maxcrashes:
+                    self.ncrashes[nodeid] += 1
+                    self.logger.warning("fixnodes(): attempting to restart nodeid %d", nodeid)
+                    res = self.openmm_workers[nodeid].start_worker()
+                    if res is not None:
+                        self.node_status[nodeid] = None
+                else:
+                    self.logger.warning("fixnodes(): node %d has crashed too many times; it will not be restarted.", nodeid)
+                    self.disabled[nodeid] = True
 
     def _availableNode(self):
         #returns a node at random among available nodes
         available = [node for node in range(self.nprocs)
-                     if self.node_status[node] == None]
+                     if self.node_status[node] is None]
 
         if available == None or len(available) == 0:
             return None

@@ -74,7 +74,7 @@ class LocalOpenMMTransport(Transport):
             nodeid = job['nodeid']
 
         try:
-            if self.node_status[nodeid] is not None and self.node_status[nodeid] > 0: #-1 signals a crashed node that should be left alone
+            if self.node_status[nodeid] is not None and self.node_status[nodeid] >= 0: #-1 signals a crashed node that should be left alone
                 self.node_status[nodeid] = None
         except:
             self.logger.warning("clear_resource(): unable to query nodeid %d", nodeid)

@@ -67,13 +67,16 @@ atm_utils.addRestraintForce(lig_cm_particles = lig2_cm_atoms,
                             offset = lig2_restr_offset)
 
 #alignment restraint
+kfdispl = 2.5 * kilocalorie_per_mole/angstrom**2
+ktheta = 10.0 * kilocalorie_per_mole
+kpsi   = 10.0 * kilocalorie_per_mole
 lig1_ref_atoms  = [ refatoms_lig1[i]+lig1_atoms[0] for i in range(3)]
 lig2_ref_atoms  = [ refatoms_lig2[i]+lig2_atoms[0] for i in range(3)]
 atm_utils.addAlignmentForce(liga_ref_particles = lig1_ref_atoms,
                             ligb_ref_particles = lig2_ref_atoms,
-                            kfdispl =  2.5 * kilocalorie_per_mole/angstrom**2,
+                            kfdispl = 2.5 * kilocalorie_per_mole/angstrom**2,
                             ktheta =  10.0 * kilocalorie_per_mole,
-                            kpsi =    10.0 * kilocalorie_per_mole,
+                            kpsi =  10.0 * kilocalorie_per_mole,
                             offset = lig2_restr_offset)
 
 #restrain all heavy atoms of receptor and ligands to equilibrate only the solvent

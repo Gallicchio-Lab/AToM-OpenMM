@@ -114,20 +114,21 @@ class OMMSystemAmberABFE(OMMSystem):
         else:
             msg = "Error: LIGAND_ATOMS is required"
             self._exit(msg)
-
-
-        #CM-CM Vsite restraints
+        
         cm_lig_atoms = self.keywords.get('LIGAND_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
         if cm_lig_atoms is not None:
             lig_atom_restr = [int(i) for i in cm_lig_atoms]
         else:
             lig_atom_restr = None
+
         cm_rcpt_atoms = self.keywords.get('RCPT_CM_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
         if cm_rcpt_atoms is not None:
             rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
         else:
             rcpt_atom_restr = None
+
         cmrestraints_present = (cm_rcpt_atoms is not None) and (cm_lig_atoms is not None)
+
         self.vsiterestraintForce = None
         if cmrestraints_present:
             cmkf = float(self.keywords.get('CM_KF'))
@@ -142,45 +143,6 @@ class OMMSystemAmberABFE(OMMSystem):
                                                                    kfcm = kf,
                                                                    tolcm = r0,
                                                                    offset = ligoffset)
-
-        #orientational VSite restraints
-        #the indexes of the groups of atoms that define the internal reference frame of the ligand
-        lig_frame_groups = None
-        lig_frame_groups_inp = self.keywords.get('LIGAND_VSITE_FRAMEGROUPS')
-        if lig_frame_groups_inp is not None:
-            lig_frame_groups = []
-            for i in range(3):
-                lig_frame_groups.append([int(j) for j in lig_frame_groups_inp[str(i)]])
-        #the indexes of the groups of atoms that define the internal reference frame of the receptor
-        rcpt_frame_groups = None
-        rcpt_frame_groups_inp = self.keywords.get('RCPT_VSITE_FRAMEGROUPS')
-        if rcpt_frame_groups_inp is not None:
-            rcpt_frame_groups = []
-            for i in range(3):
-                rcpt_frame_groups.append([int(j) for j in rcpt_frame_groups_inp[str(i)]])
-        if (lig_frame_groups is not None) and (rcpt_frame_groups is not None):
-             kftheta = self.keywords.get('VSITE_KFTHETA')
-             theta0 = self.keywords.get('VSITE_THETA0')
-             thetatol = self.keywords.get('VSITE_THETATOL')
-             kfphi = self.keywords.get('VSITE_KFPHI')
-             phi0 = self.keywords.get('VSITE_PHI0')
-             phitol = self.keywords.get('VSITE_PHITOL')
-             kfpsi = self.keywords.get('VSITE_KFPSI')
-             psi0 = self.keywords.get('VSITE_PSI0')
-             psitol = self.keywords.get('VSITE_PSITOL')
-             kftheta = kftheta if kftheta is None else float(kftheta)*kilocalories_per_mole
-             theta0 = theta0 if theta0 is None else float(theta0)*degrees
-             thetatol = thetatol if thetatol is None else float(thetatol)*degrees
-             kfphi = kfphi if kfphi is None else float(kfphi)*(kilocalories_per_mole/degrees**2)
-             phi0 = phi0 if phi0 is None else float(phi0)*degrees
-             phitol = phitol if phitol is None else float(phitol)*degrees
-             kfpsi = kfpsi if kfpsi is None else float(kfpsi)*(kilocalories_per_mole/degrees**2)
-             psi0 = psi0 if psi0 is None else float(psi0)*degrees
-             psitol = psitol if psitol is None else float(psitol)*degrees
-             atm_utils.addVsiteRestraintForceCMAngles(lig_frame_groups, rcpt_frame_groups, 
-                                                      kftheta, theta0, thetatol,
-                                                      kfphi, phi0, phitol,
-                                                      kfpsi, psi0, psitol)
 
         #indexes of the atoms whose position is restrained near the initial positions
         #by a flat-bottom harmonic potential. 
@@ -340,58 +302,7 @@ class OMMSystemAmberRBFE(OMMSystem):
                                         kfcm = kf,
                                         tolcm = r0,
                                         offset = self.lig2offset)
-
-        #orientational VSite restraints
-        #the indexes of the groups of atoms that define the internal reference frame of the ligand
-        lig1_frame_groups = None
-        lig1_frame_groups_inp = self.keywords.get('LIGAND1_VSITE_FRAMEGROUPS')
-        if lig1_frame_groups_inp is not None:
-            lig1_frame_groups = []
-            for i in range(3):
-                lig1_frame_groups.append([int(j) for j in lig1_frame_groups_inp[str(i)]])
-        lig2_frame_groups = None
-        lig2_frame_groups_inp = self.keywords.get('LIGAND2_VSITE_FRAMEGROUPS')
-        if lig2_frame_groups_inp is not None:
-            lig2_frame_groups = []
-            for i in range(3):
-                lig2_frame_groups.append([int(j) for j in lig2_frame_groups_inp[str(i)]])
-        #the indexes of the groups of atoms that define the internal reference frame of the receptor
-        rcpt_frame_groups = None
-        rcpt_frame_groups_inp = self.keywords.get('RCPT_VSITE_FRAMEGROUPS')
-        if rcpt_frame_groups_inp is not None:
-            rcpt_frame_groups = []
-            for i in range(3):
-                rcpt_frame_groups.append([int(j) for j in rcpt_frame_groups_inp[str(i)]])
-        if rcpt_frame_groups is not None:
-            kftheta = self.keywords.get('VSITE_KFTHETA')
-            theta0 = self.keywords.get('VSITE_THETA0')
-            thetatol = self.keywords.get('VSITE_THETATOL')
-            kfphi = self.keywords.get('VSITE_KFPHI')
-            phi0 = self.keywords.get('VSITE_PHI0')
-            phitol = self.keywords.get('VSITE_PHITOL')
-            kfpsi = self.keywords.get('VSITE_KFPSI')
-            psi0 = self.keywords.get('VSITE_PSI0')
-            psitol = self.keywords.get('VSITE_PSITOL')
-            kftheta = kftheta if kftheta is None else float(kftheta)*kilocalories_per_mole
-            theta0 = theta0 if theta0 is None else float(theta0)*degrees
-            thetatol = thetatol if thetatol is None else float(thetatol)*degrees
-            kfphi = kfphi if kfphi is None else float(kfphi)*(kilocalories_per_mole/degrees**2)
-            phi0 = phi0 if phi0 is None else float(phi0)*degrees
-            phitol = phitol if phitol is None else float(phitol)*degrees
-            kfpsi = kfpsi if kfpsi is None else float(kfpsi)*(kilocalories_per_mole/degrees**2)
-            psi0 = psi0 if psi0 is None else float(psi0)*degrees
-            psitol = psitol if psitol is None else float(psitol)*degrees
-            if lig1_frame_groups is not None:
-                atm_utils.addVsiteRestraintForceCMAngles(lig1_frame_groups, rcpt_frame_groups,
-                                                         kftheta, theta0, thetatol,
-                                                         kfphi, phi0, phitol,
-                                                         kfpsi, psi0, psitol)
-            if lig2_frame_groups is not None:
-                atm_utils.addVsiteRestraintForceCMAngles(lig2_frame_groups, rcpt_frame_groups,
-                                                         kftheta, theta0, thetatol,
-                                                         kfphi, phi0, phitol,
-                                                         kfpsi, psi0, psitol)
-
+        
         #reference atoms for alignment force
         refatoms1_cntl = self.keywords.get('ALIGN_LIGAND1_REF_ATOMS')
         self.refatoms1 = [int(refatoms1) for refatoms1 in refatoms1_cntl]

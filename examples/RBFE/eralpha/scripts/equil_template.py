@@ -69,9 +69,6 @@ atm_utils.addRestraintForce(lig_cm_particles = lig2_cm_atoms,
 
 
 #alignment restraint
-kfdispl = 2.5 * kilocalorie_per_mole/angstrom**2
-ktheta = 10.0 * kilocalorie_per_mole
-kpsi   = 10.0 * kilocalorie_per_mole
 lig1_ref_atoms  = [ refatoms_lig1[i]+lig1_atoms[0] for i in range(3)]
 lig2_ref_atoms  = [ refatoms_lig2[i]+lig2_atoms[0] for i in range(3)]
 atm_utils.addAlignmentForce(liga_ref_particles = lig1_ref_atoms,

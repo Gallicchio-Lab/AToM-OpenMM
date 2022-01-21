@@ -363,15 +363,15 @@ class OMMSystemAmberRBFE(OMMSystem):
             for i in range(3):
                 rcpt_frame_groups.append([int(j) for j in rcpt_frame_groups_inp[str(i)]])
         if rcpt_frame_groups is not None:
-            kftheta = self.keywords.get('VSITE_KFTHETA')
-            theta0 = self.keywords.get('VSITE_THETA0')
-            thetatol = self.keywords.get('VSITE_THETATOL')
-            kfphi = self.keywords.get('VSITE_KFPHI')
-            phi0 = self.keywords.get('VSITE_PHI0')
-            phitol = self.keywords.get('VSITE_PHITOL')
-            kfpsi = self.keywords.get('VSITE_KFPSI')
-            psi0 = self.keywords.get('VSITE_PSI0')
-            psitol = self.keywords.get('VSITE_PSITOL')
+            kftheta = self.keywords.get('VSITE_KFTHETA_LIG1')
+            theta0 = self.keywords.get('VSITE_THETA0_LIG1')
+            thetatol = self.keywords.get('VSITE_THETATOL_LIG1')
+            kfphi = self.keywords.get('VSITE_KFPHI_LIG1')
+            phi0 = self.keywords.get('VSITE_PHI0_LIG1')
+            phitol = self.keywords.get('VSITE_PHITOL_LIG1')
+            kfpsi = self.keywords.get('VSITE_KFPSI_LIG1')
+            psi0 = self.keywords.get('VSITE_PSI0_LIG1')
+            psitol = self.keywords.get('VSITE_PSITOL_LIG1')
             kftheta = kftheta if kftheta is None else float(kftheta)*kilocalories_per_mole
             theta0 = theta0 if theta0 is None else float(theta0)*degrees
             thetatol = thetatol if thetatol is None else float(thetatol)*degrees
@@ -386,6 +386,24 @@ class OMMSystemAmberRBFE(OMMSystem):
                                                          kftheta, theta0, thetatol,
                                                          kfphi, phi0, phitol,
                                                          kfpsi, psi0, psitol)
+            kftheta = self.keywords.get('VSITE_KFTHETA_LIG2')
+            theta0 = self.keywords.get('VSITE_THETA0_LIG2')
+            thetatol = self.keywords.get('VSITE_THETATOL_LIG2')
+            kfphi = self.keywords.get('VSITE_KFPHI_LIG2')
+            phi0 = self.keywords.get('VSITE_PHI0_LIG2')
+            phitol = self.keywords.get('VSITE_PHITOL_LIG2')
+            kfpsi = self.keywords.get('VSITE_KFPSI_LIG2')
+            psi0 = self.keywords.get('VSITE_PSI0_LIG2')
+            psitol = self.keywords.get('VSITE_PSITOL_LIG2')
+            kftheta = kftheta if kftheta is None else float(kftheta)*kilocalories_per_mole
+            theta0 = theta0 if theta0 is None else float(theta0)*degrees
+            thetatol = thetatol if thetatol is None else float(thetatol)*degrees
+            kfphi = kfphi if kfphi is None else float(kfphi)*(kilocalories_per_mole/degrees**2)
+            phi0 = phi0 if phi0 is None else float(phi0)*degrees
+            phitol = phitol if phitol is None else float(phitol)*degrees
+            kfpsi = kfpsi if kfpsi is None else float(kfpsi)*(kilocalories_per_mole/degrees**2)
+            psi0 = psi0 if psi0 is None else float(psi0)*degrees
+            psitol = psitol if psitol is None else float(psitol)*degrees
             if lig2_frame_groups is not None:
                 atm_utils.addVsiteRestraintForceCMAngles(lig2_frame_groups, rcpt_frame_groups,
                                                          kftheta, theta0, thetatol,

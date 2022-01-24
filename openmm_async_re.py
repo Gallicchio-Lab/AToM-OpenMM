@@ -89,11 +89,13 @@ class openmm_job(async_re):
     def _update_state_of_replica_addcustom(self, replica):
         pass
 
-    def _hasCompleted(self,replica,cycle):
+    def _hasCompleted(self,repl,cycle):
         """
         Returns true if an OpenMM replica has successfully completed a cycle.
         """
-        #safeguards are off for local transport
+        pot = self._getPot(repl)
+        if pot is None:
+            return False
         return True
 
     def _getPar(self, repl):

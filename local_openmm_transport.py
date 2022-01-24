@@ -198,25 +198,27 @@ class LocalOpenMMTransport(Transport):
         #update replica cycle, mdsteps, write out, etc. from worker
         ommreplica = job['openmm_replica']
         if job['openmm_worker'].has_crashed(): #refuses to update replica from a crashed worker
-            return
+            return None
+        (pos,vel) = job['openmm_worker'].get_posvel()
+        pot = job['openmm_worker'].get_energy()
+        if pos is None or vel is None or pot is None:
+            return None
         cycle = ommreplica.get_cycle() + 1
         ommreplica.set_cycle(cycle)
         mdsteps = ommreplica.get_mdsteps() + job['nsteps']
         ommreplica.set_mdsteps(mdsteps)
         #update positions and velocities of openmm replica
-        (pos,vel) = job['openmm_worker'].get_posvel()
         ommreplica.set_posvel(pos,vel)
 
-        #should also update boxsize
-
+        #TODO: should also update boxsize
         #update energies of openmm replica
-        pot = job['openmm_worker'].get_energy()
         ommreplica.set_energy(pot)
         #output data and trajectory file update 
         if mdsteps % job['nprnt'] == 0:
             ommreplica.save_out()
         if mdsteps % job['ntrj'] == 0:
             ommreplica.save_dcd()
+        return 0
 
     def isDone(self,replica,cycle):
         """
@@ -252,10 +254,13 @@ class LocalOpenMMTransport(Transport):
                 done = not openmm_worker.is_running()
 
             if done:
+                #update replica info
+                retcode = self._update_replica(job)
+                if retcode is None:
+                    self.logger.warning("isDone(): replica %d has completed with errors", replica)
+                    self.node_status[job['nodeid']] = -1 #signals dead context
                 # disconnects replica from job and node
                 self._clear_resource(replica)
-                #update replica info
-                self._update_replica(job)
                 #flag replica as not linked to a job
                 self.replica_to_job[replica] = None
 

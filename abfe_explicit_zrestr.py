@@ -8,7 +8,7 @@ import logging
 import signal
 import shutil
 import random
-import blah
+
 from simtk import openmm as mm
 from simtk.openmm.app import *
 from simtk.openmm import *

@@ -8,7 +8,7 @@ import logging
 import signal
 import shutil
 import random
-
+import blah
 from simtk import openmm as mm
 from simtk.openmm.app import *
 from simtk.openmm import *
@@ -31,13 +31,44 @@ class OMMSystemAmberABFE_zrestr(OMMSystemAmberABFE):
         
         atm_utils = ATMMetaForceUtils(self.system)
 
+        #select all ligand atoms based on python syntax as string from the command file
+        
+        lig_atoms_selection = self.keywords.get('LIGAND_ATOMS')
+        if lig_atoms_selection is not None:
+            lig_atom_str = "[" + lig_atoms_selection + "]"
+            exec("self.lig_atoms = " + lig_atoms_str)
+        else:
+            msg = "Error: LIGAND_ATOMS is required"
+            self._exit(msg)
+            
+
+        #add receptor and ligand atom indexes for centroid calculation using string based python syntaxes from the command file
+        
+        cm_lig_atoms_selection = self.keywords.get('LIGAND_CM_ATOMS')   #python syntax as string for selecting specific receptor atoms
+        if cm_lig_atoms_selection is not None:
+            cm_lig_atom_str = "[" + cm_lig_atoms_selection + "]"
+            exec("lig_atoms_restr = " + cm_lig_atoms_str)
+        else:
+            lig_atom_restr = None
+
+        cm_rcpt_atoms_selection = self.keywords.get('RCPT_CM_ATOMS')   #python syntax as string for selecting specific ligand atoms
+        if cm_rcpt_atoms_selection is not None:
+            cm_rcpt_atom_str = "[" + cm_rcpt_atoms_selection + "]"
+            exec("rcpt_atoms_restr = " + cm_rcpt_atoms_str)
+        else:
+            rcpt_atom_restr = None
+
+        cmrestraints_present = (cm_rcpt_atoms_selection is not None) and (cm_lig_atoms_selection is not None)
+
+        """
+
         lig_atoms_in = self.keywords.get('LIGAND_ATOMS')   #indexes of ligand atoms
         if lig_atoms_in is not None:
             self.lig_atoms = [int(i) for i in lig_atoms_in]
         else:
             msg = "Error: LIGAND_ATOMS is required"
             self._exit(msg)
-        
+
         cm_lig_atoms = self.keywords.get('LIGAND_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
         if cm_lig_atoms is not None:
             lig_atom_restr = [int(i) for i in cm_lig_atoms]
@@ -52,6 +83,7 @@ class OMMSystemAmberABFE_zrestr(OMMSystemAmberABFE):
 
         cmrestraints_present = (cm_rcpt_atoms is not None) and (cm_lig_atoms is not None)
 
+        """
         self.vsiterestraintForce = None
         if cmrestraints_present:
             print("Adding z-restraints")

@@ -28,6 +28,11 @@ class OMMSystemAmberABFE_zrestr(OMMSystemAmberABFE):
         self.topology = self.prmtop.topology
         self.positions = self.inpcrd.positions
         self.boxvectors = self.inpcrd.boxVectors
+
+        prmtop = self.prmtop
+        impcrd = self.inpcrd
+        topology = self.topology
+        positions = self.positions
         
         atm_utils = ATMMetaForceUtils(self.system)
 
@@ -35,8 +40,9 @@ class OMMSystemAmberABFE_zrestr(OMMSystemAmberABFE):
         
         lig_atoms_selection = self.keywords.get('LIGAND_ATOMS')
         if lig_atoms_selection is not None:
-            lig_atom_str = "[" + lig_atoms_selection + "]"
-            exec("self.lig_atoms = " + lig_atoms_str)
+            lig_atom_str = "[{0}]".format(lig_atoms_selection)
+            self.lig_atoms = eval(lig_atom_str)
+            #print(self.lig_atoms)
         else:
             msg = "Error: LIGAND_ATOMS is required"
             self._exit(msg)
@@ -46,21 +52,27 @@ class OMMSystemAmberABFE_zrestr(OMMSystemAmberABFE):
         
         cm_lig_atoms_selection = self.keywords.get('LIGAND_CM_ATOMS')   #python syntax as string for selecting specific receptor atoms
         if cm_lig_atoms_selection is not None:
-            cm_lig_atom_str = "[" + cm_lig_atoms_selection + "]"
-            exec("lig_atoms_restr = " + cm_lig_atoms_str)
+            #cm_lig_atom_str ="lig_atom_restr = [{0}]".format(cm_lig_atoms_selection)
+            cm_lig_atom_str ="[{0}]".format(cm_lig_atoms_selection)
+            #print(cm_lig_atom_str)
+            lig_atom_restr = eval(cm_lig_atom_str)
+            print(lig_atom_restr)
         else:
             lig_atom_restr = None
 
         cm_rcpt_atoms_selection = self.keywords.get('RCPT_CM_ATOMS')   #python syntax as string for selecting specific ligand atoms
         if cm_rcpt_atoms_selection is not None:
-            cm_rcpt_atom_str = "[" + cm_rcpt_atoms_selection + "]"
-            exec("rcpt_atoms_restr = " + cm_rcpt_atoms_str)
+            cm_rcpt_atom_str = "[{0}]".format(cm_rcpt_atoms_selection)
+            #print(cm_rcpt_atom_str)
+            rcpt_atom_restr = eval(cm_rcpt_atom_str)
+            print(rcpt_atom_restr)
         else:
             rcpt_atom_restr = None
 
         cmrestraints_present = (cm_rcpt_atoms_selection is not None) and (cm_lig_atoms_selection is not None)
 
         """
+        # set receptor and ligand atom indexes from raw index input
 
         lig_atoms_in = self.keywords.get('LIGAND_ATOMS')   #indexes of ligand atoms
         if lig_atoms_in is not None:
@@ -191,12 +203,12 @@ class openmm_job_AmberABFE_zrestr(openmm_job_ATM):
             self._buildStates()
         
         #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberABFE_zrestr(self.basename, self.keywords, prmtopfile, crdfile)
+        service_ommsys = OMMSystemAmberABFE_zrestr(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
         self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False)
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
-            replica = OMMReplicaATM(i, self.basename, self.service_worker)
+            replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger)
             if replica.stateid == None:
                 replica.set_state(i, self.stateparams[i])#initial setting
             self.openmm_replicas.append(replica)
@@ -209,7 +221,7 @@ class openmm_job_AmberABFE_zrestr(openmm_job_ATM):
             matches = pattern.search(slot_id)
             platform_id = int(matches.group(1))
             device_id = int(matches.group(2))
-            ommsys = OMMSystemAmberABFE_zrestr(self.basename, self.keywords, prmtopfile, crdfile)
+            ommsys = OMMSystemAmberABFE_zrestr(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
             self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, self.gpu_platform_name, platform_id, device_id))
 
 

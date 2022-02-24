@@ -93,8 +93,11 @@ class openmm_job(async_re):
         """
         Returns true if an OpenMM replica has successfully completed a cycle.
         """
-        pot = self._getPot(repl)
-        if pot is None:
+        try:
+            pot = self._getPot(repl)
+            if pot is None:
+                return False
+        except:
             return False
         return True
 

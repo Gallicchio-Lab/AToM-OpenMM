@@ -183,6 +183,9 @@ class OMMWorker(object):
                 self.platform = Platform.getPlatformByName(self.platform_name)
                 self.platform_properties["OpenCLPlatformIndex"] = str(self.platformId)
                 self.platform_properties["DeviceIndex"] = str(self.deviceId)
+            elif self.platform_name == "CUDA":
+                self.platform = Platform.getPlatformByName(self.platform_name)
+                self.platform_properties["DeviceIndex"] = str(self.deviceId)
             elif self.platform_name == "Reference":
                 self.platform = Platform.getPlatformByName(self.platform_name)
             else:

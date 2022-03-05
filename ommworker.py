@@ -227,6 +227,11 @@ class OMMWorker(object):
             self.simulation.reporters.append(StateDataReporter(self.logfile_p, self.nprnt, step=True, temperature=True))
 
     def openmm_worker(self):
+        try:
+            import setproctitle
+            setproctitle.setproctitle("AToM worker")
+        except:
+            pass
         
         self._startedSignal.clear()
         self._readySignal.clear()

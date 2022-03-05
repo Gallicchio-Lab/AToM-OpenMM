@@ -37,6 +37,12 @@ class async_re(object):
     logging.config.fileConfig(os.path.join(os.path.dirname(__file__), "utils/logging.conf"))
 
     def __init__(self, command_file, options):
+        try:
+            import setproctitle
+            setproctitle.setproctitle("AToM %s" % command_file)
+        except:
+            pass
+
         self._setLogger()
 
         self.command_file = command_file

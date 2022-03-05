@@ -43,9 +43,16 @@ class openmm_job(async_re):
         nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
         nprnt = int(self.keywords.get('PRNT_FREQUENCY'))
         ntrj = int(self.keywords.get('TRJ_FREQUENCY'))
+        #print(nsteps, nprnt, ntrj)
+        """
         if not nprnt % nsteps == 0:
             self._exit("nprnt must be an integer multiple of nsteps.")
         if not ntrj % nsteps == 0:
+            self._exit("ntrj must be an integer multiple of nsteps.")
+        """
+        if nsteps % nprnt != 0:
+            self._exit("nprnt must be an integer multiple of nsteps.")
+        if nsteps % ntrj != 0:
             self._exit("ntrj must be an integer multiple of nsteps.")
 
         job_info = {

@@ -183,18 +183,20 @@ class OMMWorker(object):
                 self.platform = Platform.getPlatformByName(self.platform_name)
                 self.platform_properties["OpenCLPlatformIndex"] = str(self.platformId)
                 self.platform_properties["DeviceIndex"] = str(self.deviceId)
-                self.logger.info("Using OpenCL OpenMM platform")
+                self.platform_properties["Precision"] = "mixed"
+                self.logger.info("Worker using OpenCL OpenMM platform")
             elif self.platform_name == "CUDA":
                 self.platform = Platform.getPlatformByName(self.platform_name)
                 self.platform_properties["DeviceIndex"] = str(self.deviceId)
-                self.logger.info("Using CUDA OpenMM platform")
+                self.platform_properties["Precision"] = "mixed"
+                self.logger.info("Worker using CUDA OpenMM platform")
             elif self.platform_name == "Reference":
                 self.platform = Platform.getPlatformByName(self.platform_name)
             else:
                 self.logger.warning("Unrecognized platform name")
         else:
             self.platform = Platform.getPlatformByName('Reference')
-            self.logger.info("Using Reference OpenMM platform")
+            self.logger.info("Worker using Reference OpenMM platform")
 
         self.simulation = Simulation(self.topology, self.system, self.integrator, self.platform, self.platform_properties)
         self.context = self.simulation.context

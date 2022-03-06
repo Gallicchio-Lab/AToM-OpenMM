@@ -60,8 +60,8 @@ class OMMSystemAmberTRE(OMMSystem):
 
         self.prmtop = AmberPrmtopFile(self.prmtopfile)
         self.inpcrd = AmberInpcrdFile(self.crdfile)
-        self.system = self.prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=1*nanometer,
-                                          constraints=HBonds)
+        self.system = self.prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=0.9*nanometer,
+                                               constraints=HBonds, hydrogenMass = 1.5*amu)
         self.topology = self.prmtop.topology
         self.positions = self.inpcrd.positions
 
@@ -81,7 +81,8 @@ class OMMSystemAmberTRE(OMMSystem):
         sforce.setForceGroup(1)
         self.system.addForce(sforce)
         
-        self.integrator = LangevinIntegrator(temperature/kelvin, self.frictionCoeff/(1/picosecond), self.MDstepsize/ picosecond )
+        self.integrator = LangevinMiddleIntegrator(temperature/kelvin, self.frictionCoeff/(1/picosecond), self.MDstepsize/ picosecond )
+        self.integrator.setConstraintTolerance(0.00001)
 
 class OMMSystemAmberABFE(OMMSystem):
     def __init__(self, basename, keywords, prmtopfile, crdfile, logger):

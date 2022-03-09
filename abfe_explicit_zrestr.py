@@ -8,7 +8,7 @@ import logging
 import signal
 import shutil
 import random
-
+import re
 from simtk import openmm as mm
 from simtk.openmm.app import *
 from simtk.openmm import *
@@ -26,29 +26,39 @@ class OMMSystemAmberABFE_zrestr(OMMSystemAmberABFE):
         #to set the indexes for the receptor and ligand CM atoms
         
         #add receptor and ligand atom indexes for centroid calculation using string based python syntaxes from the command file
-        
-        cm_lig_atoms_selection = self.keywords.get('LIGAND_CM_ATOMS')   #python syntax as string for selecting specific receptor atoms
-        if cm_lig_atoms_selection is not None:
-            cm_lig_atoms_selection = cm_lig_atoms_selection.replace("prmtop.topology.atoms", "self.prmtop.topology.atoms")
-            #cm_lig_atom_str ="lig_atom_restr = [{0}]".format(cm_lig_atoms_selection)
-            cm_lig_atom_str ="[{0}]".format(cm_lig_atoms_selection)
-            #print(cm_lig_atom_str)
-            lig_atom_restr = eval(cm_lig_atom_str)
-            print(lig_atom_restr)
+
+        alpha_regex = "[A-Za-z()]+" #contains letters and chracters
+        index_regex = "^[0-9]+," #starts with a number and a comma
+        syntax_str = re.compile(alpha_regex)
+        index_str = re.compile(index_regex)
+
+        cm_lig_atoms = self.keywords.get('LIGAND_CM_ATOMS')   #python syntax as string for selecting specific receptor atoms
+        if cm_lig_atoms is not None:
+            if re.search(index_str, cm_lig_atoms):
+                lig_atom_restr = [int(i) for i in cm_lig_atoms]
+            elif re.search(syntax_str, cm_lig_atoms):
+                cm_lig_atoms = cm_lig_atoms.replace("prmtop.topology.atoms", "self.prmtop.topology.atoms")
+                cm_lig_atom_str ="[{0}]".format(cm_lig_atoms_selection)
+                #print(cm_lig_atom_str)
+                lig_atom_restr = eval(cm_lig_atom_str)
+                print(lig_atom_restr)
         else:
             lig_atom_restr = None
 
-        cm_rcpt_atoms_selection = self.keywords.get('RCPT_CM_ATOMS')   #python syntax as string for selecting specific ligand atoms
-        if cm_rcpt_atoms_selection is not None:
-            cm_rcpt_atoms_selection = cm_rcpt_atoms_selection.replace("prmtop.topology.atoms", "self.prmtop.topology.atoms")
-            cm_rcpt_atom_str = "[{0}]".format(cm_rcpt_atoms_selection)
-            #print(cm_rcpt_atom_str)
-            rcpt_atom_restr = eval(cm_rcpt_atom_str)
-            print(rcpt_atom_restr)
+        cm_rcpt_atoms = self.keywords.get('RCPT_CM_ATOMS')   #python syntax as string for selecting specific ligand atoms
+        if cm_rcpt_atoms is not None:
+            if re.search(index_str, cm_rcpt_atoms):
+                rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
+            elif re.search(syntax_str, cm_rcpt_atoms):
+                cm_rcpt_atoms = cm_rcpt_atoms.replace("prmtop.topology.atoms", "self.prmtop.topology.atoms")
+                cm_rcpt_atom_str = "[{0}]".format(cm_rcpt_atoms_selection)
+                #print(cm_rcpt_atom_str)
+                rcpt_atom_restr = eval(cm_rcpt_atom_str)
+                print(rcpt_atom_restr)
         else:
             rcpt_atom_restr = None
 
-        cmrestraints_present = (cm_rcpt_atoms_selection is not None) and (cm_lig_atoms_selection is not None)
+        cmrestraints_present = (cm_rcpt_atoms is not None) and (cm_lig_atoms is not None)
 
         self.vsiterestraintForce = None
         if cmrestraints_present:

@@ -24,7 +24,6 @@ class openmm_job(async_re):
         self.openmm_replicas = None
         self.stateparams = None
         self.openmm_workers = None
-        self.gpu_platform_name = 'OpenCL' #default for now
         self.kb = 0.0019872041*kilocalories_per_mole/kelvin
         
     def _setLogger(self):
@@ -357,8 +356,9 @@ class openmm_job_AmberTRE(openmm_job_TRE):
             matches = pattern.search(slot_id)
             platform_id = int(matches.group(1))
             device_id = int(matches.group(2))
+            gpu_platform_name = node["arch"]
             ommsys = OMMSystemAmberTRE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
-            self.openmm_workers.append(OMMWorkerTRE(self.basename, ommsys, self.keywords, self.gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
+            self.openmm_workers.append(OMMWorkerTRE(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
     
 class openmm_job_AmberABFE(openmm_job_ATM):
     def __init__(self, command_file, options):
@@ -389,8 +389,9 @@ class openmm_job_AmberABFE(openmm_job_ATM):
             matches = pattern.search(slot_id)
             platform_id = int(matches.group(1))
             device_id = int(matches.group(2))
+            gpu_platform_name = node["arch"]
             ommsys = OMMSystemAmberABFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
-            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, self.gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
+            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
 
 class openmm_job_AmberRBFE(openmm_job_ATM):
     def __init__(self, command_file, options):
@@ -421,8 +422,9 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
             matches = pattern.search(slot_id)
             platform_id = int(matches.group(1))
             device_id = int(matches.group(2))
+            gpu_platform_name = node["arch"]
             ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
-            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, self.gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
+            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
 
 
 

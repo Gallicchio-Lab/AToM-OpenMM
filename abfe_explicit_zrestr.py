@@ -97,8 +97,7 @@ class OMMSystemAmberABFE_zrestr(OMMSystemAmberABFE):
         else:
             msg = "Error: LIGAND_ATOMS is required"
             self._exit(msg)
-    
-    
+
 class openmm_job_AmberABFE_zrestr(openmm_job_ATM):
     def __init__(self, command_file, options):
         super().__init__(command_file, options)
@@ -128,8 +127,9 @@ class openmm_job_AmberABFE_zrestr(openmm_job_ATM):
             matches = pattern.search(slot_id)
             platform_id = int(matches.group(1))
             device_id = int(matches.group(2))
+            gpu_platform_name = node["arch"]
             ommsys = OMMSystemAmberABFE_zrestr(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
-            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, self.gpu_platform_name, platform_id, device_id))
+            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id))
 
 
 if __name__ == '__main__':

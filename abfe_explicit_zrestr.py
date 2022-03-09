@@ -181,10 +181,12 @@ class OMMSystemAmberABFE_zrestr(OMMSystemAmberABFE):
             sforce.addGlobalParameter(self.parameter[name], 0)
         sforce.setForceGroup(1)
         self.system.addForce(sforce)
-        
-        #temperature = int(self.keywords.get('TEMPERATURES')) * kelvin
-        self.integrator = LangevinIntegrator(temperature/kelvin, self.frictionCoeff/(1/picosecond), self.MDstepsize/ picosecond )
-        self.integrator.setIntegrationForceGroups({1,3})
+
+        #the ATM force is evaluated once per timestep, the bonded forces are evaluated twice per timestep
+        bonded_frequency = int(round(self.MDstepsize/(0.001*picosecond)))
+        self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (self.MDstepsize/femtosecond, bonded_frequency))
+        self.integrator = ATMMTSLangevinIntegrator(temperature, self.frictionCoeff, self.MDstepsize, [(1,bonded_frequency), (3,1)] )
+        self.integrator.setConstraintTolerance(0.00001)
 
         #these are the global parameters specified in the cntl files that need to be reset
         #by the worker after reading the first configuration

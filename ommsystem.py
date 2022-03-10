@@ -100,8 +100,7 @@ class OMMSystemAmber(OMMSystem):
         nonbonded.setForceGroup(1)
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
-        self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (self.MDstepsize/femtosecond, bonded_frequency))
-
+        self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
         self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(1,1), (0, bonded_frequency)])
         self.integrator.setConstraintTolerance(0.00001)
 
@@ -223,7 +222,7 @@ class OMMSystemAmberABFE(OMMSystemAmber):
     def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
-        self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (self.MDstepsize/femtosecond, bonded_frequency))
+        self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
         self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(1,bonded_frequency), (3,1)] )
         self.integrator.setConstraintTolerance(0.00001)
 
@@ -294,7 +293,7 @@ class OMMSystemAmberABFE(OMMSystemAmber):
         self.cparams["ATMUbcore"] = ubcore/kilojoules_per_mole
         self.cparams["ATMAcore"] = acore
 
-        
+
 class OMMSystemAmberRBFE(OMMSystemAmber):
     def __init__(self, basename, keywords, prmtopfile, crdfile, logger):
         super().__init__(basename, keywords, prmtopfile, crdfile, logger)
@@ -481,7 +480,14 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
             fc = float(self.keywords.get('POSRE_FORCE_CONSTANT')) * kilocalorie_per_mole
             tol = float(self.keywords.get('POSRE_TOLERANCE')) * angstrom
             self.posrestrForce = self.atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
-        
+
+    def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
+        #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
+        bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
+        self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
+        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(1,bonded_frequency), (3,1)] )
+        self.integrator.setConstraintTolerance(0.00001)
+
     def create_system(self):
 
         self.load_amber_system()

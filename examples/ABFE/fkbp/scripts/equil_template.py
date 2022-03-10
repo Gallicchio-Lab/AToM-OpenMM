@@ -25,7 +25,7 @@ restrained_atoms = [<RESTRAINEDATOMS>]
 #load system
 prmtop = AmberPrmtopFile(jobname + '.prmtop')
 inpcrd = AmberInpcrdFile(jobname + '.inpcrd')
-system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=1*nanometer,
+system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=0.9*nanometer,
                              constraints=HBonds)
 
 #load the ATM Meta Force facility. Among other things the initializer
@@ -58,12 +58,14 @@ MDstepsize = 0.001 * picosecond
 barostat = MonteCarloBarostat(1*bar, temperature)
 barostat.setFrequency(0)#disabled
 system.addForce(barostat)
-integrator = LangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond)
+integrator = MTSLangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, [(1,1), (2,1)])
+integrator.setConstraintTolerance(0.00001)
 
-#sets up platform
-platform_name = 'OpenCL'
+#platform_name = 'OpenCL'
+platform_name = 'CUDA'
 platform = Platform.getPlatformByName(platform_name)
 properties = {}
+properties["Precision"] = "mixed"
 
 simulation = Simulation(prmtop.topology, system, integrator,platform, properties)
 print ("Using platform %s" % simulation.context.getPlatform().getName())

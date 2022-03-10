@@ -22,7 +22,7 @@ lig_resid = 2
 
 prmtop = AmberPrmtopFile(jobname + '.prmtop')
 inpcrd = AmberInpcrdFile(jobname + '.inpcrd')
-system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=1*nanometer,
+system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=0.9*nanometer,
                              constraints=HBonds)
 atm_utils = ATMMetaForceUtils(system)
 
@@ -46,12 +46,14 @@ system.addForce(barostat)
 #set up integrator
 frictionCoeff = 0.5 / picosecond
 MDstepsize = 0.001 * picosecond
-integrator = LangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond)
+integrator = MTSLangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, [(1,1), (2,1)])
+integrator.setConstraintTolerance(0.00001)
 
-platform_name = 'OpenCL'
+#platform_name = 'OpenCL'
+platform_name = 'CUDA'
 platform = Platform.getPlatformByName(platform_name)
-
 properties = {}
+properties["Precision"] = "mixed"
 
 simulation = Simulation(prmtop.topology, system, integrator,platform, properties)
 print ("Using platform %s" % simulation.context.getPlatform().getName())

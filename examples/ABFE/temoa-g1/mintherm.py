@@ -10,6 +10,11 @@ from datetime import datetime
 
 from atmmetaforce import *
 
+#the multiple-time step integrator does not have a setTemperature() method
+def setTemperature(self, temperature):
+    self.setGlobalVariableByName('kT', MOLAR_GAS_CONSTANT_R*temperature)
+MTSLangevinIntegrator.setTemperature = setTemperature
+
 print("Started at: " + str(time.asctime()))
 start=datetime.now()
 
@@ -20,7 +25,7 @@ lig_resid = 2
 
 prmtop = AmberPrmtopFile(jobname + '.prmtop')
 inpcrd = AmberInpcrdFile(jobname + '.inpcrd')
-system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=1*nanometer,
+system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=0.9*nanometer,
                              constraints=HBonds)
 atm_utils = ATMMetaForceUtils(system)
 
@@ -43,16 +48,16 @@ final_temperature = 300 * kelvin
 temperature = initial_temperature
 frictionCoeff = 0.5 / picosecond
 MDstepsize = 0.001 * picosecond
-    
-integrator = LangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond)
+integrator = MTSLangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, [(1,1), (2,1)])
+integrator.setConstraintTolerance(0.00001)
 
-platform_name = 'OpenCL'
+#platform_name = 'OpenCL'
+platform_name = 'CUDA'
 platform = Platform.getPlatformByName(platform_name)
-
 properties = {}
+properties["Precision"] = "mixed"
 
 simulation = Simulation(prmtop.topology, system, integrator,platform, properties)
-
 print ("Using platform %s" % simulation.context.getPlatform().getName())
 simulation.context.setPositions(inpcrd.positions)
 if inpcrd.boxVectors is not None:

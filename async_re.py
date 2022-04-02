@@ -435,8 +435,7 @@ class async_re(object):
         exchange_start_time = time.time()
 
         # Matrix of replica energies in each state.
-        # The computeSwapMatrix() function is defined by application
-        # classes (Amber/US, Impact/BEDAM, etc.)
+        # The computeSwapMatrix() function is defined by application classes
         matrix_start_time = time.time()
         swap_matrix = self._computeSwapMatrix(replicas_to_exchange,
                                               states_to_exchange)

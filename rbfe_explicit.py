@@ -29,9 +29,9 @@ if __name__ == '__main__':
     commandFile = sys.argv[1]
 
     print("")
-    print("====================================")
-    print("BEDAM Asynchronous Replica Exchange ")
-    print("====================================")
+    print("========================================")
+    print("AToM RBFE Asynchronous Replica Exchange ")
+    print("========================================")
     print("")
     print("Started at: " + str(time.asctime()))
     print("Input file:", commandFile)

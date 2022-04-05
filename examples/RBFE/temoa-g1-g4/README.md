@@ -21,20 +21,22 @@ cd $HOME/RBFE/temoa-g1-g4
 
 ### Replica Exchange Production
 
-```
+
 Copy the `nodefile` from the scripts directory
 ```
-cp ../scripts/nodefile .
+cp $HOME/examples/RBFE/scripts/nodefile .
 ```
-This `nodefile` assumes one GPU on the system (on the OpenCL platform 0 with device id 0). It looks like:
+This `nodefile` assumes one GPU on the system. It looks like:
 ```
-localhost,0:0,1,OpenCL,,/tmp
+localhost,0:0,1,CUDA,,/tmp
 ```
-The critical bit is the `0:0` item in the format `<OpenCL platform id>:<device id>'. The other items are in the nodefile specification are for future use and are ignored. You can add more GPUs if you have them. For example, create this nodefile to use two GPUs with device ids 0, and 1:
+The critical bit is the `0:0` item in the format `<Platform id>:<device id>`. The other items are in the nodefile specification are for future use and are ignored. You can add more GPUs if you have them. For example, create this nodefile to use two GPUs with device ids 0, and 1:
 ```
-localhost,0:0,1,OpenCL,,/tmp
-localhost,0:1,1,OpenCL,,/tmp
+localhost,0:0,1,CUDA,,/tmp
+localhost,0:1,1,CUDA,,/tmp
 ```
+
+To use the OpenCL platform, replace `CUDA` with `OpenCL` in the nodefile, in which case the first number in the device specification should be set to the index of the OpenCL platform corresponding to the GPUs on the system (probably 0). With CUDA, the platform id specification is ignored.
 
 Now run replica exchange
 ```

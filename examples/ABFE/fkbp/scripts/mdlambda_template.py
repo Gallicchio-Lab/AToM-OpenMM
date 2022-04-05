@@ -37,7 +37,7 @@ direction = 1.0
 
 prmtop = AmberPrmtopFile(jobname + '.prmtop')
 inpcrd = AmberInpcrdFile(jobname + '.inpcrd')
-system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=1*nanometer,
+system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=0.9*nanometer,
                              constraints=HBonds)
 atm_utils = ATMMetaForceUtils(system)
 
@@ -79,14 +79,17 @@ system.addForce(barostat)
 temperature = 300 * kelvin
 frictionCoeff = 0.5 / picosecond
 MDstepsize = 0.001 * picosecond
+#MD is conducted using forces from groups 1 and 3 only. Group 1 are bonded forces that are calculated once.
+#Group 3 contains the ATMMetaForce that computes the non-bonded forces before and after the ligand is displaced and
+#it then combines them according to the alchemical potential.
+integrator = MTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(3,1), (1,1)])
+integrator.setConstraintTolerance(0.00001)
 
-integrator = LangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond)
-integrator.setIntegrationForceGroups({1,3})
-
-platform_name = 'OpenCL'
+#platform_name = 'OpenCL'
+platform_name = 'CUDA'
 platform = Platform.getPlatformByName(platform_name)
-
 properties = {}
+properties["Precision"] = "mixed"
 
 simulation = Simulation(prmtop.topology, system, integrator,platform, properties)
 print ("Using platform %s" % simulation.context.getPlatform().getName())

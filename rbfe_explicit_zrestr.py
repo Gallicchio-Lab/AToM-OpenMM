@@ -106,7 +106,7 @@ class OMMSystemAmberRBFE_zrestr(OMMSystemAmberRBFE):
             msg = "Error: LIGAND2_ATOMS is required"
             self._exit(msg)
 
-class openmm_job_AmberRBFE(openmm_job_ATM):
+class openmm_job_AmberRBFE_zrestr(openmm_job_ATM):
     def __init__(self, command_file, options):
         super().__init__(command_file, options)
 
@@ -117,7 +117,7 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
             self._buildStates()
         
         #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
+        service_ommsys = OMMSystemAmberRBFE_zrestr(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
         self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
         #creates openmm replica objects
         self.openmm_replicas = []
@@ -135,7 +135,7 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
             matches = pattern.search(slot_id)
             platform_id = int(matches.group(1))
             device_id = int(matches.group(2))
-            ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
+            ommsys = OMMSystemAmberRBFE_zrestr(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
             self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, self.gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
 
         
@@ -160,7 +160,7 @@ if __name__ == '__main__':
     print("")
     sys.stdout.flush()
 
-    rx = openmm_job_AmberRBFE(commandFile, options=None)
+    rx = openmm_job_AmberRBFE_zrestr(commandFile, options=None)
 
     rx.setupJob()
 

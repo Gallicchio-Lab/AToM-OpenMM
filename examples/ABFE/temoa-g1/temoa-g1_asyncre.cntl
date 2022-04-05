@@ -77,7 +77,7 @@ UBCORE = 100.0
 FRICTION_COEFF = 0.500000
 
 #MD time step in ps
-TIME_STEP = 0.001
+TIME_STEP = 0.002
 
 #set to 'yes' to turn on verbose logging
 VERBOSE = 'no'

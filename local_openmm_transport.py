@@ -203,6 +203,15 @@ class LocalOpenMMTransport(Transport):
         pot = job['openmm_worker'].get_energy()
         if pos is None or vel is None or pot is None:
             return None
+        for value in pot.values():
+            if math.isnan(value._value):
+                return None
+        for p in pos:
+            if math.isnan(p.x) or math.isnan(p.y) or math.isnan(p.z):
+                return None
+        for v in vel:
+            if math.isnan(v.x) or math.isnan(v.y) or math.isnan(v.z):
+                return None
         cycle = ommreplica.get_cycle() + 1
         ommreplica.set_cycle(cycle)
         mdsteps = ommreplica.get_mdsteps() + job['nsteps']

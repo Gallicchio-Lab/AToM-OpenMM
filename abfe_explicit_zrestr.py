@@ -38,7 +38,7 @@ class OMMSystemAmberABFE_zrestr(OMMSystemAmberABFE):
                 lig_atom_restr = [int(i) for i in cm_lig_atoms]
             elif re.search(syntax_str, cm_lig_atoms):
                 cm_lig_atoms = cm_lig_atoms.replace("prmtop.topology.atoms", "self.prmtop.topology.atoms")
-                cm_lig_atom_str ="[{0}]".format(cm_lig_atoms_selection)
+                cm_lig_atom_str ="[{0}]".format(cm_lig_atoms)
                 #print(cm_lig_atom_str)
                 lig_atom_restr = eval(cm_lig_atom_str)
                 print(lig_atom_restr)
@@ -51,7 +51,7 @@ class OMMSystemAmberABFE_zrestr(OMMSystemAmberABFE):
                 rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
             elif re.search(syntax_str, cm_rcpt_atoms):
                 cm_rcpt_atoms = cm_rcpt_atoms.replace("prmtop.topology.atoms", "self.prmtop.topology.atoms")
-                cm_rcpt_atom_str = "[{0}]".format(cm_rcpt_atoms_selection)
+                cm_rcpt_atom_str = "[{0}]".format(cm_rcpt_atoms)
                 #print(cm_rcpt_atom_str)
                 rcpt_atom_restr = eval(cm_rcpt_atom_str)
                 print(rcpt_atom_restr)
@@ -110,7 +110,7 @@ class openmm_job_AmberABFE_zrestr(openmm_job_ATM):
         
         #builds service worker for replicas use
         service_ommsys = OMMSystemAmberABFE_zrestr(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
-        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False)
+        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False, logger=self.logger)
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
@@ -129,7 +129,7 @@ class openmm_job_AmberABFE_zrestr(openmm_job_ATM):
             device_id = int(matches.group(2))
             gpu_platform_name = node["arch"]
             ommsys = OMMSystemAmberABFE_zrestr(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
-            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id))
+            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id, compute=True, logger=self.logger))
 
 
 if __name__ == '__main__':

@@ -16,6 +16,8 @@ from simtk.unit import *
 from datetime import datetime
 
 from openmm_async_re import openmm_job_AmberRBFE
+from openmm_async_re import *
+from ommsystem import *
 
 class OMMSystemAmberRBFE_zrestr(OMMSystemAmberRBFE):
 
@@ -135,8 +137,9 @@ class openmm_job_AmberRBFE_zrestr(openmm_job_ATM):
             matches = pattern.search(slot_id)
             platform_id = int(matches.group(1))
             device_id = int(matches.group(2))
+            gpu_platform_name = node["arch"]
             ommsys = OMMSystemAmberRBFE_zrestr(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
-            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, self.gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
+            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
 
         
 if __name__ == '__main__':

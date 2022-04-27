@@ -290,21 +290,21 @@ class OMMSystemAmberRBFE(OMMSystem):
             self._exit(msg)
         
         #ligand 1 Vsite restraint
-        cm_lig1_atoms = self.keywords.get('REST_LIGAND1_CMLIG_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
+        cm_lig1_atoms = self.keywords.get('LIGAND1_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
         if cm_lig1_atoms is not None:
             lig1_atom_restr = [int(i) for i in cm_lig1_atoms]
         else:
             lig1_atom_restr = None
         
         #ligand 2 Vsite restraint
-        cm_lig2_atoms = self.keywords.get('REST_LIGAND2_CMLIG_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
+        cm_lig2_atoms = self.keywords.get('LIGAND2_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
         if cm_lig2_atoms is not None:
             lig2_atom_restr = [int(i) for i in cm_lig2_atoms]
         else:
             lig2_atom_restr = None
         
         #Vsite restraint receptor atoms
-        cm_rcpt_atoms = self.keywords.get('REST_LIGAND_CMREC_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
+        cm_rcpt_atoms = self.keywords.get('RCPT_CM_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
         if cm_rcpt_atoms is not None:
             rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
         else:
@@ -328,7 +328,7 @@ class OMMSystemAmberRBFE(OMMSystem):
             kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
             cmtol = float(self.keywords.get('CM_TOL'))
             r0 = cmtol * angstrom #radius of Vsite sphere            
-            
+
             #Vsite restraints for ligands 1 and 2
             self.vsiterestraintForce1 = atm_utils.addRestraintForce(lig_cm_particles = lig1_atom_restr,
                                         rcpt_cm_particles = rcpt_atom_restr,

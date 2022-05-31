@@ -46,6 +46,9 @@ class OMMSystem(object):
         self.frictionCoeff = float(self.keywords.get('FRICTION_COEFF')) / picosecond
         self.MDstepsize = float(self.keywords.get('TIME_STEP')) * picosecond
 
+        self.atmforcegroup = 2
+        self.nonbondedforcegroup = 1
+
     def _exit(message):
         """Print and flush a message to stdout and then exit."""
         self.logger.error(message)
@@ -82,7 +85,7 @@ class OMMSystemAmber(OMMSystem):
     def set_barostat(self,temperature,pressure,frequency):
         """
         sets the system Barostat; Currently applies the MonteCarlo Barostat
-        
+
         Requires: self,
         temperature
         pressure : eg. 1*bar
@@ -90,14 +93,13 @@ class OMMSystemAmber(OMMSystem):
 
         """
         barostat = MonteCarloBarostat(pressure, temperature)
-        barostat.setForceGroup(1)
         barostat.setFrequency(frequency)#disabled
         self.system.addForce(barostat)
 
     def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
         #place non-bonded force in group 1, assume all other bonded forces are in group 0
         nonbonded = [f for f in self.system.getForces() if isinstance(f, NonbondedForce)][0]
-        nonbonded.setForceGroup(1)
+        nonbonded.setForceGroup(self.nonbondedforcegroup)
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
         self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
@@ -117,7 +119,6 @@ class OMMSystemAmberTRE(OMMSystemAmber):
         sforce = mm.CustomBondForce("1")
         for name in self.parameter:
             sforce.addGlobalParameter(self.parameter[name], 0)
-        sforce.setForceGroup(1)
         self.system.addForce(sforce)
 
         self.set_integrator(temperature, self.frictionCoeff, self.MDstepsize)
@@ -125,7 +126,7 @@ class OMMSystemAmberTRE(OMMSystemAmber):
 class OMMSystemAmberABFE(OMMSystemAmber):
     def __init__(self, basename, keywords, prmtopfile, crdfile, logger):
         super().__init__(basename, keywords, prmtopfile, crdfile, logger)
-        
+
         self.parameter['perturbation_energy'] = 'REPertEnergy'
         self.parameter['atmintermediate'] = 'REAlchemicalIntermediate'
         self.atmforce = None
@@ -223,32 +224,18 @@ class OMMSystemAmberABFE(OMMSystemAmber):
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
         self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
-        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(1,bonded_frequency), (3,1)] )
+        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(0,bonded_frequency), (self.atmforcegroup, 1)] )
         self.integrator.setConstraintTolerance(0.00001)
 
-    def create_system(self):
-        self.load_amber_system()
-        
-        self.atm_utils = ATMMetaForceUtils(self.system)
-        
-        self.set_ligand_atoms()
-        
-        self.set_vsite_restraints()
-
-        self.set_orientation_restraints()
-       
-        self.set_positional_restraints()
-        
-            
+    def set_atmforce(self):
         #these define the state and will be overriden in set_state()
-        temperature = 300 * kelvin
         lmbd = 0.0
         lambda1 = lmbd
         lambda2 = lmbd
         alpha = 0.0 / kilocalorie_per_mole
         u0 = 0.0 * kilocalorie_per_mole
         w0coeff = 0.0 * kilocalorie_per_mole
-        alchemical_direction = 1.0
+        direction = 1.0
 
         #soft-core parameters are fixed (the same in all states)
         umsc = float(self.keywords.get('UMAX')) * kilocalorie_per_mole
@@ -264,40 +251,58 @@ class OMMSystemAmberABFE(OMMSystemAmber):
         else:
             msg = "Error: DISPLACEMENT is required"
             self._exit(msg)
-        
+
         #create ATM Force
-        self.atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, alchemical_direction)
+        atmvariableforcegroups = [self.nonbondedforcegroup]
+        self.atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, direction, )
 
         for i in range(self.topology.getNumAtoms()):
             self.atmforce.addParticle(i, 0., 0., 0.)
         for i in self.lig_atoms:
             self.atmforce.setParticleParameters(i, i, self.displ[0], self.displ[1], self.displ[2] )
-        self.atmforce.setForceGroup(3)
+        self.atmforce.setForceGroup(self.atmforcegroup)
         self.system.addForce(self.atmforce)
-        
-        #add barostat
-        self.set_barostat(temperature,1*bar,0)
-        
-        #hack to store ASyncRE quantities in the openmm State
-        sforce = mm.CustomBondForce("1")
-        for name in self.parameter:
-            sforce.addGlobalParameter(self.parameter[name], 0)
-        sforce.setForceGroup(1)
-        self.system.addForce(sforce)
-        
-        self.set_integrator(temperature, self.frictionCoeff, self.MDstepsize)
-
         #these are the global parameters specified in the cntl files that need to be reset
         #by the worker after reading the first configuration
         self.cparams["ATMUmax"] = umsc/kilojoules_per_mole
         self.cparams["ATMUbcore"] = ubcore/kilojoules_per_mole
         self.cparams["ATMAcore"] = acore
 
+    def create_system(self):
+        self.load_amber_system()
+
+        self.atm_utils = ATMMetaForceUtils(self.system)
+
+        self.set_ligand_atoms()
+
+        self.set_vsite_restraints()
+
+        self.set_orientation_restraints()
+
+        self.set_positional_restraints()
+
+        self.set_atmforce()
+
+        #temperature is part of the state and is maybe overriden in set_state()
+        temperature = 300 * kelvin
+
+        #add barostat
+        pressure=1*bar
+        self.set_barostat(temperature,pressure,0)
+
+        #hack to store ASyncRE quantities in the openmm State
+        sforce = mm.CustomBondForce("1")
+        for name in self.parameter:
+            sforce.addGlobalParameter(self.parameter[name], 0)
+        self.system.addForce(sforce)
+
+        self.set_integrator(temperature, self.frictionCoeff, self.MDstepsize)
+
 
 class OMMSystemAmberRBFE(OMMSystemAmber):
     def __init__(self, basename, keywords, prmtopfile, crdfile, logger):
         super().__init__(basename, keywords, prmtopfile, crdfile, logger)
-        
+
         self.parameter['perturbation_energy'] = 'REPertEnergy'
         self.parameter['atmintermediate'] = 'REAlchemicalIntermediate'
         self.atmforce = None
@@ -312,7 +317,7 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
             self.lig1_atoms = [int(i) for i in lig1_atoms_in]
         else:
             msg = "Error: LIGAND1_ATOMS is required"
-            self._exit(msg)        
+            self._exit(msg)
         if lig2_atoms_in is not None:
             self.lig2_atoms = [int(i) for i in lig2_atoms_in ]
         else:
@@ -332,22 +337,18 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
     def set_vsite_restraints(self):
         #ligand 1 Vsite restraint
         cm_lig1_atoms = self.keywords.get('LIGAND1_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
-        if cm_lig1_atoms is None:
-            self.keywords.get('REST_LIGAND1_CMLIG_ATOMS')
         if cm_lig1_atoms is not None:
             lig1_atom_restr = [int(i) for i in cm_lig1_atoms]
         else:
             lig1_atom_restr = None
-        
+
         #ligand 2 Vsite restraint
         cm_lig2_atoms = self.keywords.get('LIGAND2_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
-        if cm_lig2_atoms is None:
-            self.keywords.get('REST_LIGAND2_CMLIG_ATOMS')
         if cm_lig2_atoms is not None:
             lig2_atom_restr = [int(i) for i in cm_lig2_atoms]
         else:
             lig2_atom_restr = None
-        
+
         #Vsite restraint receptor atoms
         cm_rcpt_atoms = self.keywords.get('RCPT_CM_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
         if cm_rcpt_atoms is None:
@@ -356,7 +357,7 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
             rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
         else:
             rcpt_atom_restr = None
-            
+
         cmrestraints_present = (rcpt_atom_restr is not None) and (lig1_atom_restr is not None) and (lig2_atom_restr is not None)
 
         self.vsiterestraintForce1 = None
@@ -365,8 +366,8 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
             cmkf = float(self.keywords.get('CM_KF'))
             kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
             cmtol = float(self.keywords.get('CM_TOL'))
-            r0 = cmtol * angstrom #radius of Vsite sphere            
-            
+            r0 = cmtol * angstrom #radius of Vsite sphere
+
             #Vsite restraints for ligands 1 and 2
             self.vsiterestraintForce1 = self.atm_utils.addRestraintForce(lig_cm_particles = lig1_atom_restr,
                                         rcpt_cm_particles = rcpt_atom_restr,
@@ -457,11 +458,11 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
         refatoms1_cntl = self.keywords.get('ALIGN_LIGAND1_REF_ATOMS')
         self.refatoms1 = [int(refatoms1) for refatoms1 in refatoms1_cntl]
         lig1_ref_atoms  = [ self.refatoms1[i]+self.lig1_atoms[0] for i in range(3)]
-        
+
         refatoms2_cntl = self.keywords.get('ALIGN_LIGAND2_REF_ATOMS')
         self.refatoms2 = [int(refatoms2) for refatoms2 in refatoms2_cntl]
         lig2_ref_atoms  = [ self.refatoms2[i]+self.lig2_atoms[0] for i in range(3)]
-        
+
         #add alignment force
         self.atm_utils.addAlignmentForce(liga_ref_particles = lig1_ref_atoms,
                                     ligb_ref_particles = lig2_ref_atoms,
@@ -489,32 +490,10 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
         self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
-        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(1,bonded_frequency), (3,1)] )
+        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(0,bonded_frequency), (self.atmforcegroup,1)] )
         self.integrator.setConstraintTolerance(0.00001)
 
-    def create_system(self):
-
-        self.load_amber_system()
-
-        self.atm_utils = ATMMetaForceUtils(self.system)
-
-        self.set_ligand_atoms()
-
-        self.set_displacement()
-        
-        self.set_vsite_restraints()
-
-        #set orientation restraints
-        self.set_orientation_restraints()
-        
-        #set reference atoms for alignment force
-        self.set_alignmentForce()
-        
-        #indexes of the atoms whose position is restrained near the initial positions
-        #by a flat-bottom harmonic potential.
-        self.set_positional_restraints()
-        
-            
+    def set_atmforce(self):
         #these define the state and will be overriden in set_state()
         temperature = 300 * kelvin
         lmbd = 0.0
@@ -523,6 +502,7 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
         alpha = 0.0 / kilocalorie_per_mole
         u0 = 0.0 * kilocalorie_per_mole
         w0coeff = 0.0 * kilocalorie_per_mole
+        direction = 1.0
 
         #soft-core parameters are fixed (the same in all states)
         umsc = float(self.keywords.get('UMAX')) * kilocalorie_per_mole
@@ -534,7 +514,8 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
         acore = float(self.keywords.get('ACORE'))
 
         #create ATM Force
-        self.atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore)
+        atmvariableforcegroups = [self.nonbondedforcegroup]
+        self.atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, direction, atmvariableforcegroups)
 
         for i in range(self.topology.getNumAtoms()):
             self.atmforce.addParticle(i, 0., 0., 0.)
@@ -543,24 +524,50 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
         for i in self.lig2_atoms:
             self.atmforce.setParticleParameters(i, i, -self.displ[0], -self.displ[1], -self.displ[2] )
 
-        self.atmforce.setForceGroup(3)
+        self.atmforce.setForceGroup(self.atmforcegroup)
         self.system.addForce(self.atmforce)
+
+        #these are the global parameters specified in the cntl files that need to be reset after reading the first configuration
+        self.cparams["ATMUmax"] = umsc/kilojoules_per_mole
+        self.cparams["ATMUbcore"] = ubcore/kilojoules_per_mole
+        self.cparams["ATMAcore"] = acore
+
+    def create_system(self):
+
+        self.load_amber_system()
+
+        self.atm_utils = ATMMetaForceUtils(self.system)
+
+        self.set_ligand_atoms()
+
+        self.set_displacement()
+
+        self.set_vsite_restraints()
+
+        #set orientation restraints
+        self.set_orientation_restraints()
+
+        #set reference atoms for alignment force
+        self.set_alignmentForce()
+
+        #indexes of the atoms whose position is restrained near the initial positions
+        #by a flat-bottom harmonic potential.
+        self.set_positional_restraints()
+
+        self.set_atmforce()
+
+        #temperature is part of the state and is maybe overriden in set_state()
+        temperature = 300 * kelvin
 
         #add barostat
         pressure=1*bar
         self.set_barostat(temperature,pressure,0)
-        
+
         #hack to store ASyncRE quantities in the openmm State
         sforce = mm.CustomBondForce("1")
         for name in self.parameter:
             sforce.addGlobalParameter(self.parameter[name], 0)
-        sforce.setForceGroup(1)
         self.system.addForce(sforce)
 
         self.set_integrator(temperature, self.frictionCoeff, self.MDstepsize)
 
-        #these are the global parameters specified in the cntl files that need to be reset after reading the first
-        #configuration
-        self.cparams["ATMUmax"] = umsc/kilojoules_per_mole
-        self.cparams["ATMUbcore"] = ubcore/kilojoules_per_mole
-        self.cparams["ATMAcore"] = acore

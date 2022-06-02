@@ -4,6 +4,7 @@ from __future__ import division
 Collects all of the ways that openmm systems are loaded
 """
 import os, re, sys, time, shutil, copy, random, signal
+import numpy as np
 import multiprocessing as mp
 #from multiprocessing import Process, Queue, Event
 import logging
@@ -21,6 +22,11 @@ from atmmetaforce import *
 class ATMMTSLangevinIntegrator(MTSLangevinIntegrator):
     def setTemperature(self, temperature):
         self.setGlobalVariableByName('kT', MOLAR_GAS_CONSTANT_R*temperature)
+
+##adds a method to retrieve the group of the metaD force
+def getMetaDForceGroup(self):
+    return self._force.getForceGroup()
+Metadynamics.getForceGroup = getMetaDForceGroup
 
 class OMMSystem(object):
     def __init__(self, basename, keywords, logger):
@@ -224,7 +230,7 @@ class OMMSystemAmberABFE(OMMSystemAmber):
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
         self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
-        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(0,bonded_frequency), (self.atmforcegroup, 1)] )
+        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.atmforcegroup,1)] )
         self.integrator.setConstraintTolerance(0.00001)
 
     def set_atmforce(self):
@@ -253,8 +259,9 @@ class OMMSystemAmberABFE(OMMSystemAmber):
             self._exit(msg)
 
         #create ATM Force
+        self.atm_utils.setNonbondedForceGroup(self.nonbondedforcegroup)
         atmvariableforcegroups = [self.nonbondedforcegroup]
-        self.atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, direction, )
+        self.atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, direction, atmvariableforcegroups )
 
         for i in range(self.topology.getNumAtoms()):
             self.atmforce.addParticle(i, 0., 0., 0.)
@@ -305,6 +312,7 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
 
         self.parameter['perturbation_energy'] = 'REPertEnergy'
         self.parameter['atmintermediate'] = 'REAlchemicalIntermediate'
+        self.parameter['bias_energy'] = 'BiasEnergy'
         self.atmforce = None
         self.lig1_atoms = None
         self.lig2_atoms = None
@@ -490,7 +498,7 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
         self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
-        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(0,bonded_frequency), (self.atmforcegroup,1)] )
+        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.atmforcegroup,1)] )
         self.integrator.setConstraintTolerance(0.00001)
 
     def set_atmforce(self):
@@ -514,6 +522,7 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
         acore = float(self.keywords.get('ACORE'))
 
         #create ATM Force
+        self.atm_utils.setNonbondedForceGroup(self.nonbondedforcegroup)
         atmvariableforcegroups = [self.nonbondedforcegroup]
         self.atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, direction, atmvariableforcegroups)
 
@@ -535,39 +544,50 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
     def create_system(self):
 
         self.load_amber_system()
-
         self.atm_utils = ATMMetaForceUtils(self.system)
-
         self.set_ligand_atoms()
-
         self.set_displacement()
-
         self.set_vsite_restraints()
-
         #set orientation restraints
         self.set_orientation_restraints()
-
         #set reference atoms for alignment force
         self.set_alignmentForce()
-
         #indexes of the atoms whose position is restrained near the initial positions
         #by a flat-bottom harmonic potential.
         self.set_positional_restraints()
-
-        self.set_atmforce()
-
         #temperature is part of the state and is maybe overriden in set_state()
         temperature = 300 * kelvin
+
+        #metaD force
+        torsion = [239, 247, 245, 246]
+        gaussian_nfac = 36. # how many gaussians to cover 2pi
+        gaussian_width = (2.*np.pi/gaussian_nfac) * radians
+        angle_min = -np.pi * radians
+        angle_max =  np.pi * radians
+        periodic = True
+        #metadynamics settings
+        bias_factor = 8. # this is (T+DeltaT)/T
+        bias_height = 0.3 * kilocalorie_per_mole #height of each gaussian
+        bias_frequency = 100 #steps in between gaussian depositions
+        bias_savefrequency = 100000 #steps in between checkpointing of bias potential 
+        bias_dir = "metabias-f8" #directory where to store the bias potential
+        #biasforce
+        torForce1 = mm.CustomTorsionForce("theta")
+        p = torsion
+        torForce1.addTorsion(p[0], p[1], p[2], p[3])
+        biasvar1 = BiasVariable(torForce1, angle_min, angle_max, gaussian_width, periodic)
+        self.metaD = Metadynamics(self.system, [biasvar1], temperature, bias_factor, bias_height, bias_frequency, bias_savefrequency, bias_dir)
+        self.metaDforcegroup = self.metaD.getForceGroup()
+        
+        self.set_atmforce()
 
         #add barostat
         pressure=1*bar
         self.set_barostat(temperature,pressure,0)
-
         #hack to store ASyncRE quantities in the openmm State
         sforce = mm.CustomBondForce("1")
         for name in self.parameter:
             sforce.addGlobalParameter(self.parameter[name], 0)
         self.system.addForce(sforce)
-
+        
         self.set_integrator(temperature, self.frictionCoeff, self.MDstepsize)
-

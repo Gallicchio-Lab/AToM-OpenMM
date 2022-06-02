@@ -332,7 +332,10 @@ class OMMWorkerATM(OMMWorker):
         self.simulation.context.setParameter(atmforce.Direction(), self.par['atmdirection'] )
 
     def _worker_getenergy(self):
-        state = self.simulation.context.getState(getEnergy = True, groups = {1,3})
+        state = self.simulation.context.getState(getEnergy = True, groups = {0,self.ommsystem.metaDforcegroup,self.ommsystem.atmforcegroup})
         self.pot['potential_energy'] = state.getPotentialEnergy()
         self.pot['perturbation_energy'] = self.ommsystem.atmforce.getPerturbationEnergy(self.simulation.context)
+        state = self.simulation.context.getState(getEnergy = True, groups = {self.ommsystem.metaDforcegroup})
+        self.pot['bias_energy'] = state.getPotentialEnergy()
+        print(self.pot)
         self._outq.put(self.pot)

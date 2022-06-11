@@ -200,7 +200,7 @@ class OMMSystemAmberABFE(OMMSystem):
         self.posrestrForce = None
         if posrestr_atoms_list is not None:
             posrestr_atoms = [int(i) for i in posrestr_atoms_list]
-            fc = float(self.keywords.get('POSRE_FORCE_CONSTANT')) * kilocalorie_per_mole
+            fc = float(self.keywords.get('POSRE_FORCE_CONSTANT')) * kilocalorie_per_mole/angstrom**2
             tol = float(self.keywords.get('POSRE_TOLERANCE')) * angstrom
             self.posrestrForce = atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
             
@@ -450,7 +450,7 @@ class OMMSystemAmberRBFE(OMMSystem):
         self.posrestrForce = None
         if posrestr_atoms_list is not None:
             posrestr_atoms = [int(i) for i in posrestr_atoms_list]
-            fc = float(self.keywords.get('POSRE_FORCE_CONSTANT')) * kilocalorie_per_mole
+            fc = float(self.keywords.get('POSRE_FORCE_CONSTANT')) * kilocalorie_per_mole/angstrom**2
             tol = float(self.keywords.get('POSRE_TOLERANCE')) * angstrom
             self.posrestrForce = atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
             

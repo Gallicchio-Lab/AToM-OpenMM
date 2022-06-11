@@ -55,6 +55,8 @@ class OMMSystem(object):
         self.atmforcegroup = 2
         self.nonbondedforcegroup = 1
 
+        self.metaD = None
+
     def _exit(message):
         """Print and flush a message to stdout and then exit."""
         self.logger.error(message)
@@ -109,7 +111,11 @@ class OMMSystemAmber(OMMSystem):
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
         self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
-        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(1,1), (0, bonded_frequency)])
+        if self.metaD != None:
+            fgroups = [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.nonbondedforcegroup,1)]
+        else:
+            fgroups = [(0,bonded_frequency), (self.nonbondedforcegroup,1)]
+        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, fgroups)
         self.integrator.setConstraintTolerance(0.00001)
 
     def set_positional_restraints(self):
@@ -122,6 +128,32 @@ class OMMSystemAmber(OMMSystem):
             fc = float(self.keywords.get('POSRE_FORCE_CONSTANT')) * (kilocalorie_per_mole/angstrom**2)
             tol = float(self.keywords.get('POSRE_TOLERANCE')) * angstrom
             self.posrestrForce = self.atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
+
+    def set_torsion_metaDbias(self,temperature):
+        if self.keywords.get('METADBIAS_DIR') == None:
+            return
+        bias_dir = self.keywords.get('METADBIAS_DIR')
+        torsion = self.keywords.get('METADBIAS_TORSION')
+        gaussian_width = float(self.keywords.get('METADBIAS_GWIDTH'))*degrees
+        angle_min = float(self.keywords.get('METADBIAS_MINANGLE'))*degrees
+        angle_max = float(self.keywords.get('METADBIAS_MAXANGLE'))*degrees
+        periodic = True
+        bias_factor = float(self.keywords.get('METADBIAS_FACTOR'))
+        bias_height = float(self.keywords.get('METADBIAS_GHEIGHT'))*kilocalorie_per_mole
+        #these are arbitrary: no updates
+        bias_frequency = 100
+        bias_savefrequency = 100
+        #biasforce
+        torForce1 = mm.CustomTorsionForce("theta")
+
+        print(int(torsion[0]), int(torsion[1]), int(torsion[2]), int(torsion[3]))
+        print(angle_min, angle_max, gaussian_width, periodic)
+        print(temperature, bias_factor, bias_height, bias_frequency, bias_savefrequency, bias_dir)
+        
+        torForce1.addTorsion(int(torsion[0]), int(torsion[1]), int(torsion[2]), int(torsion[3]))
+        biasvar1 = BiasVariable(torForce1, angle_min, angle_max, gaussian_width, periodic)
+        self.metaD = Metadynamics(self.system, [biasvar1], temperature, bias_factor, bias_height, bias_frequency, bias_savefrequency, bias_dir)
+        self.metaDforcegroup = self.metaD.getForceGroup()
 
 #Temperature RE
 class OMMSystemAmberTRE(OMMSystemAmber):
@@ -146,6 +178,7 @@ class OMMSystemAmberABFE(OMMSystemAmber):
 
         self.parameter['perturbation_energy'] = 'REPertEnergy'
         self.parameter['atmintermediate'] = 'REAlchemicalIntermediate'
+        self.parameter['bias_energy'] = 'BiasEnergy'
         self.atmforce = None
         self.lig_atoms = None
         self.displ = None
@@ -230,7 +263,11 @@ class OMMSystemAmberABFE(OMMSystemAmber):
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
         self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
-        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.atmforcegroup,1)] )
+        if self.metaD != None:
+            fgroups = [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.atmforcegroup,1)]
+        else:
+            fgroups = [(0,bonded_frequency), (self.atmforcegroup,1)]
+        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, fgroups )
         self.integrator.setConstraintTolerance(0.00001)
 
     def set_atmforce(self):
@@ -483,7 +520,11 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
         self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
-        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.atmforcegroup,1)] )
+        if self.metaD != None:
+            fgroups = [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.atmforcegroup,1)]
+        else:
+            fgroups = [(0,bonded_frequency), (self.atmforcegroup,1)]
+        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, fgroups )
         self.integrator.setConstraintTolerance(0.00001)
 
     def set_atmforce(self):
@@ -543,26 +584,7 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
         #temperature is part of the state and is maybe overriden in set_state()
         temperature = 300 * kelvin
 
-        #metaD force
-        torsion = [239, 247, 245, 246]
-        gaussian_nfac = 36. # how many gaussians to cover 2pi
-        gaussian_width = (2.*np.pi/gaussian_nfac) * radians
-        angle_min = -np.pi * radians
-        angle_max =  np.pi * radians
-        periodic = True
-        #metadynamics settings
-        bias_factor = 8. # this is (T+DeltaT)/T
-        bias_height = 0.3 * kilocalorie_per_mole #height of each gaussian
-        bias_frequency = 100 #steps in between gaussian depositions
-        bias_savefrequency = 100000 #steps in between checkpointing of bias potential 
-        bias_dir = "metabias-f8" #directory where to store the bias potential
-        #biasforce
-        torForce1 = mm.CustomTorsionForce("theta")
-        p = torsion
-        torForce1.addTorsion(p[0], p[1], p[2], p[3])
-        biasvar1 = BiasVariable(torForce1, angle_min, angle_max, gaussian_width, periodic)
-        self.metaD = Metadynamics(self.system, [biasvar1], temperature, bias_factor, bias_height, bias_frequency, bias_savefrequency, bias_dir)
-        self.metaDforcegroup = self.metaD.getForceGroup()
+        self.set_torsion_metaDbias(temperature)
         
         self.set_atmforce()
 

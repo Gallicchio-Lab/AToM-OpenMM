@@ -332,9 +332,16 @@ class OMMWorkerATM(OMMWorker):
         self.simulation.context.setParameter(atmforce.Direction(), self.par['atmdirection'] )
 
     def _worker_getenergy(self):
-        state = self.simulation.context.getState(getEnergy = True, groups = {0,self.ommsystem.metaDforcegroup,self.ommsystem.atmforcegroup})
+        if self.ommsystem.metaD != None:
+            fgroups = {0,self.ommsystem.metaDforcegroup,self.ommsystem.atmforcegroup}
+        else:
+            fgroups = {0,self.ommsystem.atmforcegroup}
+        state = self.simulation.context.getState(getEnergy = True, groups = fgroups)
         self.pot['potential_energy'] = state.getPotentialEnergy()
         self.pot['perturbation_energy'] = self.ommsystem.atmforce.getPerturbationEnergy(self.simulation.context)
-        state = self.simulation.context.getState(getEnergy = True, groups = {self.ommsystem.metaDforcegroup})
-        self.pot['bias_energy'] = state.getPotentialEnergy()
+        if self.ommsystem.metaD != None:
+            state = self.simulation.context.getState(getEnergy = True, groups = {self.ommsystem.metaDforcegroup})
+            self.pot['bias_energy'] = state.getPotentialEnergy()
+        else:
+            self.pot['bias_energy'] = 0.0 * kilojoules_per_mole
         self._outq.put(self.pot)

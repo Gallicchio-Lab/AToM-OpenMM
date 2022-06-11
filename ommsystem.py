@@ -145,11 +145,6 @@ class OMMSystemAmber(OMMSystem):
         bias_savefrequency = 100
         #biasforce
         torForce1 = mm.CustomTorsionForce("theta")
-
-        print(int(torsion[0]), int(torsion[1]), int(torsion[2]), int(torsion[3]))
-        print(angle_min, angle_max, gaussian_width, periodic)
-        print(temperature, bias_factor, bias_height, bias_frequency, bias_savefrequency, bias_dir)
-        
         torForce1.addTorsion(int(torsion[0]), int(torsion[1]), int(torsion[2]), int(torsion[3]))
         biasvar1 = BiasVariable(torForce1, angle_min, angle_max, gaussian_width, periodic)
         self.metaD = Metadynamics(self.system, [biasvar1], temperature, bias_factor, bias_height, bias_frequency, bias_savefrequency, bias_dir)

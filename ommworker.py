@@ -337,5 +337,4 @@ class OMMWorkerATM(OMMWorker):
         self.pot['perturbation_energy'] = self.ommsystem.atmforce.getPerturbationEnergy(self.simulation.context)
         state = self.simulation.context.getState(getEnergy = True, groups = {self.ommsystem.metaDforcegroup})
         self.pot['bias_energy'] = state.getPotentialEnergy()
-        print(self.pot)
         self._outq.put(self.pot)

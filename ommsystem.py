@@ -112,6 +112,17 @@ class OMMSystemAmber(OMMSystem):
         self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(1,1), (0, bonded_frequency)])
         self.integrator.setConstraintTolerance(0.00001)
 
+    def set_positional_restraints(self):
+        #indexes of the atoms whose position is restrained near the initial positions
+        #by a flat-bottom harmonic potential. 
+        posrestr_atoms_list = self.keywords.get('POS_RESTRAINED_ATOMS')
+        self.posrestrForce = None
+        if posrestr_atoms_list is not None:
+            posrestr_atoms = [int(i) for i in posrestr_atoms_list]
+            fc = float(self.keywords.get('POSRE_FORCE_CONSTANT')) * (kilocalorie_per_mole/angstrom**2)
+            tol = float(self.keywords.get('POSRE_TOLERANCE')) * angstrom
+            self.posrestrForce = self.atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
+
 #Temperature RE
 class OMMSystemAmberTRE(OMMSystemAmber):
     def create_system(self):
@@ -214,17 +225,6 @@ class OMMSystemAmberABFE(OMMSystemAmber):
                                                       kftheta, theta0, thetatol,
                                                       kfphi, phi0, phitol,
                                                       kfpsi, psi0, psitol)
-
-    def set_positional_restraints(self):
-        #indexes of the atoms whose position is restrained near the initial positions
-        #by a flat-bottom harmonic potential. 
-        posrestr_atoms_list = self.keywords.get('POS_RESTRAINED_ATOMS')
-        self.posrestrForce = None
-        if posrestr_atoms_list is not None:
-            posrestr_atoms = [int(i) for i in posrestr_atoms_list]
-            fc = float(self.keywords.get('POSRE_FORCE_CONSTANT')) * kilocalorie_per_mole
-            tol = float(self.keywords.get('POSRE_TOLERANCE')) * angstrom
-            self.posrestrForce = self.atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
 
     def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
@@ -478,21 +478,6 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
                                     ktheta = float(self.keywords.get('ALIGN_K_THETA'))*kilocalorie_per_mole,
                                     kpsi = float(self.keywords.get('ALIGN_K_PSI'))*kilocalorie_per_mole,
                                     offset = self.lig2offset)
-
-    def set_positional_restraints(self):
-        """
-        set indexes of atoms that will be restrained during the simulation
-        using a flat-bottom harmonic potential
-        eg. C-alpha backbone atoms in proteins
-
-        """
-        posrestr_atoms_list = self.keywords.get('POS_RESTRAINED_ATOMS')
-        self.posrestrForce = None
-        if posrestr_atoms_list is not None:
-            posrestr_atoms = [int(i) for i in posrestr_atoms_list]
-            fc = float(self.keywords.get('POSRE_FORCE_CONSTANT')) * kilocalorie_per_mole
-            tol = float(self.keywords.get('POSRE_TOLERANCE')) * angstrom
-            self.posrestrForce = self.atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
 
     def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)

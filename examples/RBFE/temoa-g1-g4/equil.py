@@ -43,6 +43,7 @@ w0coeff = 0.0 * kilocalorie_per_mole
 umsc =  100.0 * kilocalorie_per_mole
 ubcore = 50.0 * kilocalorie_per_mole
 acore = 0.062500
+direction = 1
 
 #load system
 prmtop = AmberPrmtopFile(jobname + '.prmtop')
@@ -50,8 +51,7 @@ inpcrd = AmberInpcrdFile(jobname + '.inpcrd')
 system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=0.9*nanometer,
                              constraints=HBonds)
 
-#load the ATM Meta Force facility. Among other things the initializer
-#sorts Forces into groups 
+#load the ATM Meta Force utility facility
 atm_utils = ATMMetaForceUtils(system)
 
 number_of_atoms = prmtop.topology.getNumAtoms()
@@ -122,7 +122,11 @@ for at in prmtop.topology.atoms():
 atm_utils.addPosRestraints(posrestr_atoms, inpcrd.positions, fc, tol)
 
 #create ATM Force
-atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore )
+atmforcegroup = 2
+nonbonded_force_group = 1
+atm_utils.setNonbondedForceGroup(nonbonded_force_group)
+atmvariableforcegroups = [nonbonded_force_group]
+atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, direction, atmvariableforcegroups )
 #adds all atoms to the force with zero displacement
 for at in prmtop.topology.atoms():
     atmforce.addParticle(int(at.id)-1, 0., 0., 0.)
@@ -132,31 +136,23 @@ for i in lig1_atoms:
     atmforce.setParticleParameters(i, i, displ[0] * angstrom, displ[1] * angstrom, displ[2] * angstrom)
 for i in lig2_atoms:
     atmforce.setParticleParameters(i, i, -displ[0] * angstrom, -displ[1] * angstrom, -displ[2] * angstrom)
-#The ATMMetaForce assumes to be in force group 3, it looks for bonded forces in group 1 and non-bonded forces in group 2
-#Bonded forces are those that are not expected to change when the ligand is displaced.
-#Conversely, non-bonded forces change when the ligand is displaced. 
-#The ATMMetaForceUtils() initializer (above) automatically sorts the system forces in groups 1 except for non-bonded forces
-#that are placed in group 2.
-atmforce.setForceGroup(3)
+atmforce.setForceGroup(atmforcegroup)
 system.addForce(atmforce)
-
 
 #Set up Langevin integrator with NPT barostat but disabled
 temperature = 300 * kelvin
 frictionCoeff = 0.5 / picosecond
 MDstepsize = 0.001 * picosecond
 barostat = MonteCarloBarostat(1*bar, temperature)
-barostat.setFrequency(0)#disabled
-barostat.setForceGroup(1)
+barostat.setFrequency(900000000)#disabled
 system.addForce(barostat)
-#MD is conducted using forces from groups 1 and 3 only. Group 1 are bonded forces that are calculated once.
-#Group 3 contains the ATMMetaForce that computes the non-bonded forces before and after the ligand is displaced and
-#it then combines them according to the alchemical potential.
-integrator = MTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(1,1), (3,1)])
+#MD is conducted using forces from groups 0 (forces not added to the ATM Meta Force)
+#and the group of the ATM Meta Force.
+integrator = MTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(0,1), (atmforcegroup,1)])
 integrator.setConstraintTolerance(0.00001)
 
-#platform_name = 'OpenCL'
-platform_name = 'CUDA'
+platform_name = 'OpenCL'
+#platform_name = 'CUDA'
 platform = Platform.getPlatformByName(platform_name)
 properties = {}
 properties["Precision"] = "mixed"
@@ -167,12 +163,12 @@ simulation.context.setPositions(inpcrd.positions)
 if inpcrd.boxVectors is not None:
     simulation.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
 
-pote = simulation.context.getState(getEnergy = True, groups = {1,3}).getPotentialEnergy()
+pote = simulation.context.getState(getEnergy = True, groups = {0,atmforcegroup}).getPotentialEnergy()
 
 print( "LoadState ...")
 simulation.loadState(jobname + '_npt.xml')
 
-print("Potential Energy =", simulation.context.getState(getEnergy = True, groups = {1,3}).getPotentialEnergy())
+print("Potential Energy =", simulation.context.getState(getEnergy = True, groups = {0,atmforcegroup}).getPotentialEnergy())
 
 print("Equilibration ...")
 

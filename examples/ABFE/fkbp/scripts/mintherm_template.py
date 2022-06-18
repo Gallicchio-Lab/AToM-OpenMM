@@ -32,8 +32,7 @@ inpcrd = AmberInpcrdFile(jobname + '.inpcrd')
 system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=0.9*nanometer,
                              constraints=HBonds)
 
-#load the ATM Meta Force facility. Among other things the initializer
-#sorts Forces into groups 
+#load the ATM Meta Force facility
 atm_utils = ATMMetaForceUtils(system)
 
 lig_cm_atoms = lig_atoms
@@ -69,13 +68,15 @@ frictionCoeff = 0.5 / picosecond
 MDstepsize = 0.001 * picosecond
 barostat = MonteCarloBarostat(1*bar, final_temperature)
 saved_barostat_frequency = barostat.getFrequency()
-barostat.setFrequency(0)#disabled
+barostat.setFrequency(900000000)#disabled
 system.addForce(barostat)
-integrator = MTSLangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, [(1,1), (2,1)])
+nonbonded_force_group = 1
+atm_utils.setNonbondedForceGroup(nonbonded_force_group)
+integrator = MTSLangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, [(0,1), (nonbonded_force_group,1)])
 integrator.setConstraintTolerance(0.00001)
 
-#platform_name = 'OpenCL'
-platform_name = 'CUDA'
+platform_name = 'OpenCL'
+#platform_name = 'CUDA'
 platform = Platform.getPlatformByName(platform_name)
 properties = {}
 properties["Precision"] = "mixed"

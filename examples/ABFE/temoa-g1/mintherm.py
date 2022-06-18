@@ -48,11 +48,13 @@ final_temperature = 300 * kelvin
 temperature = initial_temperature
 frictionCoeff = 0.5 / picosecond
 MDstepsize = 0.001 * picosecond
-integrator = MTSLangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, [(1,1), (2,1)])
+nonbonded_force_group = 1
+atm_utils.setNonbondedForceGroup(nonbonded_force_group)
+integrator = MTSLangevinIntegrator(temperature/kelvin, frictionCoeff/(1/picosecond), MDstepsize/ picosecond, [(0,1), (nonbonded_force_group,1)])
 integrator.setConstraintTolerance(0.00001)
 
-#platform_name = 'OpenCL'
-platform_name = 'CUDA'
+platform_name = 'OpenCL'
+#platform_name = 'CUDA'
 platform = Platform.getPlatformByName(platform_name)
 properties = {}
 properties["Precision"] = "mixed"

@@ -157,7 +157,7 @@ class OMMSystemAmberTRE(OMMSystemAmber):
         #the temperature defines the state and will be overriden in set_state()
         temperature = 300 * kelvin
         #set barostat
-        self.set_barostat(temperature,1*bar,0)
+        self.set_barostat(temperature,1*bar,900000000)
 
         #hack to store ASyncRE quantities in the openmm State
         sforce = mm.CustomBondForce("1")
@@ -327,7 +327,7 @@ class OMMSystemAmberABFE(OMMSystemAmber):
 
         #add barostat
         pressure=1*bar
-        self.set_barostat(temperature,pressure,0)
+        self.set_barostat(temperature,pressure,900000000)
 
         #hack to store ASyncRE quantities in the openmm State
         sforce = mm.CustomBondForce("1")
@@ -585,11 +585,11 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
 
         #add barostat
         pressure=1*bar
-        self.set_barostat(temperature,pressure,0)
+        self.set_barostat(temperature,pressure,900000000)
         #hack to store ASyncRE quantities in the openmm State
         sforce = mm.CustomBondForce("1")
         for name in self.parameter:
             sforce.addGlobalParameter(self.parameter[name], 0)
         self.system.addForce(sforce)
-        
+
         self.set_integrator(temperature, self.frictionCoeff, self.MDstepsize)

@@ -59,7 +59,11 @@ tol = 1.5 * angstrom
 atm_utils.addPosRestraints(restrained_atoms, inpcrd.positions, fc, tol)
 
 #create ATM Force (direction is 1 by default)
-atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore )
+atmforcegroup = 2
+nonbonded_force_group = 1
+atm_utils.setNonbondedForceGroup(nonbonded_force_group)
+atmvariableforcegroups = [nonbonded_force_group]
+atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, direction, atmvariableforcegroups )
 
 for at in prmtop.topology.atoms():
     atmforce.addParticle(at.index, 0., 0., 0.)
@@ -67,26 +71,24 @@ for at in prmtop.topology.atoms():
 for i in lig_atoms:
     atmforce.setParticleParameters(i, i, displ[0] * angstrom, displ[1] * angstrom, displ[2] * angstrom)
 
-atmforce.setForceGroup(3)
+atmforce.setForceGroup(atmforcegroup)
 system.addForce(atmforce)
 
 #add barostat
 barostat = MonteCarloBarostat(1*bar, temperature)
-barostat.setForceGroup(1)
-barostat.setFrequency(0)#disabled
+barostat.setFrequency(900000000)#disabled
 system.addForce(barostat)
 
 temperature = 300 * kelvin
 frictionCoeff = 0.5 / picosecond
 MDstepsize = 0.001 * picosecond
-#MD is conducted using forces from groups 1 and 3 only. Group 1 are bonded forces that are calculated once.
-#Group 3 contains the ATMMetaForce that computes the non-bonded forces before and after the ligand is displaced and
-#it then combines them according to the alchemical potential.
-integrator = MTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(3,1), (1,1)])
+#MD is conducted using forces from groups 0 (forces not added to the ATM Meta Force)
+#and the group of the ATM Meta Force.
+integrator = MTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(0,1), (atmforcegroup,1)])
 integrator.setConstraintTolerance(0.00001)
 
-#platform_name = 'OpenCL'
-platform_name = 'CUDA'
+platform_name = 'OpenCL'
+#platform_name = 'CUDA'
 platform = Platform.getPlatformByName(platform_name)
 properties = {}
 properties["Precision"] = "mixed"
@@ -97,7 +99,7 @@ simulation.context.setPositions(inpcrd.positions)
 if inpcrd.boxVectors is not None:
     simulation.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
 
-state = simulation.context.getState(getEnergy = True, groups = {1,3})
+state = simulation.context.getState(getEnergy = True, groups = {0,atmforcegroup})
 pote = state.getPotentialEnergy()
 
 print( "LoadState ...")
@@ -114,7 +116,7 @@ simulation.context.setParameter(atmforce.Ubcore(), ubcore /kilojoules_per_mole)
 simulation.context.setParameter(atmforce.Acore(), acore)
 simulation.context.setParameter(atmforce.Direction(), direction)
 
-state = simulation.context.getState(getEnergy = True, groups = {1,3})
+state = simulation.context.getState(getEnergy = True, groups = {0,atmforcegroup})
 print("Potential Energy =", state.getPotentialEnergy())
 
 print("Annealing to lambda = 1/2 ...")
@@ -132,7 +134,7 @@ deltalambda = (0.5 - 0.0)/float(loopStep)
 
 for i in range(loopStep):
     simulation.step(stepId)
-    state = simulation.context.getState(getEnergy = True, groups = {1,3})
+    state = simulation.context.getState(getEnergy = True, groups = {0,atmforcegroup})
     pot_energy = (state.getPotentialEnergy()).value_in_unit(kilocalorie_per_mole)
     pert_energy = (atmforce.getPerturbationEnergy(simulation.context)).value_in_unit(kilocalorie_per_mole)
     l1 = simulation.context.getParameter(atmforce.Lambda1())

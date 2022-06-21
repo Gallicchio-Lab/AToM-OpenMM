@@ -14,7 +14,7 @@ We recommend going over the tutorials in this sequence.
 
 This ASyncRE software. The examples have been written assuming that it is installed under `$HOME/software/async_re-openmm`.
 
-To run the examples we assume that the [OpenMM](http://openmm.org) libraries (version 7.6.0 or newer) have been installed in a location where python can find them. Presumably you did so under a `conda` environment. If so activate the environment to run the examples.
+To run the examples we assume that the [OpenMM](http://openmm.org) libraries (version 7.7.0 or newer) have been installed in a location where python can find them. Presumably you did so under a `conda` environment. If so activate the environment to run the examples.
 
 We also assume that the [ATMMetaForce OpenMM plugin](https://github.com/Gallicchio-Lab/openmm-atmmetaforce-plugin) is installed and available within the same OpenMM environment and that python can find the corresponding python bindings.
 

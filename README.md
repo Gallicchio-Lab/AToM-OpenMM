@@ -1,9 +1,9 @@
-ASyncRE-OpenMM
+AToM-OpenMM
 ==============
 
-ASynchronous Replica Exchange for OpenMM (ASyncRE-OpenMM) is an extensible Python package enabling asynchronous parallel replica exchange molecular simulations with OpenMM on a workstation or a compute node with one or more GPUs. 
+The Alchemical Transfer Method for for OpenMM (AToM-OpenMM) is an extensible Python package for the estimation of absolute and relative binding free energies of molecular complexes. It implements the [Alchemical Transfer Method (ATM)](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129) with  asynchronous parallel replica exchange molecular dynamics with the [OpenMM](https://github.com/openmm) library. The AToM software can be deployed on a workstation or a compute node with one or more GPUs.
 
-This version of ASyncRE is tailored to Alchemical Transfer Method alchemical calculations using the latest stable release of the [ATMetaForce plugin](https://github.com/Gallicchio-Lab/openmm-atmmetaforce-plugin) (currently version 0.2.4.1).
+AToM uses the [ATMetaForce plugin](https://github.com/Gallicchio-Lab/openmm-atmmetaforce-plugin) for OpenMM.
 
 Credits
 -------
@@ -20,10 +20,16 @@ Rajat Pal <rajatfor2014@gmail.com>
 
 The asynchronous replica exchange method was first implemented in the [AsyncRE](https://github.com/ComputationalBiophysicsCollaborative/AsyncRE) package for the IMPACT program.
 
-Citation
---------
+Citations
+---------
 
-[Asynchronous Replica Exchange Software for Grid and Heterogeneous Computing](http://www.compmolbiophysbc.org/publications#asyncre_software_2015)
+Please [cite us](http://www.compmolbiophysbc.org/publications) if you use this software in your research:
+
+- [Relative Binding Free Energy Calculations for Ligands with Diverse Scaffolds with the Alchemical Transfer Method](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129)
+
+- [Alchemical Transfer Approach to Absolute Binding Free Energy Estimation](https://pubs.acs.org/doi/10.1021/acs.jctc.1c00266)
+
+- [Asynchronous Replica Exchange Software for Grid and Heterogeneous Computing](http://www.compmolbiophysbc.org/publications#asyncre_software_2015)
 
 Installation & Usage
 --------------------
@@ -31,11 +37,16 @@ Installation & Usage
 It is recommended that the installation is performed in a personal python environment (`conda`, `miniconda`, or similar). ASyncRE requires the `configobj` and `numpy` python modules. 
 
 ```
-git clone https://github.com/Gallicchio-Lab/async_re-openmm.git
-cd async_re-openmm
+git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
+cd AToM-OpenMM
 python setup.py install
 ```
 
 See [examples](examples/) for examples and tutorials.
 
+While we strive to develop and distribute high-quality and bug-free software, keep in mind that this is research software under heavy development. AToM is provided without any guarantees of correctness. Please report issues [here](https://github.com/Gallicchio-Lab/AToM-OpenMM/issues). We welcome contributions and pull requests.
 
+Licensing
+---------
+
+ This software is licensed under the terms of the [GNU General Public License](http://opensource.org/licenses/GPL-3.0). See [LICENSE](LICENSE)

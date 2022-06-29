@@ -383,15 +383,9 @@ class openmm_job_AmberABFE(openmm_job_ATM):
 
         # creates openmm workers objects
         self.openmm_workers = []
-        pattern = re.compile('(\d+):(\d+)')
         for node in self.compute_nodes:
-            slot_id = node["slot_number"]
-            matches = pattern.search(slot_id)
-            platform_id = int(matches.group(1))
-            device_id = int(matches.group(2))
-            gpu_platform_name = node["arch"]
             ommsys = OMMSystemAmberABFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
-            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
+            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
 
 class openmm_job_AmberRBFE(openmm_job_ATM):
     def __init__(self, command_file, options):
@@ -416,15 +410,9 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
 
         # creates openmm context objects
         self.openmm_workers = []
-        pattern = re.compile('(\d+):(\d+)')
         for node in self.compute_nodes:
-            slot_id = node["slot_number"]
-            matches = pattern.search(slot_id)
-            platform_id = int(matches.group(1))
-            device_id = int(matches.group(2))
-            gpu_platform_name = node["arch"]
             ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
-            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
+            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
 
 
 

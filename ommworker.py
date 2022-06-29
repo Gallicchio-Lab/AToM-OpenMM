@@ -29,10 +29,18 @@ class OMMWorker(object):
     #  _worker_setstate_fromqueue()
     #  _worker_getenergy()
     #  _openmm_worker_body()
-    def __init__(self, basename, ommsystem, keywords, platform_name = None , platform_id = None, device_id = None, compute = True, logger = None):
-        self.platform_name = platform_name
-        self.platformId = platform_id
-        self.deviceId = device_id
+    def __init__(self, basename, ommsystem, keywords, node_info = None, compute = True, logger = None):
+        self.platform_name = None
+        self.platformId = None
+        self.deviceId = None
+        self.nthreads = None
+        if node_info is not None:
+            pattern = re.compile('(\d+):(\d+)')
+            self.platform_name = node_info['arch']
+            matches = pattern.search(node_info["slot_number"])
+            self.platformId = int(matches.group(1))
+            self.deviceId = int(matches.group(2))
+            self.nthreads = int(node_info["threads_number"])        
         self.basename = basename
         self.keywords = keywords
         self.ommsystem = ommsystem
@@ -190,8 +198,13 @@ class OMMWorker(object):
                 self.platform_properties["DeviceIndex"] = str(self.deviceId)
                 self.platform_properties["Precision"] = "mixed"
                 self.logger.info("Worker using CUDA OpenMM platform")
+            elif self.platform_name == "CPU":
+                self.platform = Platform.getPlatformByName(self.platform_name)
+                self.platform_properties["Threads"] = str(self.nthreads)
+                self.logger.info("Worker using CPU OpenMM platform")
             elif self.platform_name == "Reference":
                 self.platform = Platform.getPlatformByName(self.platform_name)
+                self.logger.info("Worker using Reference OpenMM platform")
             else:
                 self.logger.warning("Unrecognized platform name")
         else:

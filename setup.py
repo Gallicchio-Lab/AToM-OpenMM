@@ -25,7 +25,10 @@ from async_re import __version__ as VERSION
 
 NAME = 'async_re'
 
-MODULES = 'async_re', 'ommreplica', 'ommsystem', 'ommworker', 'local_openmm_transport', 'transport', 'gibbs_sampling', 'openmm_async_re', 'abfe_explicit.py', 'rbfe_explicit.py'
+MODULES = 'async_re', 'ommreplica', 'ommsystem', 'ommworker', 'local_openmm_transport', 'transport', 'gibbs_sampling', 'openmm_async_re'
+
+
+SCRIPTS = 'abfe_explicit.py', 'rbfe_explicit.py'
 
 REQUIRES = 'configobj', 'numpy'
 

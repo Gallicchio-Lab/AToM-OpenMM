@@ -75,12 +75,11 @@ class OMMSystemAmberRBFE_zrestr(OMMSystemAmberRBFE):
             self.vsiterestraintForce.addPerBondParameter("kf")
             self.vsiterestraintForce.addPerBondParameter("r0")
             self.vsiterestraintForce.addPerBondParameter("offz")
-            self.vsiterestraintForce.setForceGroup(1)
             self.vsiterestraintForce.addGroup(rcpt_atom_restr)
             self.vsiterestraintForce.addGroup(lig1_atom_restr)
             self.vsiterestraintForce.addGroup(lig2_atom_restr)
-            self.vsiterestraintForce.addBond([0,1], [kf, r0, self.lig1offset[2]])
-            self.vsiterestraintForce.addBond([0,2], [kf, r0, self.lig2offset[2]])
+            self.vsiterestraintForce.addBond([0,1], [kf/(kilocalories_per_mole/angstrom**2), r0/angstrom, self.lig1offset[2]/angstrom])
+            self.vsiterestraintForce.addBond([0,2], [kf/(kilocalories_per_mole/angstrom**2), r0/angstrom, self.lig2offset[2]/angstrom])
             self.system.addForce(self.vsiterestraintForce)
 
     def set_ligand_atoms(self):

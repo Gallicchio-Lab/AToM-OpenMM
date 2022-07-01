@@ -30,11 +30,13 @@ class OMMWorker(object):
     #  _worker_getenergy()
     #  _openmm_worker_body()
     def __init__(self, basename, ommsystem, keywords, node_info = None, compute = True, logger = None):
+        self.node_name = None
         self.platform_name = None
         self.platformId = None
         self.deviceId = None
         self.nthreads = None
         if node_info is not None:
+            self.node_name = node_info['node_name']
             pattern = re.compile('(\d+):(\d+)')
             self.platform_name = node_info['arch']
             matches = pattern.search(node_info["slot_number"])
@@ -232,7 +234,7 @@ class OMMWorker(object):
         
         if self.compute and self.platformId is not None and self.deviceId is not None:
             #sets up logfile
-            self.wdir = "cntxt%d_%d" % (int(self.platformId),int(self.deviceId))
+            self.wdir = "cntxt_%s_%d_%d" % (self.node_name,int(self.platformId),int(self.deviceId))
             if not os.path.isdir(self.wdir):
                 os.mkdir(self.wdir)
             self.logfile = "%s/%s.log" % (self.wdir, self.basename)

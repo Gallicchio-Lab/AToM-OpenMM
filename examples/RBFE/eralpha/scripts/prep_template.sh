@@ -12,5 +12,5 @@
 for pair in <LIGPAIRS> ; do
     jobname=<RECEPTOR>-$pair
     echo "Prepping $jobname"
-    ( cd ${jobname} &&  ../../scripts/runopenmm ${jobname}_mintherm.py && ../../scripts/runopenmm ${jobname}_equil.py  )  || exit 1
+    ( cd ${jobname} &&  python ${jobname}_mintherm.py && python ${jobname}_equil.py  )  || exit 1
 done

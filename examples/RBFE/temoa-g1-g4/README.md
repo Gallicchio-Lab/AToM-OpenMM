@@ -13,7 +13,6 @@ The starting point are the topology and coordinate files of a simulation box wit
 
 We assume in this tutorial that the examples directory of this repository has been copied under `$HOME/examples` and that the ASyncRE software is available under `$HOME/software/AToM-OpenMM`. Adjust the pathnames as needed. We are also assuming that OpenMM can be launched by running ``python`` in a conda environment. See [examples/README](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples).
 
-
 Mininize, thermalize, relax, and equilibrate the complex:
 ```
 cd $HOME/RBFE/temoa-g1-g4
@@ -23,28 +22,15 @@ python mintherm.py && python  npt.py && python equil.py
 
 ### Replica Exchange Production
 
-
 Copy the `nodefile` from the scripts directory
 ```
 cp $HOME/examples/RBFE/scripts/nodefile .
 ```
-See 
-
-This `nodefile` assumes one GPU on the system. It looks like:
-```
-localhost,0:0,1,CUDA,,/tmp
-```
-The critical bit is the `0:0` item in the format `<Platform id>:<device id>`. The other items are in the nodefile specification are for future use and are ignored. You can add more GPUs if you have them. For example, create this nodefile to use two GPUs with device ids 0, and 1:
-```
-localhost,0:0,1,CUDA,,/tmp
-localhost,0:1,1,CUDA,,/tmp
-```
-
-To use the OpenCL platform, replace `CUDA` with `OpenCL` in the nodefile, in which case the first number in the device specification should be set to the index of the OpenCL platform corresponding to the GPUs on the system (probably 0). With CUDA, the platform id specification is ignored.
+See the [TEMOA-G1 ABFE tutorial](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/ABFE/temoa-g1) about the nodefile and how to customize it in different ways to match the hardware on your machine. 
 
 Now run replica exchange
 ```
-../scripts/runopenmm $HOME/software/async_re-openmm/rbfe_explicit.py temoa-g1-g4_asyncre.cntl
+python $HOME/software/AToM-OpenMM/rbfe_explicit.py temoa-g1-g4_asyncre.cntl
 ```
 
 You should see the contents of the control file echo-ed back and messages indicating that replica are dispatched to the GPU and that replicas change alchemical states by exchanging them with other replicas. The job is set to run for 4 hours.
@@ -65,4 +51,4 @@ It should print something similar to this:
 ```
 DDGb = -3.50378 +- 0.3484641 range: 20 39
 ```
-The value shown is the relative binding free energy (ΔΔGb = ΔGb(TEMOA-G4) - ΔG(TEMOA-G1)) between TEMOA-G4 and TEMOA-G1. In this example 20 is the number of initial samples to discard for equilibration. 39 in this case is the number of samples per replica that has been collected. The simulations here are just short examples. See the [paper](https://arxiv.org/abs/2107.05153) for more details.
+The value shown is the relative binding free energy (ΔΔGb = ΔGb(TEMOA-G4) - ΔGb(TEMOA-G1)) between TEMOA-G4 and TEMOA-G1. In this example 20 is the number of initial samples to discard for equilibration. 39 in this case is the number of samples per replica that has been collected. The simulations here are just short examples. See the [paper](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129) for more details.

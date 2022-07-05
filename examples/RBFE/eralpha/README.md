@@ -1,11 +1,18 @@
 Relative Binding Free Energies of a set of Antagonists of the Estrogen Receptor α Nuclear Receptor
 --------------------------------------------------------------------------------------------------
 
-In this tutorial we will calculate the relative binding free energies between four protein-ligand complexes of the ERα nuclear receptor with four antagonists from the paper: [Azimi, Khuttan, Wu, Pal, Gallicchio. Relative Binding Free Energy Calculations for Ligands with Diverse Scaffolds with the Alchemical Transfer Method.](https://arxiv.org/abs/2107.05153) This tutorial uses an automated workflow to prepare and run the six relative binding free energy calculations between all pairs of complexes.
+In this tutorial we will calculate the relative binding free energies between four protein-ligand complexes of the ERα nuclear receptor with four antagonists from the paper: [Azimi, Khuttan, Wu, Pal, Gallicchio. Relative Binding Free Energy Calculations for Ligands with Diverse Scaffolds with the Alchemical Transfer Method.](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129) This tutorial uses an automated workflow to prepare and run the six relative binding free energy calculations between all pairs of complexes.
+
+It is highly recommended to go through less complex [tutorials](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples)before attempting this one. The following assumes familiarity with the terms and procedures introduced in the [TEMOA G1 ABFE tutorial](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/ABFE/temoa-g1) and others.
 
 ### System preparation
 
-We assume in this tutorial that the examples directory of this repository has been copied under `$HOME/examples` and that the ASyncRE software is available under `$HOME/software/async_re-openmm`. Adjust the pathname to the ASyncRE installation in `setup=settings.sh` as needed. We are also assuming that OpenMM is launched by running the provided `runopenmm` script (see below), that locates the OpenMM libraries under the OPENMM_DIR environment variable, and that the Ambertools executables are in the search path.
+We assume in this tutorial that the examples directory of this repository has been copied under `$HOME/examples`. We assume that AToM-OpenMM is available under `$HOME/software/AToM-OpenMM`. Adjust the pathname pointing to the AToM-OpenMM installation folder in `setup-settings.sh` as needed. See the [TEMOA G1 ABFE tutorial](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/ABFE/temoa-g1) for help setting up OpenMM and the AToM-OpenMM software.
+
+This tutorial assumes that the [Ambertools](http://ambermd.org) executables are in the search path. They can be conveniently installed under the same conda environment:
+```
+conda install -c conda-forge ambertools
+```
 
 Setup the simulation input files. The automated setup script below reads the parameters from the `setup-settings.sh` file.
 ```
@@ -36,7 +43,7 @@ Each replica exchange calculation is set to run for 2 hours on 1 GPU. Much longe
 
 ### Free Energy Analysis
 
-The relative binding free energy (ΔΔGb = ΔGb(B) - ΔG(A)) between each ligand pair A and B are collected by the `free_energies.sh` script in the `complexes` directory:
+The relative binding free energy (ΔΔGb = ΔGb(B) - ΔGb(A)) between each ligand pair A and B are collected by the `free_energies.sh` script in the `complexes` directory:
 ```
 cd $HOME/examples/RBFE/eralpha/complexes
 bash ./free_energies.sh

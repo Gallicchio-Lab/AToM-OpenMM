@@ -1,4 +1,4 @@
-ASyncRE-OpenMM Tutorials
+AToM-OpenMM Tutorials
 ------------------------
 
 ### Tutorials
@@ -12,13 +12,11 @@ We recommend going over the tutorials in this sequence.
 
 ### Software requirements
 
-This ASyncRE software. The examples have been written assuming that it is installed under `$HOME/software/async_re-openmm`.
+This AToM-OpenMM software. The examples have been written assuming that it is installed under `$HOME/software/AToM-OpenMM`.
 
-To run the examples we assume that the [OpenMM](http://openmm.org) libraries (version 7.7.0 or newer) have been installed in a location where python can find them. Presumably you did so under a `conda` environment. If so activate the environment to run the examples.
+Follow the [installation instructions](https://github.com/Gallicchio-Lab/openmm-atmmetaforce-plugin) to install OpenMM and the ATM Meta Force plugin. In general, we assume that the [OpenMM](http://openmm.org) libraries (version 7.6.0 or newer) have been installed in a location where python can find them. Presumably you did so under a `conda` environment. If so activate the environment to run the examples. We also assume that the [ATMMetaForce OpenMM plugin](https://github.com/Gallicchio-Lab/openmm-atmmetaforce-plugin) is installed and available within the same OpenMM environment and that python can find the corresponding python bindings. 
 
-We also assume that the [ATMMetaForce OpenMM plugin](https://github.com/Gallicchio-Lab/openmm-atmmetaforce-plugin) is installed and available within the same OpenMM environment and that python can find the corresponding python bindings.
+When using a conda environment, the examples can be launched with the ``python`` command of that environment. For other situations, a sample `runopenmm` script is provided in the  [scripts/]( https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/scripts) to get you started if needed. It requires you to define the environment variable `OPENMM_DIR` pointing to the OpenMM installation on your system. It also assumes that the python OpenMM bindings have been stored under the same folder.
 
-A sample `runopenmm` script is provided in the  [scripts/]( https://github.com/Gallicchio-Lab/async_re-openmm/tree/master/examples/scripts) to get you started if needed. It requires you to define the environment variable `OPENMM_DIR` pointing to the OpenMM installation on your system. It also assumes that the python OpenMM bindings have been stored under the same folder.
-
-Free energy analysis requires R with the UWHAM R module. To install the UWHAM module run `install.packages("UWHAM")` in R.
+Free energy analysis requires R with the UWHAM R module. Do ``conda install r-base`` to install R in a conda environment. To install the UWHAM module run `install.packages("UWHAM")` in R.
 

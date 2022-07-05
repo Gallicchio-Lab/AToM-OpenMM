@@ -10,4 +10,4 @@
 #SBATCH -t 02:15:00
 
 echo "localhost,0:0,1,OpenCL,,/tmp" > nodefile
-../../scripts/runopenmm <ASYNCRE_DIR>/abfe_explicit.py <JOBNAME>_asyncre.cntl
+python <ASYNCRE_DIR>/abfe_explicit.py <JOBNAME>_asyncre.cntl

@@ -200,6 +200,11 @@ class OMMWorker(object):
                 self.platform_properties["DeviceIndex"] = str(self.deviceId)
                 self.platform_properties["Precision"] = "mixed"
                 self.logger.info("Worker using CUDA OpenMM platform")
+            elif self.platform_name == "HIP":
+                self.platform = Platform.getPlatformByName(self.platform_name)
+                self.platform_properties["DeviceIndex"] = str(self.deviceId)
+                self.platform_properties["Precision"] = "mixed"
+                self.logger.info("Worker using HIP OpenMM platform")
             elif self.platform_name == "CPU":
                 self.platform = Platform.getPlatformByName(self.platform_name)
                 self.platform_properties["Threads"] = str(self.nthreads)

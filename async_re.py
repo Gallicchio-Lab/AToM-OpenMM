@@ -294,6 +294,8 @@ class async_re(object):
 
         if self.transport.numNodesAlive() <= 0 :
             self.logger.info("No compute devices are alive. Quitting.")
+        else:
+            self.logger.info("Reached set simulation time. Terminating normally.")
 
         self.transport.DrainJobQueue()
         self.updateStatus()

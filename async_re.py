@@ -56,10 +56,10 @@ class async_re(object):
 
         #set to False to run without exchanges
         self.exchange = True
-        
+
         #catch ctrl-C to terminate threads gracefully
         signal.signal(signal.SIGINT, self._signal_handler)
-    
+
     def _exit(self, message):
         """Print and flush a message to stdout and then exit."""
         self._cleanup()
@@ -233,13 +233,13 @@ class async_re(object):
         self.updateStatus()
 
         self.print_status()
-        
+
     def scheduleJobs(self):
         # Gets the wall clock time for a replica to complete a cycle
-        # If unspecified it is estimated as 10% of job wall clock time
+        # If unspecified it is estimated as 1% of job wall clock time
         replica_run_time = self.keywords.get('REPLICA_RUN_TIME')
         if self.keywords.get('REPLICA_RUN_TIME') is None:
-            replica_run_time = int(round(self.walltime/10.))
+            replica_run_time = int(round(self.walltime/100.))
         else:
             replica_run_time = int(self.keywords.get('REPLICA_RUN_TIME'))
         # double it to give time for current running processes
@@ -263,12 +263,24 @@ class async_re(object):
         else:
             checkpoint_time = float(self.keywords.get('CHECKPOINT_TIME'))
 
+        sample_steps = int(self.keywords.get('PRNT_FREQUENCY'))
+        cycle_steps = int(self.keywords.get('PRODUCTION_STEPS'))
+        cycle_to_sample = sample_steps/cycle_steps
+        enough_samples = False
+        if self.keywords.get('MAX_SAMPLES')  is not None:
+            max_samples = int(self.keywords.get('MAX_SAMPLES'))
+            enough_samples = all( [ (replica.get_cycle()-1)/cycle_to_sample >=  max_samples
+                                    for replica in self.openmm_replicas ]  )
+            if enough_samples:
+                self.logger.info("All replicas collected the requested number of samples (%d)" % max_samples)
+
         start_time = time.time()
-        end_time = (start_time + 60*(self.walltime - replica_run_time) -
-                    cycle_time - 10)
+        end_time = start_time + 60*(self.walltime - replica_run_time)
         last_checkpoint_time = start_time
 
-        while time.time() < end_time and self.transport.numNodesAlive() > 0 :
+        while ( time.time() < end_time and
+                self.transport.numNodesAlive() > 0 and
+                not enough_samples ) :
             current_time = time.time()
 
             self.updateStatus()
@@ -292,10 +304,20 @@ class async_re(object):
                 last_checkpoint_time = current_time
                 self.logger.info("done.")
 
+            #terminates if enough samples have been collected
+            if self.keywords.get('MAX_SAMPLES')  is not None:
+                max_samples = int(self.keywords.get('MAX_SAMPLES'))
+                enough_samples = all( [ (replica.get_cycle()-1)/cycle_to_sample >=  max_samples
+                                        for replica in self.openmm_replicas ]  )
+                if enough_samples:
+                    self.logger.info("All replicas collected the requested number of samples (%d)" % max_samples)
+
         if self.transport.numNodesAlive() <= 0 :
             self.logger.info("No compute devices are alive. Quitting.")
         else:
-            self.logger.info("Reached set simulation time. Terminating normally.")
+            if time.time() >= end_time :
+                self.logger.info("Requested simulation time completed (%d mins)" % self.walltime)
+            self.logger.info("Normal termination.")
 
         self.transport.DrainJobQueue()
         self.updateStatus()
@@ -350,7 +372,7 @@ class async_re(object):
 
     def _buildInpFile(self, repl):
         pass
-        
+
     def updateStatus(self):
         """Scan the replicas and update their states."""
         self.transport.poll()
@@ -432,7 +454,7 @@ class async_re(object):
 
         if self.verbose:
             self.logger.debug('Initiating exchanges amongst %d replicas:', nreplicas_to_exchange)
-        
+
         exchange_start_time = time.time()
 
         # Matrix of replica energies in each state.

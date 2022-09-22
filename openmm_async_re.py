@@ -42,17 +42,10 @@ class openmm_job(async_re):
         nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
         nprnt = int(self.keywords.get('PRNT_FREQUENCY'))
         ntrj = int(self.keywords.get('TRJ_FREQUENCY'))
-        #print(nsteps, nprnt, ntrj)
-        """
-        if not nprnt % nsteps == 0:
-            self._exit("nprnt must be an integer multiple of nsteps.")
-        if not ntrj % nsteps == 0:
-            self._exit("ntrj must be an integer multiple of nsteps.")
-        """
-        if nsteps % nprnt != 0:
-            self._exit("nprnt must be an integer multiple of nsteps.")
-        if nsteps % ntrj != 0:
-            self._exit("ntrj must be an integer multiple of nsteps.")
+        if nprnt % nsteps != 0:
+            self._exit("PRNT_FREQUENCY must be an integer multiple of PRODUCTION_STEPS.")
+        if ntrj % nsteps != 0:
+            self._exit("TRJ_FREQUENCY must be an integer multiple of PRODUCTION_STEPS.")
 
         job_info = {
             "replica": replica,
@@ -278,7 +271,7 @@ class openmm_job_ATM(openmm_job):
         if alpha._value > 0.:
             softplusf += ((lambda2 - lambda1)/alpha) * math.log(ee)
         return softplusf
-        
+
     #customized getPot to return the unperturbed potential energy
     #of the replica U0 = U - W_lambda(u)
     def _getPot(self, repl):
@@ -298,7 +291,7 @@ class openmm_job_ATM(openmm_job):
         pot['direction'] = par['atmdirection']
         pot['intermediate'] = par['atmintermediate']
         return pot
-        
+
     def _reduced_energy(self, par, pot):
         temperature = par['temperature']
         beta = 1./(self.kb*temperature)
@@ -326,7 +319,7 @@ class openmm_job_ATM(openmm_job):
         #changes the format of the positions in case of an exchange between replicas with two different directions 
         #replica.convert_pos_into_direction_format()
         pass
-        
+
 class openmm_job_AmberTRE(openmm_job_TRE):
     def __init__(self, command_file, options):
         super().__init__(command_file, options)
@@ -359,7 +352,7 @@ class openmm_job_AmberTRE(openmm_job_TRE):
             gpu_platform_name = node["arch"]
             ommsys = OMMSystemAmberTRE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
             self.openmm_workers.append(OMMWorkerTRE(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
-    
+
 class openmm_job_AmberABFE(openmm_job_ATM):
     def __init__(self, command_file, options):
         super().__init__(command_file, options)
@@ -369,7 +362,7 @@ class openmm_job_AmberABFE(openmm_job_ATM):
 
         if self.stateparams is None:
             self._buildStates()
-        
+
         #builds service worker for replicas use
         service_ommsys = OMMSystemAmberABFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
         self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
@@ -396,7 +389,7 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
 
         if self.stateparams is None:
             self._buildStates()
-        
+
         #builds service worker for replicas use
         service_ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
         self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
@@ -414,7 +407,3 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
             ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
             self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
 
-
-
-                                        
-                                        

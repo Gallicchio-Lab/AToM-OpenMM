@@ -1,16 +1,13 @@
 #!/bin/bash
 #
 #SBATCH -J <JOBNAME>
-##SBATCH --partition=debug
-#SBATCH --partition=project
+#SBATCH --partition=gpu-shared
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:1
-##SBATCH --qos=restrained
-#SBATCH --qos=maxjobs
+#SBATCH --gpus=1
+#SBATCH --account=TG-MCB150001
 #SBATCH --no-requeue
-#SBATCH --account=insite
-#SBATCH -t 24:00:00
+#SBATCH -t 10:00:00
 
 . ~/miniconda3/bin/activate atm
 echo "Running on $(hostname)"

@@ -26,7 +26,6 @@
     7.6000   42.7620   48.5320 N   0  0  0  0  0  0
     6.4450   42.0610   48.5810 C   0  0  0  0  0  0
     5.8550   41.6320   47.3960 C   0  0  0  0  0  0
-   11.5662   46.6643   52.1189 H   0  0  0  0  0  0
     4.6775   45.4225   50.6302 H   0  0  0  0  0  0
     5.3628   44.2225   51.7641 H   0  0  0  0  0  0
     4.4581   46.6481   53.1622 H   0  0  0  0  0  0
@@ -44,138 +43,70 @@
     3.1327   40.0939   48.6677 H   0  0  0  0  0  0
     4.1634   40.9006   50.7623 H   0  0  0  0  0  0
     6.3008   42.1012   50.7394 H   0  0  0  0  0  0
-    9.3735   47.1694   52.6519 H   0  0  0  0  0  0
     8.2898   42.5561   47.8235 H   0  0  0  0  0  0
     6.3393   41.8654   46.4593 H   0  0  0  0  0  0
+   11.5200   44.7341   50.2536 H   0  0  0  0  0  0
+   11.5662   46.6643   52.1189 H   0  0  0  0  0  0
   1 14  2  0  0  0
   1 21  1  0  0  0
   1 22  1  0  0  0
-  2 18  1  0  0  0
-  2 19  2  0  0  0
-  2 25  1  0  0  0
+  2 18  2  0  0  0
+  2 19  1  0  0  0
+  2 45  1  0  0  0
   3  4  1  0  0  0
   3 16  1  0  0  0
+  3 25  1  0  0  0
   3 26  1  0  0  0
-  3 27  1  0  0  0
   4  5  1  0  0  0
   4  9  1  0  0  0
-  4 28  1  0  0  0
+  4 27  1  0  0  0
   5  6  1  0  0  0
+  5 28  1  0  0  0
   5 29  1  0  0  0
-  5 30  1  0  0  0
   6  7  1  0  0  0
+  6 30  1  0  0  0
   6 31  1  0  0  0
-  6 32  1  0  0  0
   7  8  1  0  0  0
+  7 32  1  0  0  0
   7 33  1  0  0  0
-  7 34  1  0  0  0
   8  9  1  0  0  0
+  8 34  1  0  0  0
   8 35  1  0  0  0
-  8 36  1  0  0  0
+  9 36  1  0  0  0
   9 37  1  0  0  0
-  9 38  1  0  0  0
  10 11  2  0  0  0
  10 24  1  0  0  0
- 10 39  1  0  0  0
+ 10 38  1  0  0  0
  11 12  1  0  0  0
- 11 40  1  0  0  0
+ 11 39  1  0  0  0
  12 13  2  0  0  0
- 12 41  1  0  0  0
+ 12 40  1  0  0  0
  13 23  1  0  0  0
- 13 42  1  0  0  0
+ 13 41  1  0  0  0
  14 15  1  0  0  0
  15 16  1  0  0  0
  15 17  2  0  0  0
  17 18  1  0  0  0
  17 20  1  0  0  0
- 18 43  1  0  0  0
  19 20  1  0  0  0
+ 19 44  1  0  0  0
  20 21  2  0  0  0
  22 23  1  0  0  0
- 22 44  1  0  0  0
+ 22 42  1  0  0  0
  23 24  2  0  0  0
- 24 45  1  0  0  0
+ 24 43  1  0  0  0
 M  END
 > <s_m_entry_id>
-1
+9
 
 > <s_m_entry_name>
-1h1q.1
-
-> <s_pdb_PDB_TITLE>
-STRUCTURE OF HUMAN THR160-PHOSPHO CDK2/CYCLIN A COMPLEXED WITH THE INHIBITOR NU6094
-
-> <s_pdb_PDB_ID>
-1H1Q
-
-> <r_pdb_PDB_CRYST1_a>
-73.99
-
-> <r_pdb_PDB_CRYST1_b>
-134.73
-
-> <r_pdb_PDB_CRYST1_c>
-148.12
-
-> <r_pdb_PDB_CRYST1_alpha>
-90
-
-> <r_pdb_PDB_CRYST1_beta>
-90
-
-> <r_pdb_PDB_CRYST1_gamma>
-90
-
-> <s_pdb_PDB_CRYST1_Space_Group>
-P 21 21 21
-
-> <i_pdb_PDB_CRYST1_z>
-8
-
-> <s_pdb_PDB_CLASSIFICATION>
-TRANSFERASE
-
-> <s_pdb_PDB_DEPOSITION_DATE>
-21-JUL-02
-
-> <s_pdb_PDB_format_version>
-3.15
-
-> <r_pdb_PDB_R>
-0.238
-
-> <r_pdb_PDB_Rfree>
-0.332
-
-> <r_pdb_PDB_RESOLUTION>
-2.5
-
-> <s_pdb_PDB_EXPDTA>
-X-RAY DIFFRACTION
-
-> <r_pdb_PDB_EXPDTA_TEMPERATURE>
-100
-
-> <r_pdb_PDB_EXPDTA_PH>
-7
-
-> <s_pdb_PDB_REMARK_350_Biomolecule_1_Transform_1_Chains>
-A, B
-
-> <s_pdb_PDB_REMARK_350_Biomolecule_1_Transform_1_Matrix_1>
-1.000000 0.000000 0.000000   0.000000;0.000000 1.000000 0.000000   0.000000;0.000000 0.000000 1.000000   0.000000
-
-> <s_pdb_PDB_REMARK_350_Biomolecule_2_Transform_1_Chains>
-C, D
-
-> <s_pdb_PDB_REMARK_350_Biomolecule_2_Transform_1_Matrix_1>
-1.000000 0.000000 0.000000   0.000000;0.000000 1.000000 0.000000   0.000000;0.000000 0.000000 1.000000   0.000000
+1H1Q.1
 
 > <s_m_Source_Path>
-/Users/sheenam
+/Users/sheenam/Downloads
 
 > <s_m_Source_File>
-1h1q.pdb
+1H1Q.mol2
 
 > <i_m_Source_File_Index>
 1

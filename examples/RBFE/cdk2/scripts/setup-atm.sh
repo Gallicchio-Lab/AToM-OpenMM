@@ -117,8 +117,9 @@ EOF
     echo "Vsite receptor atoms:"
     echo "$vsite_rcpt_atoms"
 
-    #search for first instance of LIG to find the size of the receptor
-    l1=$( awk '$4 ~ /LIG/{print $2}' < ${jobname}.pdb  | head -1 )
+    #search for the first ligand to find the size of the receptor
+    namereslig1=$( awk  'f{printf("%.3s", $8);f=0} /@<TRIPOS>ATOM/{f=1}' ${work_dir}/ligands/${lig1}.mol2 ) || exit 1
+    l1=$( awk "\$4 ~ /${namereslig1}/{print \$2}" < ${jobname}.pdb  | head -1 ) || exit 1
     lig1start=$(expr $l1 - 1 )
     num_atoms_rcpt=$(expr $l1 - 1 )
     #retrieve number of atoms of the ligands from their mol2 files

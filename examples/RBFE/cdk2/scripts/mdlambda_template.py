@@ -112,8 +112,8 @@ MDstepsize = 0.001 * picosecond
 integrator = MTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, [(0,1), (atmforcegroup,1)])
 integrator.setConstraintTolerance(0.00001)
 
-platform_name = 'OpenCL'
-#platform_name = 'CUDA'
+#platform_name = 'OpenCL'
+platform_name = 'CUDA'
 platform = Platform.getPlatformByName(platform_name)
 properties = {}
 properties["Precision"] = "mixed"

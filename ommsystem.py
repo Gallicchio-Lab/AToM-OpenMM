@@ -23,11 +23,6 @@ class ATMMTSLangevinIntegrator(MTSLangevinIntegrator):
     def setTemperature(self, temperature):
         self.setGlobalVariableByName('kT', MOLAR_GAS_CONSTANT_R*temperature)
 
-##adds a method to retrieve the group of the metaD force
-def getMetaDForceGroup(self):
-    return self._force.getForceGroup()
-Metadynamics.getForceGroup = getMetaDForceGroup
-
 class OMMSystem(object):
     def __init__(self, basename, keywords, logger):
         self.system = None
@@ -54,8 +49,9 @@ class OMMSystem(object):
 
         self.atmforcegroup = 2
         self.nonbondedforcegroup = 1
+        self.metaDforcegroup = 3
 
-        self.metaD = None
+        self.doMetaD = False
 
     def _exit(message):
         """Print and flush a message to stdout and then exit."""
@@ -111,7 +107,7 @@ class OMMSystemAmber(OMMSystem):
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
         self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
-        if self.metaD != None:
+        if doMetaD:
             fgroups = [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.nonbondedforcegroup,1)]
         else:
             fgroups = [(0,bonded_frequency), (self.nonbondedforcegroup,1)]
@@ -132,23 +128,47 @@ class OMMSystemAmber(OMMSystem):
     def set_torsion_metaDbias(self,temperature):
         if self.keywords.get('METADBIAS_DIR') == None:
             return
-        bias_dir = self.keywords.get('METADBIAS_DIR')
-        torsion = self.keywords.get('METADBIAS_TORSION')
-        gaussian_width = float(self.keywords.get('METADBIAS_GWIDTH'))*degrees
-        angle_min = float(self.keywords.get('METADBIAS_MINANGLE'))*degrees
-        angle_max = float(self.keywords.get('METADBIAS_MAXANGLE'))*degrees
-        periodic = True
-        bias_factor = float(self.keywords.get('METADBIAS_FACTOR'))
-        bias_height = float(self.keywords.get('METADBIAS_GHEIGHT'))*kilocalorie_per_mole
-        #these are arbitrary: no updates
-        bias_frequency = 100
-        bias_savefrequency = 100
-        #biasforce
-        torForce1 = mm.CustomTorsionForce("theta")
-        torForce1.addTorsion(int(torsion[0]), int(torsion[1]), int(torsion[2]), int(torsion[3]))
-        biasvar1 = BiasVariable(torForce1, angle_min, angle_max, gaussian_width, periodic)
-        self.metaD = Metadynamics(self.system, [biasvar1], temperature, bias_factor, bias_height, bias_frequency, bias_savefrequency, bias_dir)
-        self.metaDforcegroup = self.metaD.getForceGroup()
+        bias_dirs = self.keywords.get('METADBIAS_DIR')
+        bias_offsets = self.keywords.get('METADBIAS_IDXOFFSET')
+
+        for mdir,offset in zip(bias_dirs,bias_offsets) :
+            cntlfile = "%s/%s.cntl" % (mdir, mdir)
+            keywords  = ConfigObj(cntlfile)
+            #metadynamics settings
+            bias_factor = float(keywords.get('METADBIAS_FACTOR')) # this is (T+DeltaT)/T
+            bias_height = float(keywords.get('METADBIAS_GHEIGHT')) * kilocalorie_per_mole #height of each gaussian
+            bias_frequency = int(keywords.get('METADBIAS_FREQUENCY')) #steps in between gaussian depositions
+            bias_savefrequency = int(keywords.get('METADBIAS_SAVEFREQUENCY')) #steps in between checkpointing of bias potential
+
+            #bias force settings
+            torsions = keywords.get('METADBIAS_TORSIONS')
+            ndim = len(torsions.keys())
+
+            gaussian_width = keywords.get('METADBIAS_GWIDTH')
+            angle_min = keywords.get('METADBIAS_MINANGLE')
+            angle_max = keywords.get('METADBIAS_MAXANGLE')
+            ngrid = keywords.get('METADBIAS_NGRID')
+            periodic = keywords.get('METADBIAS_PERIODIC')
+
+            torForce = []
+            biasvar = []
+
+            for t in range(ndim):
+                torForce.append(mm.CustomTorsionForce("theta"))
+                p = torsions[str(t)]
+                gw = float(gaussian_width[t])*kilocalorie_per_mole
+                amin = float(angle_min[t])*degrees
+                amax = float(angle_max[t])*degrees
+                per = int(periodic[t]) > 0
+                ng = int(ngrid[t])
+                dp = int(offset)
+                torForce[t].addTorsion(int(p[0])+dp, int(p[1])+dp, int(p[2])+dp, int(p[3])+dp)
+                biasvar.append(BiasVariable(torForce[t], amin, amax, gw, per, ng))
+                print(mdir,offset,p,dp)
+
+            metaD = Metadynamics(self.system, biasvar, temperature, bias_factor, bias_height, bias_frequency, bias_savefrequency, mdir)
+            metaD._force.setForceGroup(self.metaDforcegroup)
+        self.doMetaD = True
 
 #Temperature RE
 class OMMSystemAmberTRE(OMMSystemAmber):
@@ -258,7 +278,7 @@ class OMMSystemAmberABFE(OMMSystemAmber):
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
         self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
-        if self.metaD != None:
+        if self.doMetaD:
             fgroups = [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.atmforcegroup,1)]
         else:
             fgroups = [(0,bonded_frequency), (self.atmforcegroup,1)]
@@ -515,7 +535,7 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
         self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
-        if self.metaD != None:
+        if self.doMetaD:
             fgroups = [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.atmforcegroup,1)]
         else:
             fgroups = [(0,bonded_frequency), (self.atmforcegroup,1)]

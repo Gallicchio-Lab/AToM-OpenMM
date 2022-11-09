@@ -53,9 +53,16 @@ class OMMWorker(object):
     def start_worker(self):
         self.ctx =  mp.get_context('spawn')
         self._startedSignal = self.ctx.Event()
+        self._startedSignal.clear()
         self._readySignal = self.ctx.Event()
+        self._readySignal.clear()
         self._runningSignal = self.ctx.Event()
+        self._runningSignal.clear()
         self._errorSignal = self.ctx.Event()
+        self._errorSignal.clear()
+        self._isDone = self.ctx.Event()
+        self._isDone.clear()
+
         self._cmdq = self.ctx.Queue()
         self._inq = self.ctx.Queue()
         self._outq = self.ctx.Queue()
@@ -73,7 +80,7 @@ class OMMWorker(object):
         if self.compute:
             #compute workers are launched as subprocesses
             s = signal.signal(signal.SIGINT, signal.SIG_IGN) #so that children do not respond to ctrl-c
-            self._p = self.ctx.Process(target=self.openmm_worker)
+            self._p = self.ctx.Process(target=self.openmm_worker, args=(self._startedSignal,self._readySignal,self._runningSignal,self._errorSignal,self._isDone,self._cmdq,self._inq,self._outq))
             self._p.daemon = True
             signal.signal(signal.SIGINT, s) #restore signal before start() of children
             self._p.start()
@@ -140,6 +147,10 @@ class OMMWorker(object):
     def is_running(self):
         return self._runningSignal.is_set()
 
+    # is worked done computing?
+    def is_done(self):
+        return self._isDone.is_set()
+
     # is worker started?
     def is_started(self):
         return self._startedSignal.is_set()
@@ -157,6 +168,8 @@ class OMMWorker(object):
         self._inq.put(nheating)
         self._inq.put(ncooling)
         self._inq.put(hightemp)
+        self._runningSignal.set()
+        self._isDone.clear()
 
     #
     # routine being multi-processed (worker)
@@ -246,17 +259,18 @@ class OMMWorker(object):
             self.logfile_p = open(self.logfile, 'a+')
             self.simulation.reporters.append(StateDataReporter(self.logfile_p, self.nprnt, step=True, temperature=True))
 
-    def openmm_worker(self):
+    def openmm_worker(self, startedSignal, readySignal, runningSignal, errorSignal, isDone, cmdq, inq, outq):
         try:
             import setproctitle
             setproctitle.setproctitle("AToM worker")
         except:
             pass
         
-        self._startedSignal.clear()
-        self._readySignal.clear()
-        self._runningSignal.clear()
-        self._errorSignal.clear()
+        startedSignal.clear()
+        readySignal.clear()
+        runningSignal.clear()
+        errorSignal.clear()
+        isDone.clear()
 
         self._openmm_worker_body()
         self._openmm_worker_makecontext()
@@ -264,69 +278,67 @@ class OMMWorker(object):
         self.positions = None
         self.velocities = None
 
-        self.command = None
-
         #start event loop
-        self._startedSignal.set()
-        self._readySignal.set()
+        startedSignal.set()
+        readySignal.set()
         while(True):
-            while(self._cmdq.empty()):
+            readySignal.set()
+            while(cmdq.empty()):
                 time.sleep(0.1)
-            command = self._cmdq.get()
+            command = cmdq.get()
+            readySignal.clear()
             if command == "SETSTATE":
                 self._worker_setstate_fromqueue()
             elif command == "SETPOSVEL":
-                self.positions = self._inq.get()
-                self.velocities = self._inq.get()
+                self.positions = inq.get()
+                self.velocities = inq.get()
                 self.context.setPositions(self.positions)
                 self.context.setVelocities(self.velocities)
             elif command == "RUN":
-                self._readySignal.clear()
-                self._runningSignal.set()
+                runningSignal.set()
+                isDone.clear()
 
-                self.nsteps = int(self._inq.get())
-                self.nheating = int(self._inq.get())
-                self.ncooling = int(self._inq.get())
-                self.hightemp = float(self._inq.get())
+                self.nsteps = int(inq.get())
+                self.nheating = int(inq.get())
+                self.ncooling = int(inq.get())
+                self.hightemp = float(inq.get())
 
                 res = self._openmm_worker_run()
 
                 if self.logfile_p is not None:
                     self.logfile_p.flush()
 
-                self._runningSignal.clear()
-                self._readySignal.set()
-
                 if res is None:
-                    self._errorSignal.set()
+                    errorSignal.set()
 
+                isDone.set()
             elif command == "GETENERGY":
                 pot = self._worker_getenergy()
             elif command == "GETPOSVEL":
                 state = self.context.getState(getPositions=True, getVelocities=True)
                 self.positions = state.getPositions()
                 self.velocities = state.getVelocities()
-                self._outq.put(self.positions)
-                self._outq.put(self.velocities)
+                outq.put(self.positions)
+                outq.put(self.velocities)
             elif command == "FINISH":
                 if self.outfile_p is not None:
                     self.outfile_p.close()
-                while not self._inq.empty():
-                    self._inq.get()
-                while not self._cmdq.empty():
-                    self._cmdq.get()
-                self._outq.close()
-                self._cmdq.close()
+                while not inq.empty():
+                    inq.get()
+                while not cmdq.empty():
+                    cmdq.get()
+                outq.close()
+                cmdq.close()
                 break
             else:
                 #unknown command, do nothing, clear queues
                 while not self.inq.empty():
-                    self._inq.get()
+                    inq.get()
                 while not self.cmdq.empty():
-                    self._cmdq.get()
+                    cmdq.get()
 
-        self._startedSignal.clear()
-        self._readySignal.clear()
+        startedSignal.clear()
+        readySignal.clear()
 
 class OMMWorkerTRE(OMMWorker):
     def _worker_setstate_fromqueue(self):

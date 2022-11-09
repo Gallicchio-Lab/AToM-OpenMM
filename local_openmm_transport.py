@@ -132,13 +132,12 @@ class LocalOpenMMTransport(Transport):
         #It will scan free devices and job queue up to maxtime.
         #If the queue becomes empty, it will still block until maxtime is elapsed.
         njobs_launched = 0
-        usetime = 0
         nreplicas = len(self.replica_to_job)
 
-        while usetime < maxtime:
+        when_started = time.time()
+        while time.time() < when_started + maxtime:
             # find an available node
             node = self._availableNode()
-
             while (not self.jobqueue.empty()) and (not node == None):
 
                 # grabs job on top of the queue
@@ -181,8 +180,6 @@ class LocalOpenMMTransport(Transport):
 
             #restarts crashed nodes if any
             self._fixnodes()
-
-            usetime += mintime
 
         return njobs_launched
 
@@ -260,10 +257,11 @@ class LocalOpenMMTransport(Transport):
             if not openmm_worker.is_started():
                 done = False
             else:
-                done = not openmm_worker.is_running()
+                done = openmm_worker.is_running() and openmm_worker.is_done()
 
             if done:
                 #update replica info
+                openmm_worker._runningSignal.clear()
                 retcode = self._update_replica(job)
                 if retcode is None:
                     self.logger.warning("isDone(): replica %d has completed with errors", replica)

@@ -34,7 +34,7 @@ for i in cdk2-* ; do ( cd $i ; bash ./run.sh ) ; done
 ```
 The `run.sh` shell scripts are formatted for optionally running them on a slurm queuing system on *EXPANSE*. Edit run_template.sh in `$HOME/examples/RBFE/cdk2/scripts` to adapt them to your cluster.
 
-Each replica exchange calculation is set to run for 2 hours on 1 GPU. Much longer running times (24 hours or more) are needed for this system to approach convergence depending on the speed of the GPU. More GPUs can be deployed by editing the `run_template.sh` file in `$HOME/examples/RBFE/cdk2/scripts`
+Each replica exchange calculation is set to run for 8 hours on 1 GPU. Much longer running times (24 hours or more) are needed for this system to approach convergence depending on the speed of the GPU. More GPUs can be deployed by editing the `run_template.sh` file in `$HOME/examples/RBFE/cdk2/scripts`
 
 ### Free Energy Analysis
 The relative binding free energy (ΔΔGb = ΔGb(B) - ΔGb(A)) between each ligand pair A and B are collected by the `free_energies.sh` script in the complexes directory:

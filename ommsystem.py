@@ -516,10 +516,13 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
 
         """
         refatoms1_cntl = self.keywords.get('ALIGN_LIGAND1_REF_ATOMS')
+        refatoms2_cntl = self.keywords.get('ALIGN_LIGAND2_REF_ATOMS')
+
+        if refatoms1_cntl == None or refatoms2_cntl == None:
+            return
+
         self.refatoms1 = [int(refatoms1) for refatoms1 in refatoms1_cntl]
         lig1_ref_atoms  = [ self.refatoms1[i]+self.lig1_atoms[0] for i in range(3)]
-
-        refatoms2_cntl = self.keywords.get('ALIGN_LIGAND2_REF_ATOMS')
         self.refatoms2 = [int(refatoms2) for refatoms2 in refatoms2_cntl]
         lig2_ref_atoms  = [ self.refatoms2[i]+self.lig2_atoms[0] for i in range(3)]
 

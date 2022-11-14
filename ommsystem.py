@@ -30,6 +30,7 @@ class OMMSystem(object):
         self.positions = None
         self.boxvectors = None
         self.integrator = None
+        self.barostat = None
         self.keywords = keywords
         self.basename = basename
         self.logger = logger
@@ -93,12 +94,12 @@ class OMMSystemAmber(OMMSystem):
         Requires: self,
         temperature
         pressure : eg. 1*bar
-        frequency : 0 - disable the barostat; 1 - enable the Barostat
+        frequency : 0 - disable the barostat
 
         """
-        barostat = MonteCarloBarostat(pressure, temperature)
-        barostat.setFrequency(frequency)#disabled
-        self.system.addForce(barostat)
+        self.barostat = MonteCarloBarostat(pressure, temperature)
+        self.barostat.setFrequency(frequency)
+        self.system.addForce(self.barostat)
 
     def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
         #place non-bonded force in group 1, assume all other bonded forces are in group 0

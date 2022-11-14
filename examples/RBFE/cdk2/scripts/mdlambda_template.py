@@ -180,8 +180,10 @@ simulation.saveState(jobname + "_0.xml")
 
 #save a pdb file for visualization
 positions = simulation.context.getState(getPositions=True).getPositions()
+boxsize = simulation.context.getState().getPeriodicBoxVectors()
+simulation.topology.setPeriodicBoxVectors(boxsize)
 with open(jobname + '_0.pdb', 'w') as output:
-  PDBFile.writeFile(simulation.topology, positions, output)
+    PDBFile.writeFile(simulation.topology, positions, output)
 
 end=datetime.now()
 elapsed=end - start

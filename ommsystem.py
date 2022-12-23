@@ -134,7 +134,8 @@ class OMMSystemAmber(OMMSystem):
 
         for mdir,offset in zip(bias_dirs,bias_offsets) :
             cntlfile = "%s/%s.cntl" % (mdir, mdir)
-            keywords  = ConfigObj(cntlfile)
+            keywords  = ConfigObj(cntlfile, file_error = True)
+
             #metadynamics settings
             bias_factor = float(keywords.get('METADBIAS_FACTOR')) # this is (T+DeltaT)/T
             bias_height = float(keywords.get('METADBIAS_GHEIGHT')) * kilocalorie_per_mole #height of each gaussian
@@ -165,7 +166,6 @@ class OMMSystemAmber(OMMSystem):
                 dp = int(offset)
                 torForce[t].addTorsion(int(p[0])+dp, int(p[1])+dp, int(p[2])+dp, int(p[3])+dp)
                 biasvar.append(BiasVariable(torForce[t], amin, amax, gw, per, ng))
-                print(mdir,offset,p,dp)
 
             metaD = Metadynamics(self.system, biasvar, temperature, bias_factor, bias_height, bias_frequency, bias_savefrequency, mdir)
             metaD._force.setForceGroup(self.metaDforcegroup)

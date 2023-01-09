@@ -57,11 +57,13 @@ class async_re(object):
         #set to False to run without exchanges
         self.exchange = True
 
-        #catch ctrl-C to terminate threads gracefully
+        #catch ctrl-C and SIGTERM to terminate threads gracefully
         signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
 
     def _exit(self, message):
         """Print and flush a message to stdout and then exit."""
+        self.checkpointJob()
         self._cleanup()
         self.logger.info(message)
         sys.stdout.flush()
@@ -85,7 +87,7 @@ class async_re(object):
             pass
 
     def _signal_handler(self, sig, frame):
-        msg = "SIGINT detected ... cleaning up."
+        msg = "Termination signal %s detected ... cleaning up." % str(sig)
         self._exit(msg)
 
     def _setLogger(self):
@@ -342,6 +344,7 @@ class async_re(object):
         return
 
     def checkpointJob(self):
+        #defined in subclasses
         pass
 
     def _write_status(self):

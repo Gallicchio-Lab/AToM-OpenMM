@@ -44,5 +44,7 @@ setup(name=NAME,
       author_email=AUTHOR_EMAIL,
       py_modules=MODULES,
       scripts=SCRIPTS,
+      # Fake a package to include the config file
+      packages=['utils'], package_data={'utils': ['logging.conf']},
       requires=REQUIRES
      )

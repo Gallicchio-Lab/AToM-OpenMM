@@ -19,8 +19,7 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import sys
-from distutils.core import setup
+from setuptools import setup
 from async_re import __version__ as VERSION
 
 NAME = 'async_re'
@@ -44,5 +43,8 @@ setup(name=NAME,
       author=AUTHOR,
       author_email=AUTHOR_EMAIL,
       py_modules=MODULES,
+      scripts=SCRIPTS,
+      # Fake a package to include the config file
+      packages=['utils'], package_data={'utils': ['logging.conf']},
       requires=REQUIRES
      )

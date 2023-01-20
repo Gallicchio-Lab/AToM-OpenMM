@@ -81,8 +81,12 @@ class OMMSystemAmber(OMMSystem):
         """
         self.prmtop = AmberPrmtopFile(self.prmtopfile)
         self.inpcrd = AmberInpcrdFile(self.crdfile)
+        if self.keywords.get('HMASS') is not None:
+            hmass = float(self.keywords.get('HMASS'))*amu
+        else:
+            hmass = 1.0*amu
         self.system = self.prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=0.9*nanometer,
-                                               constraints=HBonds)
+                                               constraints=HBonds, hydrogenMass = hmass)
         self.topology = self.prmtop.topology
         self.positions = self.inpcrd.positions
         self.boxvectors = self.inpcrd.boxVectors

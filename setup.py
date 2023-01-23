@@ -27,7 +27,7 @@ NAME = 'async_re'
 MODULES = 'async_re', 'ommreplica', 'ommsystem', 'ommworker', 'local_openmm_transport', 'transport', 'gibbs_sampling', 'openmm_async_re'
 
 
-SCRIPTS = 'abfe_explicit.py', 'rbfe_explicit.py'
+SCRIPTS = 'abfe_explicit.py', 'rbfe_explicit.py', 'abfe_structprep.py', 'rbfe_structprep.py'
 
 REQUIRES = 'configobj', 'numpy'
 

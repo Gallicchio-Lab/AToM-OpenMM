@@ -90,6 +90,7 @@ class OMMReplica(object):
             mode = 'wb'
         self.dcdfile = open(dcdfilename, mode)
         self.dcd = DCDFile(self.dcdfile, self.worker.topology, self.ommsystem.MDstepsize, append=append)
+        self.dcdfile.flush() # Force the writing of the DCD header
 
     def save_dcd(self):
         #TODO

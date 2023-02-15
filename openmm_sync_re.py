@@ -14,7 +14,7 @@ from gibbs_sampling import pairwise_independence_sampling
 from local_openmm_transport import LocalOpenMMTransport
 from ommreplica import OMMReplicaATM
 from ommsystem import OMMSystemAmberRBFE
-from ommworker import OMMWorkerATM
+from ommworker_sync import OMMWorkerATM
 
 __version__ = '3.3.0'
 

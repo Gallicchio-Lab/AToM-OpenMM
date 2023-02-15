@@ -1,22 +1,14 @@
-from __future__ import print_function
-from __future__ import division
-import os
-import re
-import random
-import math
 import logging
+import math
 import signal
 
-from simtk import openmm as mm
-from simtk.openmm.app import *
-from simtk.openmm import *
-from simtk.unit import *
+from openmm.unit import kelvin, kilocalories_per_mole
 
 from async_re import async_re
-from local_openmm_transport import *
-from ommreplica import *
-from ommsystem import *
-from ommworker import *
+from ommreplica import OMMReplicaATM
+from ommsystem import OMMSystemAmberRBFE
+from ommworker import OMMWorkerATM
+
 
 class openmm_job(async_re):
     def __init__(self, command_file, options):
@@ -25,10 +17,10 @@ class openmm_job(async_re):
         self.stateparams = None
         self.openmm_workers = None
         self.kb = 0.0019872041*kilocalories_per_mole/kelvin
-        
+
     def _setLogger(self):
-        self.logger = logging.getLogger("async_re.openmm_async_re")
-        
+        self.logger = logging.getLogger("async_re.openmm_sync_re")
+
     def checkpointJob(self):
         #disable ctrl-c
         s = signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -146,49 +138,6 @@ class openmm_job(async_re):
         return U
 
 
-class openmm_job_TRE(openmm_job):
-    def _buildStates(self):
-        self.stateparams = []
-        for tempt in self.temperatures:
-            par = {}
-            par['temperature'] = float(tempt)*kelvin
-            self.stateparams.append(par)
-        return len(self.stateparams)
-
-    def _checkInput(self):
-        async_re._checkInput(self)
-
-        if self.keywords.get('TEMPERATURES') is None:
-            self._exit("TEMPERATURES needs to be specified")
-        self.temperatures = self.keywords.get('TEMPERATURES').split(',')
-        self.nreplicas = self._buildStates()
-
-    def print_status(self):
-        """
-        Writes to BASENAME_stat.txt a text version of the status of the RE job
-
-        It's fun to follow the progress in real time by doing:
-
-        watch cat BASENAME_stat.txt
-        """
-        logfile = "%s_stat.txt" % self.basename
-        ofile = open(logfile,"w")
-        log = "Replica  State   Temperature Status  Cycle \n"
-        for k in range(self.nreplicas):
-            stateid = self.status[k]['stateid_current']
-            log += "%6d   %5d  %s %6.2f  %5d \n" % (k, stateid, self.stateparams[stateid]['temperature']/kelvin, self.status[k]['running_status'], self.status[k]['cycle_current'])
-        log += "Running = %d\n" % self.running
-        log += "Waiting = %d\n" % self.waiting
-
-        ofile.write(log)
-        ofile.close()
-
-    def _reduced_energy(self, par, pot):
-        temperature = par['temperature']
-        potential_energy = pot['potential_energy']
-        beta = 1./(self.kb*temperature)
-        return beta*potential_energy
-        
 class openmm_job_ATM(openmm_job):
     def _buildStates(self):
         self.stateparams = []
@@ -320,65 +269,6 @@ class openmm_job_ATM(openmm_job):
         #replica.convert_pos_into_direction_format()
         pass
 
-class openmm_job_AmberTRE(openmm_job_TRE):
-    def __init__(self, command_file, options):
-        super().__init__(command_file, options)
-
-        prmtopfile = self.basename + ".prmtop"
-        crdfile = self.basename + ".inpcrd"
-
-        if self.stateparams is None:
-            self._buildStates()
-
-        #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberTRE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
-        self.service_worker = OMMWorkerTRE(self.basename, ommsys, self.keywords, compute = False, logger = self.logger)
-        #creates openmm replica objects
-        self.openmm_replicas = []
-        for i in range(self.nreplicas):
-            replica = OMMReplicaTRE(i, self.basename, self.service_worker, self.logger)
-            if replica.stateid == None:
-                replica.set_state(i, self.stateparams[i])#initial setting
-            self.openmm_replicas.append(replica)
-
-        # creates openmm workers
-        self.openmm_workers = []
-        pattern = re.compile('(\d+):(\d+)')
-        for node in self.compute_nodes:
-            slot_id = node["slot_number"]
-            matches = pattern.search(slot_id)
-            platform_id = int(matches.group(1))
-            device_id = int(matches.group(2))
-            gpu_platform_name = node["arch"]
-            ommsys = OMMSystemAmberTRE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
-            self.openmm_workers.append(OMMWorkerTRE(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
-
-class openmm_job_AmberABFE(openmm_job_ATM):
-    def __init__(self, command_file, options):
-        super().__init__(command_file, options)
-
-        prmtopfile = self.basename + ".prmtop"
-        crdfile = self.basename + ".inpcrd"
-
-        if self.stateparams is None:
-            self._buildStates()
-
-        #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberABFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
-        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
-        #creates openmm replica objects
-        self.openmm_replicas = []
-        for i in range(self.nreplicas):
-            replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger)
-            if replica.stateid == None:
-                replica.set_state(i, self.stateparams[i])#initial setting
-            self.openmm_replicas.append(replica)
-
-        # creates openmm workers objects
-        self.openmm_workers = []
-        for node in self.compute_nodes:
-            ommsys = OMMSystemAmberABFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
-            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
 
 class openmm_job_AmberRBFE(openmm_job_ATM):
     def __init__(self, command_file, options):

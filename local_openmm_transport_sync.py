@@ -15,9 +15,6 @@ class LocalOpenMMTransport(Transport):
         self.worker = workers[0]
         self.replicas = replicas
 
-    def numNodesAlive(self):
-        return 1
-
     def launchJob(self, i_replica, job_info):
         self.logger.debug('transport.lunchJob')
 
@@ -29,14 +26,6 @@ class LocalOpenMMTransport(Transport):
 
         self.worker.run(job_info['nsteps'])
         self._update_replica(replica, job_info)
-
-        return 1
-
-    def ProcessJobQueue(self, mintime, maxtime):
-        return 1
-
-    def DrainJobQueue(self):
-        pass
 
     def _update_replica(self, replica, job_info):
         self.logger.debug(f'transport._update_replica: {job_info}')
@@ -72,8 +61,3 @@ class LocalOpenMMTransport(Transport):
             replica.save_out()
         if mdsteps % job_info['ntrj'] == 0:
             replica.save_dcd()
-
-        return 0
-
-    def isDone(self,replica,cycle):
-        return True

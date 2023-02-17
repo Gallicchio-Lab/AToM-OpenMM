@@ -432,9 +432,12 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
         if self.stateparams is None:
             self._buildStates()
 
+        node_info = self.compute_nodes[0]
+
         #builds service worker for replicas use
         service_ommsys = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
-        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.config, compute = False, logger = self.logger)
+        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.config, node_info, compute=False, logger=self.logger)
+
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
@@ -444,7 +447,5 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
             self.openmm_replicas.append(replica)
 
         # creates openmm context objects
-        self.openmm_workers = []
-        for node in self.compute_nodes:
-            ommsys = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger) 
-            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.config, node_info = node, compute = True, logger = self.logger))
+        ommsys = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger) 
+        self.openmm_workers = [OMMWorkerATM(self.basename, ommsys, self.config, node_info, compute=True, logger=self.logger)]

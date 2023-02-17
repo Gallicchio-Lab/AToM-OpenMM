@@ -236,22 +236,9 @@ class openmm_job(sync_re):
 
     def update_state_of_replica(self, repl):
         replica = self.openmm_replicas[repl]
-        #retrieve previous state if set
-        (old_stateid, old_par) =  replica.get_state()
-        if old_stateid != None:
-            old_temperature = old_par['temperature']
-        #sets new state
-        stateid = self.status[repl]['stateid_current']
-        par = self.stateparams[stateid]
-        replica.set_state(stateid, par)
-
-        #rescale velocities (relevant only if state has changed)
-        if old_stateid != None:
-            if stateid != old_stateid:
-                temperature = par['temperature']
-                scale = math.sqrt(temperature/old_temperature)
-                for i in range(0,len(replica.velocities)):
-                    replica.velocities[i] = scale*replica.velocities[i]
+        old_stateid, _ = replica.get_state()
+        new_stateid = self.status[repl]['stateid_current']
+        replica.set_state(new_stateid, self.stateparams[new_stateid])
 
     def _getPar(self, repl):
         _, par = self.openmm_replicas[repl].get_state()

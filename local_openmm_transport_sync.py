@@ -1,17 +1,12 @@
 import logging
 import math
-import multiprocessing as mp
-import time
 
 from transport import Transport
 
 
 class LocalOpenMMTransport(Transport):
-    """
-    Class to launch and monitor jobs on a set of local GPUs
-    """
+
     def __init__(self, jobname, openmm_workers, openmm_replicas):
-        # jobname: identifies current asyncRE job
         Transport.__init__(self)
         #self.logger = logging.getLogger("async_re.local_openmm_transport")
         self.logger = logging.getLogger("async_re.openmm_sync_re")
@@ -27,23 +22,32 @@ class LocalOpenMMTransport(Transport):
         # None = no information about where the replica is running
         self.replica_to_job = [ None for k in range(len(openmm_replicas)) ]
 
-        # implements a queue of jobs from which to draw the next job
-        # to launch
-        ctx = mp.get_context('spawn')
-        self.jobqueue = ctx.Queue()
-
     def numNodesAlive(self):
         return 1
 
     def launchJob(self, replica, job_info):
+
         self.logger.debug('transport.lunchJob')
-        #Enqueues a replica for running based on provided job info.
         job = job_info
         job['replica'] = replica
-        job['start_time'] = 0
         self.replica_to_job[replica] = job
-        self.jobqueue.put(replica)
-        return self.jobqueue.qsize()
+
+        node = 0
+        job = self.replica_to_job[replica]
+
+        job['nodeid'] = node
+        job['openmm_replica'] = self.openmm_replicas[replica]
+        job['openmm_worker'] = self.openmm_workers[node]
+
+        self.replica_to_job[replica] = job
+        self.LaunchReplica(job['openmm_worker'], job['openmm_replica'], job['cycle'],
+                            job['nsteps'])
+
+        nreplicas = len(self.replica_to_job)
+        for repl in range(nreplicas):
+            self.isDone(repl,0)
+
+        return 1
 
     def LaunchReplica(self, worker, replica, cycle, nsteps):
         self.logger.debug('transport.LaunchReplica')
@@ -53,34 +57,6 @@ class LocalOpenMMTransport(Transport):
         worker.run(nsteps)
 
     def ProcessJobQueue(self, mintime, maxtime):
-        #Launches jobs waiting in the queue.
-        #It will scan free devices and job queue up to maxtime.
-        #If the queue becomes empty, it will still block until maxtime is elapsed.
-        nreplicas = len(self.replica_to_job)
-
-        # find an available node
-        node = 0
-
-        # grabs job on top of the queue
-        replica = self.jobqueue.get()
-        job = self.replica_to_job[replica]
-
-        # assign job to available node
-        job['nodeid'] = node
-        job['openmm_replica'] = self.openmm_replicas[replica]
-        job['openmm_worker'] = self.openmm_workers[node]
-        job['start_time'] = time.time()
-
-        # connects node to replica
-        self.replica_to_job[replica] = job
-
-        self.LaunchReplica(job['openmm_worker'], job['openmm_replica'], job['cycle'],
-                            job['nsteps'])
-
-        # updates set of free nodes by checking for replicas that have exited
-        for repl in range(nreplicas):
-            self.isDone(repl,0)
-
         return 1
 
     def DrainJobQueue(self):

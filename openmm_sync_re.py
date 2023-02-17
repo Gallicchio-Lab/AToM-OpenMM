@@ -9,9 +9,8 @@ import time
 from configobj import ConfigObj
 from openmm.unit import kelvin, kilocalories_per_mole
 
-from async_re import async_re
 from gibbs_sampling import pairwise_independence_sampling
-from local_openmm_transport import LocalOpenMMTransport
+from local_openmm_transport_sync import LocalOpenMMTransport
 from ommreplica import OMMReplicaATM
 from ommsystem import OMMSystemAmberRBFE
 from ommworker_sync import OMMWorkerATM
@@ -269,9 +268,13 @@ class sync_re:
         end_time = start_time + 60*(self.walltime - replica_run_time)
         last_checkpoint_time = start_time
 
+        self.logger.debug("Entering event loop: 1")
         while ( time.time() < end_time and
                 self.transport.numNodesAlive() > 0 and
                 not enough_samples ) :
+
+            self.logger.debug("=== Event loop: 1 ===")
+
             current_time = time.time()
 
             self.updateStatus()
@@ -491,7 +494,7 @@ class sync_re:
 
 class openmm_job(sync_re):
     def __init__(self, command_file, options):
-        async_re.__init__(self, command_file, options)
+        sync_re.__init__(self, command_file, options)
         self.openmm_replicas = None
         self.stateparams = None
         self.openmm_workers = None
@@ -636,7 +639,7 @@ class openmm_job_ATM(openmm_job):
         return len(self.stateparams)
 
     def _checkInput(self):
-        async_re._checkInput(self)
+        sync_re._checkInput(self)
 
         if self.keywords.get('LAMBDAS') is None:
             self._exit("LAMBDAS needs to be specified")

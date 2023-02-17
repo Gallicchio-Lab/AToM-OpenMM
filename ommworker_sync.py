@@ -9,7 +9,7 @@ from openmm.app import Simulation, StateDataReporter
 from openmm.unit import kelvin, kilojoules_per_mole
 
 
-class OMMWorker:
+class OMMWorkerATM:
     # OpenMM worker to run a replica in a process controlling one device
     #
     # The following methods can be overriden to support other replica exchange protocols.
@@ -112,12 +112,12 @@ class OMMWorker:
         return (self.positions, self.velocities)
 
     # sets the reporters of the worker
-    def set_reporters(self, current_steps, outfile, logfile, dcdfile):
-        self._startedSignal.wait()
-        self._readySignal.wait()
-        self._cmdq.put("SETREPORTERS")
-        self._inq.put(current_steps)
-        self._inq.put(logfile)
+    # def set_reporters(self, current_steps, outfile, logfile, dcdfile):
+    #     self._startedSignal.wait()
+    #     self._readySignal.wait()
+    #     self._cmdq.put("SETREPORTERS")
+    #     self._inq.put(current_steps)
+    #     self._inq.put(logfile)
 
     # kills worker
     def finish(self, wait = False):
@@ -330,12 +330,13 @@ class OMMWorker:
         startedSignal.clear()
         readySignal.clear()
 
-
-class OMMWorkerATM(OMMWorker):
     def _worker_setstate_fromqueue(self):
+
         self.par = self._inq.get()
+
         self.integrator.setTemperature(self.par['temperature'])
         self.context.setParameter(self.ommsystem.parameter['temperature'], self.par['temperature']/kelvin)
+
         atmforce = self.ommsystem.atmforce
         self.simulation.context.setParameter(atmforce.Lambda1(), self.par['lambda1'])
         self.simulation.context.setParameter(atmforce.Lambda2(), self.par['lambda2'])
@@ -345,16 +346,12 @@ class OMMWorkerATM(OMMWorker):
         self.simulation.context.setParameter(atmforce.Direction(), self.par['atmdirection'] )
 
     def _worker_getenergy(self):
-        if self.ommsystem.doMetaD:
-            fgroups = {0,self.ommsystem.metaDforcegroup,self.ommsystem.atmforcegroup}
-        else:
-            fgroups = {0,self.ommsystem.atmforcegroup}
+
+        fgroups = {0,self.ommsystem.metaDforcegroup,self.ommsystem.atmforcegroup}
         state = self.simulation.context.getState(getEnergy = True, groups = fgroups)
+        
         self.pot['potential_energy'] = state.getPotentialEnergy()
         self.pot['perturbation_energy'] = self.ommsystem.atmforce.getPerturbationEnergy(self.simulation.context)
-        if self.ommsystem.doMetaD:
-            state = self.simulation.context.getState(getEnergy = True, groups = {self.ommsystem.metaDforcegroup})
-            self.pot['bias_energy'] = state.getPotentialEnergy()
-        else:
-            self.pot['bias_energy'] = 0.0 * kilojoules_per_mole
+        self.pot['bias_energy'] = 0.0 * kilojoules_per_mole
+
         self._outq.put(self.pot)

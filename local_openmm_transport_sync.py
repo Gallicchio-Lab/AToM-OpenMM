@@ -1,7 +1,6 @@
 import logging
 import math
 import multiprocessing as mp
-# import random
 import time
 
 from transport import Transport
@@ -19,16 +18,10 @@ class LocalOpenMMTransport(Transport):
 
         # openmm contexts
         self.openmm_workers = openmm_workers
-        # self.nprocs = len(self.openmm_workers)
+        assert len(self.openmm_workers) == 1
 
         # record replica OpenMM objects
         self.openmm_replicas = openmm_replicas
-
-        # device status = None if idle
-        # Otherwise a structure containing:
-        #    replica id being executed
-        #    ...
-        # self.node_status = [ None for k in range(self.nprocs)]
 
         # contains information about the device etc. running a replica
         # None = no information about where the replica is running
@@ -39,65 +32,8 @@ class LocalOpenMMTransport(Transport):
         ctx = mp.get_context('spawn')
         self.jobqueue = ctx.Queue()
 
-        # self.ncrashes = [ 0 for k in range(self.nprocs)]
-        # self.disabled = [ False for k in range(self.nprocs)]
-        # self.maxcrashes = 4
-
-    # def _clear_resource(self, replica):
-    #     # frees up the node running a replica identified by replica id
-    #     job = {}
-    #     try:
-    #         job = self.replica_to_job[replica]
-    #         if job is None:
-    #             return None
-    #     except:
-    #         self.logger.warning("clear_resource(): unknown replica id %d",
-    #                             replica)
-
-    #     if 'nodeid' not in job:
-    #         return None
-    #     else:
-    #         nodeid = job['nodeid']
-
-        # try:
-        #     if self.node_status[nodeid] is not None and self.node_status[nodeid] >= 0: #-1 signals a crashed node that should be left alone
-        #         self.node_status[nodeid] = None
-        # except:
-        #     self.logger.warning("clear_resource(): unable to query nodeid %d", nodeid)
-        #     return None
-
-        # return nodeid
-
     def numNodesAlive(self):
-        # alive = [node for node in range(self.nprocs)
-        #              if self.node_status[node] is None or self.node_status[node] >= 0 ]
-        # return len(alive)
         return 1
-
-    # def _fixnodes(self):
-    #     for nodeid in range(self.nprocs):
-    #         if self.node_status[nodeid] is not None and self.node_status[nodeid] < 0 and not self.disabled[nodeid]:
-    #             if self.ncrashes[nodeid] <= self.maxcrashes:
-    #                 self.ncrashes[nodeid] += 1
-    #                 self.logger.warning("fixnodes(): attempting to restart nodeid %d", nodeid)
-    #                 res = self.openmm_workers[nodeid].start_worker()
-    #                 if res is not None:
-    #                     self.node_status[nodeid] = None
-    #             else:
-    #                 self.logger.warning("fixnodes(): node %d has crashed too many times; it will not be restarted.", nodeid)
-    #                 self.disabled[nodeid] = True
-
-    def _availableNode(self):
-        #returns a node at random among available nodes
-        # available = [node for node in range(self.nprocs)
-        #              if self.node_status[node] is None]
-
-        # if available == None or len(available) == 0:
-        #     return None
-        # random.shuffle(available)
-
-        # return available[0]
-        return 0
 
     def launchJob(self, replica, job_info):
         self.logger.debug('transport.lunchJob')
@@ -109,79 +45,45 @@ class LocalOpenMMTransport(Transport):
         self.jobqueue.put(replica)
         return self.jobqueue.qsize()
 
-    def LaunchReplica(self, worker, replica, cycle, nsteps,
-                      nheating = 0, ncooling = 0, hightemp = 0.0):
+    def LaunchReplica(self, worker, replica, cycle, nsteps):
         self.logger.debug('transport.LaunchReplica')
-        (stateid, par) = replica.get_state()
+        _, par = replica.get_state()
         worker.set_posvel(replica.positions, replica.velocities)
         worker.set_state(par)
-        worker.run(nsteps, nheating, ncooling, hightemp)
+        worker.run(nsteps)
 
     def ProcessJobQueue(self, mintime, maxtime):
         #Launches jobs waiting in the queue.
         #It will scan free devices and job queue up to maxtime.
         #If the queue becomes empty, it will still block until maxtime is elapsed.
-        njobs_launched = 0
         nreplicas = len(self.replica_to_job)
 
-        when_started = time.time()
-        # while time.time() < when_started + maxtime:
-        if True:
-            # find an available node
-            node = self._availableNode()
-            self.logger.debug(f"Node: {node}")
-            # while (not self.jobqueue.empty()) and (not node == None):
-            if True:
-                # grabs job on top of the queue
-                replica = self.jobqueue.get()
-                job = self.replica_to_job[replica]
+        # find an available node
+        node = 0
 
-                # assign job to available node
-                job['nodeid'] = node
-                job['openmm_replica'] = self.openmm_replicas[replica]
-                job['openmm_worker'] = self.openmm_workers[node]
-                job['start_time'] = time.time()
+        # grabs job on top of the queue
+        replica = self.jobqueue.get()
+        job = self.replica_to_job[replica]
 
-                # connects node to replica
-                self.replica_to_job[replica] = job
-                # self.node_status[node] = replica
+        # assign job to available node
+        job['nodeid'] = node
+        job['openmm_replica'] = self.openmm_replicas[replica]
+        job['openmm_worker'] = self.openmm_workers[node]
+        job['start_time'] = time.time()
 
-                if 'nheating' in job:
-                    nheating = job['nheating']
-                    ncooling = job['ncooling']
-                    hightemp = job['hightemp']
-                else:
-                    nheating = 0
-                    ncooling = 0
-                    hightemp = 0.0
+        # connects node to replica
+        self.replica_to_job[replica] = job
 
-                self.LaunchReplica(job['openmm_worker'], job['openmm_replica'], job['cycle'],
-                                   job['nsteps'], nheating, ncooling, hightemp)
+        self.LaunchReplica(job['openmm_worker'], job['openmm_replica'], job['cycle'],
+                            job['nsteps'])
 
-                # updates number of jobs launched
-                njobs_launched += 1
+        # updates set of free nodes by checking for replicas that have exited
+        for repl in range(nreplicas):
+            self.isDone(repl,0)
 
-                node = self._availableNode()
-
-            # waits mintime second and rescans job queue
-            # time.sleep(mintime)
-
-            # updates set of free nodes by checking for replicas that have exited
-            for repl in range(nreplicas):
-                self.isDone(repl,0)
-
-            #restarts crashed nodes if any
-            # self._fixnodes()
-
-        return njobs_launched
+        return 1
 
     def DrainJobQueue(self):
-        #clear the job queue
-        # while not self.jobqueue.empty():
-        #     # grabs job on top of the queue
-        #     replica = self.jobqueue.get()
-        #     self._clear_resource(replica)
-        #     self.replica_to_job[replica] = None
         pass
 
     def _update_replica(self, job):
@@ -189,8 +91,6 @@ class LocalOpenMMTransport(Transport):
 
         #update replica cycle, mdsteps, write out, etc. from worker
         ommreplica = job['openmm_replica']
-        # if job['openmm_worker'].has_crashed(): #refuses to update replica from a crashed worker
-        #     return None
         pos, vel = job['openmm_worker'].get_posvel()
         assert pos
         assert vel
@@ -228,51 +128,17 @@ class LocalOpenMMTransport(Transport):
         return 0
 
     def isDone(self,replica,cycle):
-        """
-        Checks if a replica completed a run.
-
-        If a replica is done it clears the corresponding node.
-        Note that cycle is ignored by job transport. It is assumed that it is
-        the latest cycle.  it's kept for argument compatibility with
-        hasCompleted() elsewhere.
-        """
         self.logger.debug(f'transport.isDone: {replica}')
 
         job = self.replica_to_job[replica]
-        if job == None:
+        if job is None:
             # if job has been removed we assume that the replica is done
             return True
-        else:
-            try:
-                openmm_worker = job['openmm_worker']
-            except:
-                #job is in the queue but not yet launched
-                return False
 
-            # if openmm_worker.has_crashed():
-            #     self.logger.warning("isDone(): replica %d has crashed", replica)
-            #     openmm_worker.finish(wait = False)
-            #     self.node_status[job['nodeid']] = -1 #signals dead context
-            #     self._clear_resource(replica)
-            #     self.replica_to_job[replica] = None
-            #     return True
-
-            # if not openmm_worker.is_started():
-            #     done = False
-            # else:
-            #     done = openmm_worker.is_running() and openmm_worker.is_done()
-
-            # if done:
-            if True:
-                #update replica info
-                # openmm_worker._runningSignal.clear()
-                retcode = self._update_replica(job)
-                # if retcode is None:
-                #     self.logger.warning("isDone(): replica %d has completed with errors", replica)
-                #     self.node_status[job['nodeid']] = -1 #signals dead context
-                # disconnects replica from job and node
-                # self._clear_resource(replica)
-                #flag replica as not linked to a job
-                self.replica_to_job[replica] = None
-
+        if 'openmm_replica' not in job:
             return True
+
+        self._update_replica(job)
+        self.replica_to_job[replica] = None
+
+        return True

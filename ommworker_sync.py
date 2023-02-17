@@ -176,3 +176,5 @@ class OMMWorkerATM:
         self.pot['potential_energy'] = state.getPotentialEnergy()
         self.pot['perturbation_energy'] = self.ommsystem.atmforce.getPerturbationEnergy(self.simulation.context)
         self.pot['bias_energy'] = 0.0 * kilojoules_per_mole
+
+        return self.pot

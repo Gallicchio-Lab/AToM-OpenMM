@@ -1,8 +1,5 @@
-import multiprocessing as mp
 import os
 import re
-import signal
-import time
 
 from openmm import Platform
 from openmm.app import Simulation, StateDataReporter
@@ -10,15 +7,7 @@ from openmm.unit import kelvin, kilojoules_per_mole
 
 
 class OMMWorkerATM:
-    # OpenMM worker to run a replica in a process controlling one device
-    #
-    # The following methods can be overriden to support other replica exchange protocols.
-    # See bedamtempt for an example
-    #  set_state_values()
-    #  get_energy_values()
-    #  _worker_setstate_fromqueue()
-    #  _worker_getenergy()
-    #  _openmm_worker_body()
+
     def __init__(self, basename, ommsystem, keywords, node_info = None, compute = True, logger = None):
         self.node_name = None
         self.platform_name = None
@@ -38,24 +27,7 @@ class OMMWorkerATM:
         self.ommsystem = ommsystem
         self.compute = compute
         self.logger = logger
-        self.start_worker()
 
-    def start_worker(self):
-        self.ctx =  mp.get_context('spawn')
-        self._startedSignal = self.ctx.Event()
-        self._startedSignal.clear()
-        self._readySignal = self.ctx.Event()
-        self._readySignal.clear()
-        self._runningSignal = self.ctx.Event()
-        self._runningSignal.clear()
-        self._errorSignal = self.ctx.Event()
-        self._errorSignal.clear()
-        self._isDone = self.ctx.Event()
-        self._isDone.clear()
-
-        self._cmdq = self.ctx.Queue()
-        self._inq = self.ctx.Queue()
-        self._outq = self.ctx.Queue()
         self.simulation = None
         self.context = None
         self.atmforce = None
@@ -67,127 +39,61 @@ class OMMWorkerATM:
         self.logfile_p = None
         self.outfile_p = None
         self.nprnt = int(self.keywords.get('PRNT_FREQUENCY'))
-        if self.compute:
-            #compute workers are launched as subprocesses
-            s = signal.signal(signal.SIGINT, signal.SIG_IGN) #so that children do not respond to ctrl-c
-            self._p = self.ctx.Process(target=self.openmm_worker, args=(self._startedSignal,self._readySignal,self._runningSignal,self._errorSignal,self._isDone,self._cmdq,self._inq,self._outq))
-            self._p.daemon = True
-            signal.signal(signal.SIGINT, s) #restore signal before start() of children
-            self._p.start()
-            self._readySignal.wait()
-            return self._p
-        else:
-            #the service worker needs only the context in this process
-            self._openmm_worker_body()
-            self._openmm_worker_makecontext()
-            return 1
+
+        self._openmm_worker_body()
+        self._openmm_worker_makecontext()
 
     def set_state(self, par):
-        self._readySignal.wait()
-        self._cmdq.put("SETSTATE")
-        self._inq.put(par)
+        self.logger.debug("ommworker.set_state")
+        self.par = par
+        self._worker_setstate_fromqueue()
 
     def get_energy(self):
-        self._startedSignal.wait()
-        self._readySignal.wait()
-        self._cmdq.put("GETENERGY")
-        pot = self._outq.get()
-        return pot
+        self.logger.debug("ommworker.get_energy")
+        return self._worker_getenergy()
 
-    # set positions and velocities of worker
     def set_posvel(self, positions, velocities):
-        self._startedSignal.wait()
-        self._readySignal.wait()
-        self._cmdq.put("SETPOSVEL")
-        self._inq.put(positions)
-        self._inq.put(velocities)
+        self.logger.debug("ommworker.set_posvel")
+        self.context.setPositions(positions)
+        self.context.setVelocities(velocities)
 
-    # get positions and velocities from worker
     def get_posvel(self):
-        self._startedSignal.wait()
-        self._readySignal.wait()
-        self._cmdq.put("GETPOSVEL")
-        self.positions = self._outq.get()
-        self.velocities = self._outq.get()
+        self.logger.debug("ommworker.get_posvel")
+        state = self.context.getState(getPositions=True, getVelocities=True)
+        self.positions = state.getPositions()
+        self.velocities = state.getVelocities()
         return (self.positions, self.velocities)
 
-    # sets the reporters of the worker
-    # def set_reporters(self, current_steps, outfile, logfile, dcdfile):
-    #     self._startedSignal.wait()
-    #     self._readySignal.wait()
-    #     self._cmdq.put("SETREPORTERS")
-    #     self._inq.put(current_steps)
-    #     self._inq.put(logfile)
-
-    # kills worker
     def finish(self, wait = False):
-        if wait:
-            self._startedSignal.wait()
-            self._readySignal.wait()
-        self._cmdq.put("FINISH")
-        while not self._outq.empty():
-            self._outq.get()
-        self._inq.close()
-        self._cmdq.close()
-        self._p.terminate()
-        self._p.join(10) #10s time-out
-        self._p.exitcode
+        pass
 
-    # is worker running?
     def is_running(self):
-        return self._runningSignal.is_set()
+        return False
 
-    # is worked done computing?
     def is_done(self):
-        return self._isDone.is_set()
+        return True
 
-    # is worker started?
     def is_started(self):
-        return self._startedSignal.is_set()
+        return True
 
-    # has worker died?
     def has_crashed(self):
-        return not self._p.is_alive() or self._errorSignal.is_set()
+        return False
 
-    # starts execution loop of the worker
     def run(self, nsteps, nheating = 0, ncooling = 0, hightemp = 0.0):
-        self._startedSignal.wait()
-        self._readySignal.wait()
-        self._cmdq.put("RUN")
-        self._inq.put(nsteps)
-        self._inq.put(nheating)
-        self._inq.put(ncooling)
-        self._inq.put(hightemp)
-        self._runningSignal.set()
-        self._isDone.clear()
-
-    #
-    # routine being multi-processed (worker)
-    # default is temperature replica exchange (MD at constant temperature)
-    #
+        self.logger.debug("ommworker.run")
+        self.nsteps = nsteps
+        self._openmm_worker_run()
 
     def _openmm_worker_body(self):
-        
         self.ommsystem.create_system()
         self.system = self.ommsystem.system
         self.topology = self.ommsystem.topology
         self.integrator = self.ommsystem.integrator
         self.positions = self.ommsystem.positions
         self.boxvectors = self.ommsystem.boxvectors
-        
+
     def _openmm_worker_run(self):
-        try:
-            if self.nheating > 0:
-                self.integrator.setTemperature(self.hightemp)
-                self.simulation.step(self.nheating)
-                self.simulation.step(self.ncooling)
-                production_temperature = self.par['temperature']
-                self.integrator.setTemperature(production_temperature)
-            self.simulation.step(self.nsteps)
-            return 1
-        except:
-            self.logger.error("MD has crashed")
-            return None
+        self.simulation.step(self.nsteps)
 
     def _openmm_worker_makecontext(self):
         self.platform_properties = {}
@@ -239,7 +145,7 @@ class OMMWorkerATM:
         #replace parameters loaded from the initial xml file with the values in the system
         for param_name in self.ommsystem.cparams:
             self.context.setParameter(param_name, self.ommsystem.cparams[param_name])
-        
+
         if self.compute and self.platformId is not None and self.deviceId is not None:
             #sets up logfile
             self.wdir = "cntxt_%s_%d_%d" % (self.node_name,int(self.platformId),int(self.deviceId))
@@ -249,90 +155,7 @@ class OMMWorkerATM:
             self.logfile_p = open(self.logfile, 'a+')
             self.simulation.reporters.append(StateDataReporter(self.logfile_p, self.nprnt, step=True, temperature=True))
 
-    def openmm_worker(self, startedSignal, readySignal, runningSignal, errorSignal, isDone, cmdq, inq, outq):
-        try:
-            import setproctitle
-            setproctitle.setproctitle("AToM worker")
-        except:
-            pass
-        
-        startedSignal.clear()
-        readySignal.clear()
-        runningSignal.clear()
-        errorSignal.clear()
-        isDone.clear()
-
-        self._openmm_worker_body()
-        self._openmm_worker_makecontext()
-        
-        self.positions = None
-        self.velocities = None
-
-        #start event loop
-        startedSignal.set()
-        readySignal.set()
-        while(True):
-            readySignal.set()
-            while(cmdq.empty()):
-                time.sleep(0.1)
-            command = cmdq.get()
-            readySignal.clear()
-            if command == "SETSTATE":
-                self._worker_setstate_fromqueue()
-            elif command == "SETPOSVEL":
-                self.positions = inq.get()
-                self.velocities = inq.get()
-                self.context.setPositions(self.positions)
-                self.context.setVelocities(self.velocities)
-            elif command == "RUN":
-                runningSignal.set()
-                isDone.clear()
-
-                self.nsteps = int(inq.get())
-                self.nheating = int(inq.get())
-                self.ncooling = int(inq.get())
-                self.hightemp = float(inq.get())
-
-                res = self._openmm_worker_run()
-
-                if self.logfile_p is not None:
-                    self.logfile_p.flush()
-
-                if res is None:
-                    errorSignal.set()
-
-                isDone.set()
-            elif command == "GETENERGY":
-                pot = self._worker_getenergy()
-            elif command == "GETPOSVEL":
-                state = self.context.getState(getPositions=True, getVelocities=True)
-                self.positions = state.getPositions()
-                self.velocities = state.getVelocities()
-                outq.put(self.positions)
-                outq.put(self.velocities)
-            elif command == "FINISH":
-                if self.outfile_p is not None:
-                    self.outfile_p.close()
-                while not inq.empty():
-                    inq.get()
-                while not cmdq.empty():
-                    cmdq.get()
-                outq.close()
-                cmdq.close()
-                break
-            else:
-                #unknown command, do nothing, clear queues
-                while not self.inq.empty():
-                    inq.get()
-                while not self.cmdq.empty():
-                    cmdq.get()
-
-        startedSignal.clear()
-        readySignal.clear()
-
     def _worker_setstate_fromqueue(self):
-
-        self.par = self._inq.get()
 
         self.integrator.setTemperature(self.par['temperature'])
         self.context.setParameter(self.ommsystem.parameter['temperature'], self.par['temperature']/kelvin)
@@ -349,9 +172,7 @@ class OMMWorkerATM:
 
         fgroups = {0,self.ommsystem.metaDforcegroup,self.ommsystem.atmforcegroup}
         state = self.simulation.context.getState(getEnergy = True, groups = fgroups)
-        
+
         self.pot['potential_energy'] = state.getPotentialEnergy()
         self.pot['perturbation_energy'] = self.ommsystem.atmforce.getPerturbationEnergy(self.simulation.context)
         self.pot['bias_energy'] = 0.0 * kilojoules_per_mole
-
-        self._outq.put(self.pot)

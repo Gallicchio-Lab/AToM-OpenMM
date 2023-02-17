@@ -15,10 +15,10 @@ class LocalOpenMMTransport(Transport):
         self.worker = workers[0]
         self.replicas = replicas
 
-    def launchJob(self, i_replica, job_info):
+    def launchJob(self, irepl, job_info):
         self.logger.debug('transport.lunchJob')
 
-        replica = self.replicas[i_replica]
+        replica = self.replicas[irepl]
         _, par = replica.get_state()
 
         self.worker.set_posvel(replica.positions, replica.velocities)

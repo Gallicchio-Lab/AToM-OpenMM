@@ -73,8 +73,9 @@ class OMMWorkerATM:
         self.context.setVelocities(velocities)
 
     def run(self, nsteps):
-        self.logger.debug("ommworker.run")
+        self.logger.info(f"Start MD simulation: {nsteps} steps")
         self.simulation.step(nsteps)
+        self.logger.info("Finish MD simulation")
 
     def get_energy(self):
         self.logger.debug("ommworker.get_energy")

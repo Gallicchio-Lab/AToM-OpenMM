@@ -155,21 +155,16 @@ class sync_re:
 
         # TODO: restart properly
         num_sims = max_samples * len(self.openmm_replicas)
-        for i_sim in range(num_sims):
-            self.logger.info(f"Simulation: {i_sim+1}/{num_sims}")
-
-            self.updateStatus()
-            self.print_status()
-            self.launchJobs()
-            self.updateStatus()
-            self.print_status()
-
-            self.updateStatus()
-            self.print_status()
-            self.doExchanges()
-            self.print_status()
-
-            self.checkpointJob()
+        for isample in range(max_samples):
+            for irepl, replica in enumerate(self.openmm_replicas):
+                self.logger.info(f"Simulation: sample {isample}, replica {irepl}")
+                self._launchReplica(irepl, self.status[irepl]['cycle_current'])
+                self.status[irepl]['cycle_current'] += 1
+                assert replica.get_cycle() == self.status[irepl]['cycle_current']
+                self.doExchanges()
+                self.updateStatus()
+                self.checkpointJob()
+                self.print_status()
 
     def updateStatus(self):
         """Scan the replicas and update their states."""
@@ -177,16 +172,6 @@ class sync_re:
         for k in range(self.nreplicas):
             # self._updateStatus_replica(k)
             self.update_state_of_replica(k)
-
-    def _cycle_of_replica(self,repl):
-        return self.status[repl]['cycle_current']
-
-    def launchJobs(self):
-        wait = sorted(self.replicas_waiting, key=self._cycle_of_replica)
-        k = wait[0]
-        self.logger.info('Launching replica %d cycle %d', k, self.status[k]['cycle_current'])
-        self._launchReplica(k,self.status[k]['cycle_current'])
-        self.status[k]['cycle_current'] += 1
 
     def doExchanges(self):
         self.logger.info("Replica exchange")
@@ -203,7 +188,7 @@ class sync_re:
         # Matrix of replica energies in each state.
         # The computeSwapMatrix() function is defined by application classes
         swap_matrix = self._computeSwapMatrix(replicas_to_exchange, states_to_exchange)
-        self.logger.debug(swap_matrix)
+        # self.logger.debug(swap_matrix)
 
         for repl_i in replicas_to_exchange:
             sid_i = self.status[repl_i]['stateid_current']

@@ -6,55 +6,31 @@ from transport import Transport
 
 class LocalOpenMMTransport(Transport):
 
-    def __init__(self, jobname, openmm_workers, openmm_replicas):
+    def __init__(self, jobname, workers, replicas):
         Transport.__init__(self)
         #self.logger = logging.getLogger("async_re.local_openmm_transport")
         self.logger = logging.getLogger("async_re.openmm_sync_re")
 
-        # openmm contexts
-        self.openmm_workers = openmm_workers
-        assert len(self.openmm_workers) == 1
-
-        # record replica OpenMM objects
-        self.openmm_replicas = openmm_replicas
-
-        # contains information about the device etc. running a replica
-        # None = no information about where the replica is running
-        self.replica_to_job = [ None for k in range(len(openmm_replicas)) ]
+        assert len(workers) == 1
+        self.worker = workers[0]
+        self.replicas = replicas
 
     def numNodesAlive(self):
         return 1
 
-    def launchJob(self, replica, job_info):
-
+    def launchJob(self, i_replica, job_info):
         self.logger.debug('transport.lunchJob')
-        job = job_info
-        job['replica'] = replica
-        self.replica_to_job[replica] = job
 
-        node = 0
-        job = self.replica_to_job[replica]
+        replica = self.replicas[i_replica]
+        _, par = replica.get_state()
 
-        job['nodeid'] = node
-        job['openmm_replica'] = self.openmm_replicas[replica]
-        job['openmm_worker'] = self.openmm_workers[node]
+        self.worker.set_posvel(replica.positions, replica.velocities)
+        self.worker.set_state(par)
 
-        self.replica_to_job[replica] = job
-        self.LaunchReplica(job['openmm_worker'], job['openmm_replica'], job['cycle'],
-                            job['nsteps'])
-
-        nreplicas = len(self.replica_to_job)
-        for repl in range(nreplicas):
-            self.isDone(repl,0)
+        self.worker.run(job_info['nsteps'])
+        self._update_replica(replica, job_info)
 
         return 1
-
-    def LaunchReplica(self, worker, replica, cycle, nsteps):
-        self.logger.debug('transport.LaunchReplica')
-        _, par = replica.get_state()
-        worker.set_posvel(replica.positions, replica.velocities)
-        worker.set_state(par)
-        worker.run(nsteps)
 
     def ProcessJobQueue(self, mintime, maxtime):
         return 1
@@ -62,16 +38,14 @@ class LocalOpenMMTransport(Transport):
     def DrainJobQueue(self):
         pass
 
-    def _update_replica(self, job):
-        self.logger.debug(f'transport._update_replica: {job}')
+    def _update_replica(self, replica, job_info):
+        self.logger.debug(f'transport._update_replica: {job_info}')
 
-        #update replica cycle, mdsteps, write out, etc. from worker
-        ommreplica = job['openmm_replica']
-        pos, vel = job['openmm_worker'].get_posvel()
+        pos, vel = self.worker.get_posvel()
         assert pos
         assert vel
 
-        pot = job['openmm_worker'].get_energy()
+        pot = self.worker.get_energy()
         assert pot
 
         for value in pot.values():
@@ -84,37 +58,22 @@ class LocalOpenMMTransport(Transport):
             if math.isnan(v.x) or math.isnan(v.y) or math.isnan(v.z):
                 return None
 
-        cycle = ommreplica.get_cycle() + 1
-        ommreplica.set_cycle(cycle)
+        replica.set_posvel(pos,vel)
+        replica.set_energy(pot)
 
-        mdsteps = ommreplica.get_mdsteps() + job['nsteps']
-        ommreplica.set_mdsteps(mdsteps)
+        cycle = replica.get_cycle() + 1
+        replica.set_cycle(cycle)
 
-        #update positions and velocities of openmm replica
-        ommreplica.set_posvel(pos,vel)
-
-        #update energies of openmm replica
-        ommreplica.set_energy(pot)
+        mdsteps = replica.get_mdsteps() + job_info['nsteps']
+        replica.set_mdsteps(mdsteps)
 
         #output data and trajectory file update 
-        if mdsteps % job['nprnt'] == 0:
-            ommreplica.save_out()
-        if mdsteps % job['ntrj'] == 0:
-            ommreplica.save_dcd()
+        if mdsteps % job_info['nprnt'] == 0:
+            replica.save_out()
+        if mdsteps % job_info['ntrj'] == 0:
+            replica.save_dcd()
+
         return 0
 
     def isDone(self,replica,cycle):
-        self.logger.debug(f'transport.isDone: {replica}')
-
-        job = self.replica_to_job[replica]
-        if job is None:
-            # if job has been removed we assume that the replica is done
-            return True
-
-        if 'openmm_replica' not in job:
-            return True
-
-        self._update_replica(job)
-        self.replica_to_job[replica] = None
-
         return True

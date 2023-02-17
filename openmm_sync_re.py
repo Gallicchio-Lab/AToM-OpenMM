@@ -19,34 +19,16 @@ class sync_re:
     """
     logging.config.fileConfig(os.path.join(os.path.dirname(__file__), "utils/logging.conf"))
 
-    def __init__(self, command_file, options):
+    def __init__(self, config_file, options):
         self._setLogger()
 
-        self.command_file = command_file
-        if not os.path.exists(self.command_file):
-           self._exit('No such file: %s'%self.command_file)
+        self.command_file = config_file
 
-        self.jobname = os.path.splitext(os.path.basename(command_file))[0]
-        self.keywords = ConfigObj(self.command_file)
+        self.jobname = os.path.splitext(os.path.basename(config_file))[0]
+        self.config = ConfigObj(self.command_file)
 
         self._checkInput()
         self._printStatus()
-
-        #set to False to run without exchanges
-        self.exchange = True
-
-    def _exit(self, message):
-        """Print and flush a message to stdout and then exit."""
-        self.logger.info(message)
-        sys.stdout.flush()
-        sys.exit(1)
-
-    # def _cleanup(self):
-    #     try:
-    #         for worker in self.openmm_workers:
-    #             worker.finish()
-    #     except:
-    #         pass
 
     def _setLogger(self):
         self.logger = logging.getLogger("async_re")
@@ -88,7 +70,7 @@ class sync_re:
         self.logger.info("command_file = %s", self.command_file)
         self.logger.info("jobname = %s", self.jobname)
         self.logger.info("Keywords:")
-        for k,v in self.keywords.iteritems():
+        for k,v in self.config.iteritems():
             self.logger.info("%s: %s", k, v)
 
     def _checkInput(self):
@@ -99,16 +81,16 @@ class sync_re:
         # Required Options
         #
         # basename for the job
-        self.basename = self.keywords.get('BASENAME')
+        self.basename = self.config.get('BASENAME')
         assert self.basename, 'BASENAME needs to be specified'
 
         #job transport mechanism
-        self.transport_mechanism = self.keywords.get('JOB_TRANSPORT')
+        self.transport_mechanism = self.config.get('JOB_TRANSPORT')
         self.transport = None
 
         if self.transport_mechanism == "LOCAL_OPENMM":
 
-            nodefile = self.keywords.get('NODEFILE')
+            nodefile = self.config.get('NODEFILE')
             assert nodefile, "NODEFILE needs to be specified"
             """
             check the information in the nodefile. there should be six columns in the  
@@ -143,14 +125,14 @@ class sync_re:
         self.nreplicas = None
 
         # verbose printing
-        if self.keywords.get('VERBOSE').lower() == 'yes':
+        if self.config.get('VERBOSE').lower() == 'yes':
             self.verbose = True
             if self.logger:
                 self.logger.setLevel(logging.DEBUG)
         else:
             self.verbose = False
 
-        self.jobname = self.keywords.get('BASENAME')
+        # self.jobname = self.config.get('BASENAME')
 
     def setupJob(self):
         self.transport = LocalOpenMMTransport(self.basename, self.openmm_workers, self.openmm_replicas)
@@ -168,8 +150,8 @@ class sync_re:
     def scheduleJobs(self):
 
         max_samples = None
-        if self.keywords.get('MAX_SAMPLES')  is not None:
-            max_samples = int(self.keywords.get('MAX_SAMPLES'))
+        assert self.config.get('MAX_SAMPLES'), "MAX_SAMPLES has to be specified"
+        max_samples = int(self.config.get('MAX_SAMPLES'))
 
         # TODO: restart properly
         num_sims = max_samples * len(self.openmm_replicas)
@@ -184,35 +166,17 @@ class sync_re:
 
             self.updateStatus()
             self.print_status()
-            if self.exchange:
-                self.doExchanges()
+            self.doExchanges()
             self.print_status()
 
             self.checkpointJob()
 
-        self.updateStatus()
-        self.print_status()
-
     def updateStatus(self):
         """Scan the replicas and update their states."""
-        self.transport.poll()
+        # self.transport.poll()
         for k in range(self.nreplicas):
-            self._updateStatus_replica(k)
-
-    def _updateStatus_replica(self, replica):
-        this_cycle = self.status[replica]['cycle_current']
-        if self.status[replica]['running_status'] == 'R':
-            if self.transport.isDone(replica,this_cycle):
-                self.status[replica]['running_status'] = 'S'
-                #MD engine modules implement ways to check for completion.
-                #by testing existence of output file, etc.
-                if self._hasCompleted(replica,this_cycle):
-                    self.status[replica]['cycle_current'] += 1
-                else:
-                    self.logger.warning('_updateStatus_replica(): restarting replica %s (cycle %s)',
-                                        replica, this_cycle)
-                self.status[replica]['running_status'] = 'W'
-        self.update_state_of_replica(replica)
+            # self._updateStatus_replica(k)
+            self.update_state_of_replica(k)
 
     def _cycle_of_replica(self,repl):
         return self.status[repl]['cycle_current']
@@ -270,26 +234,20 @@ class openmm_job(sync_re):
         self.logger = logging.getLogger("async_re.openmm_sync_re")
 
     def checkpointJob(self):
-        self.update_replica_states()
         for replica in self.openmm_replicas:
             replica.save_checkpoint()
 
     def _launchReplica(self,replica,cycle):
 
-        nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
-        nprnt = int(self.keywords.get('PRNT_FREQUENCY'))
-        ntrj = int(self.keywords.get('TRJ_FREQUENCY'))
+        nsteps = int(self.config.get('PRODUCTION_STEPS'))
+        nprnt = int(self.config.get('PRNT_FREQUENCY'))
+        ntrj = int(self.config.get('TRJ_FREQUENCY'))
         assert nprnt % nsteps == 0, "PRNT_FREQUENCY must be an integer multiple of PRODUCTION_STEPS."
         assert ntrj % nsteps == 0, "TRJ_FREQUENCY must be an integer multiple of PRODUCTION_STEPS."
 
         job_info = {"replica": replica, "cycle": cycle, "nsteps": nsteps, "nprnt": nprnt, "ntrj": ntrj}
 
         return self.transport.launchJob(replica, job_info)
-
-    #sync replicas with the current state assignments
-    def update_replica_states(self):
-        for repl in range(self.nreplicas):
-            self.update_state_of_replica(repl)
 
     def update_state_of_replica(self, repl):
         replica = self.openmm_replicas[repl]
@@ -310,27 +268,9 @@ class openmm_job(sync_re):
                 for i in range(0,len(replica.velocities)):
                     replica.velocities[i] = scale*replica.velocities[i]
 
-    def _hasCompleted(self,repl,cycle):
-        """
-        Returns true if an OpenMM replica has successfully completed a cycle.
-        """
-        try:
-            pot = self._getPot(repl)
-            if pot is None:
-                return False
-        except:
-            return False
-        return True
-
     def _getPar(self, repl):
-        replica = self.openmm_replicas[repl]
-        (stateid, par) = replica.get_state()
+        _, par = self.openmm_replicas[repl].get_state()
         return par
-
-    def _getPot(self, repl):
-        replica = self.openmm_replicas[repl]
-        pot = replica.get_energy()
-        return pot
 
     def _computeSwapMatrix(self, repls, states):
         """
@@ -389,29 +329,27 @@ class openmm_job_ATM(openmm_job):
     def _checkInput(self):
         sync_re._checkInput(self)
 
-        if self.keywords.get('LAMBDAS') is None:
-            self._exit("LAMBDAS needs to be specified")
-        self.lambdas = self.keywords.get('LAMBDAS').split(',')
+        assert self.config.get('LAMBDAS'), "LAMBDAS needs to be specified"
+        self.lambdas = self.config.get('LAMBDAS').split(',')
         #list of temperatures
-        if self.keywords.get('TEMPERATURES') is None:
-            self._exit("TEMPERATURES needs to be specified")
-        self.temperatures = self.keywords.get('TEMPERATURES').split(',')
+        assert self.config.get('TEMPERATURES'), "TEMPERATURES needs to be specified"
+        self.temperatures = self.config.get('TEMPERATURES').split(',')
 
         #flag to identify the intermediate states, typically the one at lambda=1/2
-        self.intermediates = self.keywords.get('INTERMEDIATE').split(',')
+        self.intermediates = self.config.get('INTERMEDIATE').split(',')
 
         #direction of transformation at each lambda
         #ABFE 1 from RA to R+A, -1 from R+A to A
         #RBFE 1 from RA+B to RB+A, -1 from RB+A to RA+B
-        self.directions = self.keywords.get('DIRECTION').split(',')
+        self.directions = self.config.get('DIRECTION').split(',')
 
         #parameters of the softplus alchemical potential
         #lambda1 = lambda2 gives the linear potential
-        self.lambda1s = self.keywords.get('LAMBDA1').split(',')
-        self.lambda2s = self.keywords.get('LAMBDA2').split(',')
-        self.alphas = self.keywords.get('ALPHA').split(',')
-        self.u0s = self.keywords.get('U0').split(',')
-        self.w0coeffs = self.keywords.get('W0COEFF').split(',')
+        self.lambda1s = self.config.get('LAMBDA1').split(',')
+        self.lambda2s = self.config.get('LAMBDA2').split(',')
+        self.alphas = self.config.get('ALPHA').split(',')
+        self.u0s = self.config.get('U0').split(',')
+        self.w0coeffs = self.config.get('W0COEFF').split(',')
 
         #build parameters for the lambda/temperatures combined states
         self.nreplicas = self._buildStates()
@@ -419,10 +357,6 @@ class openmm_job_ATM(openmm_job):
     def print_status(self):
         """
         Writes to BASENAME_stat.txt a text version of the status of the RE job
-
-        It's fun to follow the progress in real time by doing:
-
-        watch cat BASENAME_stat.txt
         """
         logfile = "%s_stat.txt" % self.basename
         ofile = open(logfile,"w")
@@ -452,7 +386,7 @@ class openmm_job_ATM(openmm_job):
         epot = pot['potential_energy']
         pertpot = pot['perturbation_energy']
         (stateid, par) = replica.get_state()
-        direction = par['atmdirection']
+        # direction = par['atmdirection']
         lambda1 = par['lambda1']
         lambda2 = par['lambda2']
         alpha = par['alpha']
@@ -499,8 +433,8 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
             self._buildStates()
 
         #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
-        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
+        service_ommsys = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
+        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.config, compute = False, logger = self.logger)
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
@@ -512,5 +446,5 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
         # creates openmm context objects
         self.openmm_workers = []
         for node in self.compute_nodes:
-            ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
-            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
+            ommsys = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger) 
+            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.config, node_info = node, compute = True, logger = self.logger))

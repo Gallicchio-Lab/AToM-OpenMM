@@ -6,13 +6,12 @@ from transport import Transport
 
 class LocalOpenMMTransport(Transport):
 
-    def __init__(self, jobname, workers, replicas):
+    def __init__(self, jobname, worker, replicas):
         Transport.__init__(self)
         #self.logger = logging.getLogger("async_re.local_openmm_transport")
         self.logger = logging.getLogger("async_re.openmm_sync_re")
 
-        assert len(workers) == 1
-        self.worker = workers[0]
+        self.worker = worker
         self.replicas = replicas
 
     def launchJob(self, irepl, job_info):

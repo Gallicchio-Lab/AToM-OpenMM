@@ -95,10 +95,7 @@ class sync_re:
         else:
             self.verbose = False
 
-        # self.jobname = self.config.get('BASENAME')
-
     def setupJob(self):
-        self.transport = LocalOpenMMTransport(self.basename, self.openmm_workers, self.openmm_replicas)
         # create status table
         self.status = [{'stateid_current': k, 'running_status': 'W',
                         'cycle_current': 1} for k in range(self.nreplicas)]
@@ -175,7 +172,6 @@ class openmm_job(sync_re):
         sync_re.__init__(self, command_file, options)
         self.openmm_replicas = None
         self.stateparams = None
-        self.openmm_workers = None
         self.kb = 0.0019872041*kilocalories_per_mole/kelvin
 
     def _setLogger(self):
@@ -367,18 +363,16 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
         if self.stateparams is None:
             self._buildStates()
 
-        #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
-        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.config, compute=False, logger=self.logger)
+        # creates openmm context objects
+        ommsys = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
+        self.worker = OMMWorkerATM(self.basename, ommsys, self.config, compute=True, logger=self.logger)
+        self.transport = LocalOpenMMTransport(self.basename, self.worker, self.openmm_replicas)
 
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
-            replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger)
+            replica = OMMReplicaATM(i, self.basename, self.worker, self.logger)
             if replica.stateid == None:
                 replica.set_state(i, self.stateparams[i])#initial setting
             self.openmm_replicas.append(replica)
 
-        # creates openmm context objects
-        ommsys = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger) 
-        self.openmm_workers = [OMMWorkerATM(self.basename, ommsys, self.config, compute=True, logger=self.logger)]

@@ -8,11 +8,10 @@ from openmm.unit import kelvin, kilojoules_per_mole
 
 class OMMWorkerATM:
 
-    def __init__(self, basename, ommsystem, config, compute=True, logger=None):
+    def __init__(self, basename, ommsystem, config, logger=None):
         self.basename = basename
         self.ommsystem = ommsystem
         self.config = config
-        self.compute = compute
         self.logger = logger
 
         self.ommsystem.create_system()
@@ -31,19 +30,16 @@ class OMMWorkerATM:
         self.context = self.simulation.context
         self.context.setPositions(self.ommsystem.positions)
         self.context.setPeriodicBoxVectors(*self.ommsystem.boxvectors)
-        self.simulation.reporters = []
 
         #one preliminary energy evaluation seems to be required to init the energy routines
-        if self.compute:
-            state = self.simulation.context.getState(getEnergy = True)#, groups = {1,3})
-            pote = state.getPotentialEnergy()
+        self.context.getState(getEnergy=True).getPotentialEnergy()
 
         #load initial state/coordinates
         self.simulation.loadState(self.basename + "_0.xml")
 
         #replace parameters loaded from the initial xml file with the values in the system
-        for param_name in self.ommsystem.cparams:
-            self.context.setParameter(param_name, self.ommsystem.cparams[param_name])
+        for key, value in self.ommsystem.cparams.items():
+            self.context.setParameter(key, value)
 
         self.wdir = f"cntxt_{device}"
         if not os.path.isdir(self.wdir):

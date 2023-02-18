@@ -39,7 +39,7 @@ class sync_re:
 
     def states_to_exchange(self):
         # Return a list of state ids of replicas that completed at least one cycle.
-        return [self.status[k]['stateid_current'] for k in self.replicas_to_exchange]
+        return [self.status[k]['stateid_current'] for k in self.replicas_to_exchange()]
 
     def _printStatus(self):
         """Print a report of the input parameters."""
@@ -111,8 +111,8 @@ class sync_re:
     def doExchanges(self):
         self.logger.info("Replica exchange")
 
-        replicas_to_exchange = self.replicas_to_exchange
-        states_to_exchange = self.states_to_exchange
+        replicas_to_exchange = self.replicas_to_exchange()
+        states_to_exchange = self.states_to_exchange()
 
         self.logger.debug(f"Replicas to exchange: {replicas_to_exchange}")
         self.logger.debug(f"States to exchange: {states_to_exchange}")
@@ -324,14 +324,13 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
 
         # creates openmm context objects
         ommsys = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
-        self.worker = OMMWorkerATM(self.basename, ommsys, self.config, compute=True, logger=self.logger)
-        self.transport = LocalOpenMMTransport(self.basename, self.worker, self.openmm_replicas)
+        self.worker = OMMWorkerATM(self.basename, ommsys, self.config, logger=self.logger)
 
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
             replica = OMMReplicaATM(i, self.basename, self.worker, self.logger)
-            if replica.stateid == None:
-                replica.set_state(i, self.stateparams[i])#initial setting
+            replica.set_state(i, self.stateparams[i])
             self.openmm_replicas.append(replica)
 
+        self.transport = LocalOpenMMTransport(self.basename, self.worker, self.openmm_replicas)

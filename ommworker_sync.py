@@ -8,15 +8,10 @@ from openmm.unit import kelvin, kilojoules_per_mole
 
 class OMMWorkerATM:
 
-    def __init__(self, basename, ommsystem, config, node_info, compute=True, logger=None):
-
-        pattern = re.compile('(\d+):(\d+)')
-        matches = pattern.search(node_info["slot_number"])
-        deviceId = int(matches.group(2))
-
+    def __init__(self, basename, ommsystem, config, compute=True, logger=None):
         self.basename = basename
-        self.config = config
         self.ommsystem = ommsystem
+        self.config = config
         self.compute = compute
         self.logger = logger
 
@@ -24,9 +19,13 @@ class OMMWorkerATM:
         self.topology = self.ommsystem.topology
         self.integrator = self.ommsystem.integrator
 
+        nodefile = self.config.get('NODEFILE')
+        assert nodefile, "NODEFILE needs to be specified"
+        device = open(nodefile, 'r').readline().split(',')[1].strip().split(':')[1].strip()
+
         platform = Platform.getPlatformByName("CUDA")
-        properties = {"DeviceIndex": str(deviceId), "Precision": "mixed"}
-        self.logger.info(f"Device: CUDA {deviceId}")
+        properties = {"DeviceIndex": device, "Precision": "mixed"}
+        self.logger.info(f"Device: CUDA {device}")
 
         self.simulation = Simulation(self.topology, self.ommsystem.system, self.integrator, platform, properties)
         self.context = self.simulation.context
@@ -46,7 +45,7 @@ class OMMWorkerATM:
         for param_name in self.ommsystem.cparams:
             self.context.setParameter(param_name, self.ommsystem.cparams[param_name])
 
-        self.wdir = f"cntxt_{deviceId}"
+        self.wdir = f"cntxt_{device}"
         if not os.path.isdir(self.wdir):
             os.mkdir(self.wdir)
         self.logfile = open(os.path.join(self.wdir, self.basename), 'a+')

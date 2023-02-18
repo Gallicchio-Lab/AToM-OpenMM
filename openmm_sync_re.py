@@ -84,43 +84,6 @@ class sync_re:
         self.basename = self.config.get('BASENAME')
         assert self.basename, 'BASENAME needs to be specified'
 
-        #job transport mechanism
-        self.transport_mechanism = self.config.get('JOB_TRANSPORT')
-        self.transport = None
-
-        if self.transport_mechanism == "LOCAL_OPENMM":
-
-            nodefile = self.config.get('NODEFILE')
-            assert nodefile, "NODEFILE needs to be specified"
-            """
-            check the information in the nodefile. there should be six columns in the  
-            nodefile. They are 'node name', 'slot number', 'number of threads', 
-            'platform','username', and 'name of the temperary folder'
-            """
-            node_info= []
-            with open(nodefile, 'r') as f:
-                line=f.readline()
-                nodeid = 0
-                while line:
-                    lineID=line.split(",")
-                    node_info.append({})
-                    node_info[nodeid]["node_name"] = str(lineID[0].strip())
-                    node_info[nodeid]["slot_number"] = str(lineID[1].strip())
-                    node_info[nodeid]["threads_number"] = str(lineID[2].strip())
-                    node_info[nodeid]["arch"] = str(lineID[3].strip())
-                    node_info[nodeid]["user_name"] = str(lineID[4].strip())
-                    node_info[nodeid]["tmp_folder"] = str(lineID[5].strip())
-                    #tmp_folder has to be pre-assigned
-                    assert node_info[nodeid]["tmp_folder"] != "", 'tmp_folder in nodefile needs to be specified'
-                    nodeid += 1
-                    line = f.readline()
-
-            #set the nodes information
-            self.num_nodes = len(node_info)
-            self.compute_nodes = node_info
-            #Can print out here to check the node information
-            self.logger.info("compute nodes: %s", ', '.join([n['node_name'] for n in node_info]))
-
         # number of replicas (may be determined by other means)
         self.nreplicas = None
 
@@ -404,11 +367,9 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
         if self.stateparams is None:
             self._buildStates()
 
-        node_info = self.compute_nodes[0]
-
         #builds service worker for replicas use
         service_ommsys = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
-        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.config, node_info, compute=False, logger=self.logger)
+        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.config, compute=False, logger=self.logger)
 
         #creates openmm replica objects
         self.openmm_replicas = []
@@ -420,4 +381,4 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
 
         # creates openmm context objects
         ommsys = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger) 
-        self.openmm_workers = [OMMWorkerATM(self.basename, ommsys, self.config, node_info, compute=True, logger=self.logger)]
+        self.openmm_workers = [OMMWorkerATM(self.basename, ommsys, self.config, compute=True, logger=self.logger)]

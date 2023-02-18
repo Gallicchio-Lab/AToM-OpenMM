@@ -33,36 +33,13 @@ class sync_re:
     def _setLogger(self):
         self.logger = logging.getLogger("async_re")
 
-    def __getattribute__(self, name):
-        if name == 'replicas_waiting':
-            # Return a list of replica indices of replicas in a wait state.
-            return [k for k in range(self.nreplicas)
-                    if self.status[k]['running_status'] == 'W']
-        elif name == 'states_waiting':
-            # Return a list of state ids of replicas in a wait state.
-            return [self.status[k]['stateid_current']
-                    for k in self.replicas_waiting]
-        elif name == 'replicas_waiting_to_exchange':
-            # Return a list of replica indices of replicas in a wait state that
-            # have ALSO completed at least one cycle.
-            return [k for k in range(self.nreplicas)
-                    if (self.status[k]['running_status'] == 'W' and
-                        self.status[k]['cycle_current'] > 1)]
-        elif name == 'states_waiting_to_exchange':
-            # Return a list of state ids of replicas in a wait state that have
-            # ALSO completed at least one cycle.
-            return [self.status[k]['stateid_current']
-                    for k in self.replicas_waiting_to_exchange]
-        elif name == 'waiting':
-            return len(self.replicas_waiting)
-        elif name == 'replicas_running':
-            # Return a list of replica indices of replicas in a running state.
-            return [k for k in range(self.nreplicas)
-                    if self.status[k]['running_status'] == 'R']
-        elif name == 'running':
-            return len(self.replicas_running)
-        else:
-            return object.__getattribute__(self,name)
+    def replicas_to_exchange(self):
+        # Return a list of replica that completed at least one cycle.
+        return [k for k in range(self.nreplicas) if self.status[k]['cycle_current'] > 1]
+
+    def states_to_exchange(self):
+        # Return a list of state ids of replicas that completed at least one cycle.
+        return [self.status[k]['stateid_current'] for k in self.replicas_to_exchange]
 
     def _printStatus(self):
         """Print a report of the input parameters."""
@@ -97,15 +74,13 @@ class sync_re:
 
     def setupJob(self):
         # create status table
-        self.status = [{'stateid_current': k, 'running_status': 'W',
-                        'cycle_current': 1} for k in range(self.nreplicas)]
+        self.status = [{'stateid_current': k, 'cycle_current': 1} for k in range(self.nreplicas)]
         for replica in self.openmm_replicas:
             self.status[replica._id]['cycle_current'] = replica.get_cycle()
             self.status[replica._id]['stateid_current'] = replica.get_stateid()
             self.logger.info("Replica %d Cycle %d Stateid %d" % (replica._id, self.status[replica._id]['cycle_current'], self.status[replica._id]['stateid_current']))
 
         self.updateStatus()
-        self.print_status()
 
     def scheduleJobs(self):
 
@@ -136,8 +111,8 @@ class sync_re:
     def doExchanges(self):
         self.logger.info("Replica exchange")
 
-        replicas_to_exchange = self.replicas_waiting_to_exchange
-        states_to_exchange = self.states_waiting_to_exchange
+        replicas_to_exchange = self.replicas_to_exchange
+        states_to_exchange = self.states_to_exchange
 
         self.logger.debug(f"Replicas to exchange: {replicas_to_exchange}")
         self.logger.debug(f"States to exchange: {states_to_exchange}")
@@ -284,22 +259,6 @@ class openmm_job_ATM(openmm_job):
 
         #build parameters for the lambda/temperatures combined states
         self.nreplicas = self._buildStates()
-
-    def print_status(self):
-        """
-        Writes to BASENAME_stat.txt a text version of the status of the RE job
-        """
-        logfile = "%s_stat.txt" % self.basename
-        ofile = open(logfile,"w")
-        log = "Replica  State  Lambda Lambda1 Lambda2 Alpha U0 W0coeff Temperature Status  Cycle \n"
-        for k in range(self.nreplicas):
-            stateid = self.status[k]['stateid_current']
-            log += "%6d   %5d  %6.3f %6.3f %6.3f %6.3f %6.2f %6.2f %6.2f %5s  %5d\n" % (k, stateid, self.stateparams[stateid]['lambda'], self.stateparams[stateid]['lambda1'], self.stateparams[stateid]['lambda2'], self.stateparams[stateid]['alpha']*kilocalories_per_mole, self.stateparams[stateid]['u0']/kilocalories_per_mole, self.stateparams[stateid]['w0']/kilocalories_per_mole, self.stateparams[stateid]['temperature']/kelvin, self.status[k]['running_status'], self.status[k]['cycle_current'])
-        log += "Running = %d\n" % self.running
-        log += "Waiting = %d\n" % self.waiting
-
-        ofile.write(log)
-        ofile.close()
 
     #evaluates the softplus function
     def _softplus(self, lambda1, lambda2, alpha, u0, w0, uf):

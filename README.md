@@ -48,6 +48,11 @@ See [examples](examples/) for examples and tutorials.
 
 While we strive to develop and distribute high-quality and bug-free software, keep in mind that this is research software under heavy development. AToM is provided without any guarantees of correctness. Please report issues [here](https://github.com/Gallicchio-Lab/AToM-OpenMM/issues). We welcome contributions and pull requests.
 
+Documentation
+-------------
+
+[Under construction](https://www.compmolbiophysbc.org/atom-openmm)
+
 Licensing
 ---------
 

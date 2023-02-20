@@ -95,13 +95,14 @@ class sync_re:
                 assert replica.get_cycle() == self.status[irepl]['cycle_current']
                 assert replica.get_cycle() == isample
 
-                self._launchReplica(irepl, self.status[irepl]['cycle_current'])
+                self._launchReplica(replica)
                 self.status[irepl]['cycle_current'] += 1
 
                 self.doExchanges()
                 self.updateStatus()
 
-            self.checkpointJob()
+            for replica in self.openmm_replicas:
+                replica.save_checkpoint()
 
     def updateStatus(self):
         """Scan the replicas and update their states."""
@@ -154,11 +155,7 @@ class openmm_job(sync_re):
     def _setLogger(self):
         self.logger = logging.getLogger("async_re.openmm_sync_re")
 
-    def checkpointJob(self):
-        for replica in self.openmm_replicas:
-            replica.save_checkpoint()
-
-    def _launchReplica(self,replica,cycle):
+    def _launchReplica(self, replica):
 
         nsteps = int(self.config.get('PRODUCTION_STEPS'))
         nprnt = int(self.config.get('PRNT_FREQUENCY'))
@@ -166,7 +163,7 @@ class openmm_job(sync_re):
         assert nprnt % nsteps == 0, "PRNT_FREQUENCY must be an integer multiple of PRODUCTION_STEPS."
         assert ntrj % nsteps == 0, "TRJ_FREQUENCY must be an integer multiple of PRODUCTION_STEPS."
 
-        job_info = {"replica": replica, "cycle": cycle, "nsteps": nsteps, "nprnt": nprnt, "ntrj": ntrj}
+        job_info = {"nsteps": nsteps, "nprnt": nprnt, "ntrj": ntrj}
 
         return self.transport.launchJob(replica, job_info)
 

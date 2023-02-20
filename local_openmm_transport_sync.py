@@ -14,14 +14,12 @@ class LocalOpenMMTransport(Transport):
         self.worker = worker
         self.replicas = replicas
 
-    def launchJob(self, irepl, job_info):
+    def launchJob(self, replica, job_info):
         self.logger.debug('transport.lunchJob')
 
-        replica = self.replicas[irepl]
         _, par = replica.get_state()
-
-        self.worker.set_posvel(replica.positions, replica.velocities)
         self.worker.set_state(par)
+        self.worker.set_posvel(replica.positions, replica.velocities)
 
         self.worker.run(job_info['nsteps'])
         self._update_replica(replica, job_info)

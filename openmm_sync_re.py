@@ -87,20 +87,16 @@ class sync_re:
         assert 'MAX_SAMPLES' in self.config, "MAX_SAMPLES has to be specified"
         num_samples = int(self.config['MAX_SAMPLES'])
 
-        last_sample = self.openmm_replicas[0].get_cycle() - 1
-        for isample in range(last_sample, num_samples):
+        last_sample = self.openmm_replicas[0].get_cycle()
+        for isample in range(last_sample, num_samples + 1):
             for irepl, replica in enumerate(self.openmm_replicas):
                 self.logger.info(f"Simulation: sample {isample}, replica {irepl}")
 
                 assert replica.get_cycle() == self.status[irepl]['cycle_current']
-                assert replica.get_cycle() in (isample, isample + 1)
-                if replica.get_cycle() == isample + 1:
-                    self.logger.debug(f"Replica {irepl} already has {replica.get_cycle()} samples")
-                    continue
+                assert replica.get_cycle() == isample
 
                 self._launchReplica(irepl, self.status[irepl]['cycle_current'])
                 self.status[irepl]['cycle_current'] += 1
-                assert replica.get_cycle() == self.status[irepl]['cycle_current']
 
                 self.doExchanges()
                 self.updateStatus()

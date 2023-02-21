@@ -1,4 +1,4 @@
-import logging
+import logging, logging.config
 import math
 import os
 import sys
@@ -7,7 +7,6 @@ from configobj import ConfigObj
 from openmm.unit import kelvin, kilocalories_per_mole
 
 from gibbs_sampling import pairwise_independence_sampling
-from local_openmm_transport_sync import LocalOpenMMTransport
 from ommreplica import OMMReplicaATM
 from ommsystem import OMMSystemAmberRBFE
 from ommworker_sync import OMMWorkerATM
@@ -86,7 +85,7 @@ class sync_re:
                 for irepl, replica in enumerate(self.openmm_replicas):
                     with Timer(self.logger.info, f"sample {isample}, replica {irepl}"):
                         assert replica.get_cycle() == isample
-                        self.transport.launchJob(replica)
+                        self.worker.run(replica)
 
                 with Timer(self.logger.info, "exchange replicas"):
                     self.doExchanges()
@@ -99,7 +98,7 @@ class sync_re:
                         replica.save_out()
                         replica.save_dcd()
 
-                with Timer(self.logger.info, "checkpoint"):
+                with Timer(self.logger.info, "checkpointing"):
                     for replica in self.openmm_replicas:
                         replica.save_checkpoint()
 
@@ -299,8 +298,7 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
 
         # creates openmm context objects
         ommsys = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
-        self.worker = OMMWorkerATM(self.basename, ommsys, self.config, logger=self.logger)
-        self.transport = LocalOpenMMTransport(self.basename, self.worker, self.config)
+        self.worker = OMMWorkerATM(self.basename, ommsys, self.config, self.logger)
 
         #creates openmm replica objects
         self.openmm_replicas = []

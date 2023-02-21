@@ -5,10 +5,12 @@ from openmm import Platform
 from openmm.app import Simulation, StateDataReporter
 from openmm.unit import kelvin, kilojoules_per_mole
 
+from utils.timer import Timer
+
 
 class OMMWorkerATM:
 
-    def __init__(self, basename, ommsystem, config, logger=None):
+    def __init__(self, basename, ommsystem, config, logger):
         self.basename = basename
         self.ommsystem = ommsystem
         self.config = config
@@ -67,11 +69,6 @@ class OMMWorkerATM:
         self.context.setPositions(positions)
         self.context.setVelocities(velocities)
 
-    def run(self, nsteps):
-        self.logger.info(f"Start MD simulation: {nsteps} steps")
-        self.simulation.step(nsteps)
-        self.logger.info("Finish MD simulation")
-
     def get_energy(self):
         self.logger.debug("ommworker.get_energy")
         fgroups = {0, self.ommsystem.atmforcegroup}
@@ -86,3 +83,24 @@ class OMMWorkerATM:
         self.logger.debug("ommworker.get_posvel")
         state = self.context.getState(getPositions=True, getVelocities=True)
         return state.getPositions(), state.getVelocities()
+
+    def run(self, replica):
+        assert replica.worker is self
+
+        with Timer(self.logger.debug, "set replica state"):
+            _, par = replica.get_state()
+            self.set_state(par)
+            self.set_posvel(replica.positions, replica.velocities)
+
+        with Timer(self.logger.debug, "run replica"):
+            nsteps = int(self.config['PRODUCTION_STEPS'])
+            self.simulation.step(nsteps)
+
+        with Timer(self.logger.debug, "get replica state"):
+            pos, vel = self.get_posvel()
+            pot = self.get_energy()
+
+            replica.set_posvel(pos, vel)
+            replica.set_energy(pot)
+            replica.set_cycle(replica.get_cycle() + 1)
+            replica.set_mdsteps(replica.get_mdsteps() + nsteps)

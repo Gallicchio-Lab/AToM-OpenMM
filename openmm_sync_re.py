@@ -11,6 +11,7 @@ from local_openmm_transport_sync import LocalOpenMMTransport
 from ommreplica import OMMReplicaATM
 from ommsystem import OMMSystemAmberRBFE
 from ommworker_sync import OMMWorkerATM
+from utils.timer import Timer
 
 
 class sync_re:
@@ -89,20 +90,26 @@ class sync_re:
 
         last_sample = self.openmm_replicas[0].get_cycle()
         for isample in range(last_sample, num_samples + 1):
-            for irepl, replica in enumerate(self.openmm_replicas):
-                self.logger.info(f"Simulation: sample {isample}, replica {irepl}")
+            with Timer(self.logger.info, f"sample {isample}"):
+                for irepl, replica in enumerate(self.openmm_replicas):
+                    with Timer(self.logger.info, f"sample {isample}, replica {irepl}"):
 
-                assert replica.get_cycle() == self.status[irepl]['cycle_current']
-                assert replica.get_cycle() == isample
+                        assert replica.get_cycle() == self.status[irepl]['cycle_current']
+                        assert replica.get_cycle() == isample
 
-                self._launchReplica(replica)
-                self.status[irepl]['cycle_current'] += 1
+                        with Timer(self.logger.info, "run replica"):
+                            self._launchReplica(replica)
+                            self.status[irepl]['cycle_current'] += 1
 
-                self.doExchanges()
-                self.updateStatus()
+                        with Timer(self.logger.info, "exchange replicas"):
+                            self.doExchanges()
 
-            for replica in self.openmm_replicas:
-                replica.save_checkpoint()
+                        with Timer(self.logger.info, "update replicas"):
+                            self.updateStatus()
+
+                with Timer(self.logger.info, "checkpoint"):
+                    for replica in self.openmm_replicas:
+                        replica.save_checkpoint()
 
     def updateStatus(self):
         """Scan the replicas and update their states."""

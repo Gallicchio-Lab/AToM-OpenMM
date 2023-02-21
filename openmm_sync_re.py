@@ -86,7 +86,7 @@ class sync_re:
                 for irepl, replica in enumerate(self.openmm_replicas):
                     with Timer(self.logger.info, f"sample {isample}, replica {irepl}"):
                         assert replica.get_cycle() == isample
-                        self._launchReplica(replica)
+                        self.transport.launchJob(replica)
 
                 with Timer(self.logger.info, "exchange replicas"):
                     self.doExchanges()
@@ -104,10 +104,7 @@ class sync_re:
                         replica.save_checkpoint()
 
     def updateStatus(self):
-        """Scan the replicas and update their states."""
-        # self.transport.poll()
         for k in range(self.nreplicas):
-            # self._updateStatus_replica(k)
             self.update_state_of_replica(k)
 
     def doExchanges(self):
@@ -145,11 +142,6 @@ class openmm_job(sync_re):
 
     def _setLogger(self):
         self.logger = logging.getLogger("async_re.openmm_sync_re")
-
-    def _launchReplica(self, replica):
-        nsteps = int(self.config['PRODUCTION_STEPS'])
-        job_info = {"nsteps": nsteps}
-        return self.transport.launchJob(replica, job_info)
 
     def update_state_of_replica(self, repl):
         replica = self.openmm_replicas[repl]
@@ -308,6 +300,7 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
         # creates openmm context objects
         ommsys = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
         self.worker = OMMWorkerATM(self.basename, ommsys, self.config, logger=self.logger)
+        self.transport = LocalOpenMMTransport(self.basename, self.worker, self.config)
 
         #creates openmm replica objects
         self.openmm_replicas = []
@@ -315,5 +308,3 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
             replica = OMMReplicaATM(i, self.basename, self.worker, self.logger)
             replica.set_state(i, self.stateparams[i])
             self.openmm_replicas.append(replica)
-
-        self.transport = LocalOpenMMTransport(self.basename, self.worker, self.openmm_replicas)

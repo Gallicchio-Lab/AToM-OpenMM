@@ -10,13 +10,13 @@ from utils.timer import Timer
 
 class OMMWorkerATM:
 
-    def __init__(self, system, config, logger):
-        self.system = system
+    def __init__(self, ommsystem, config, logger):
+        self.ommsystem = ommsystem
         self.config = config
         self.logger = logger
 
-        self.topology = self.system.topology
-        self.integrator = self.system.integrator
+        self.topology = self.ommsystem.topology
+        self.integrator = self.ommsystem.integrator
 
         nodefile = self.config.get('NODEFILE')
         assert nodefile, "NODEFILE needs to be specified"
@@ -26,10 +26,10 @@ class OMMWorkerATM:
         properties = {"DeviceIndex": device, "Precision": "mixed"}
         self.logger.info(f"Device: CUDA {device}")
 
-        self.simulation = Simulation(self.topology, self.system.system, self.integrator, platform, properties)
+        self.simulation = Simulation(self.topology, self.ommsystem.system, self.integrator, platform, properties)
         self.context = self.simulation.context
-        self.context.setPositions(self.system.positions)
-        self.context.setPeriodicBoxVectors(*self.system.boxvectors)
+        self.context.setPositions(self.ommsystem.positions)
+        self.context.setPeriodicBoxVectors(*self.ommsystem.boxvectors)
 
         #one preliminary energy evaluation seems to be required to init the energy routines
         self.context.getState(getEnergy=True).getPotentialEnergy()
@@ -39,7 +39,7 @@ class OMMWorkerATM:
         self.simulation.loadState(basename + "_0.xml")
 
         #replace parameters loaded from the initial xml file with the values in the system
-        for key, value in self.system.cparams.items():
+        for key, value in self.ommsystem.cparams.items():
             self.context.setParameter(key, value)
 
         wdir = f"cntxt_{device}"
@@ -53,9 +53,9 @@ class OMMWorkerATM:
         self.logger.debug("ommworker.set_state")
 
         self.integrator.setTemperature(par['temperature'])
-        self.context.setParameter(self.system.parameter['temperature'], par['temperature']/kelvin)
+        self.context.setParameter(self.ommsystem.parameter['temperature'], par['temperature']/kelvin)
 
-        atmforce = self.system.atmforce
+        atmforce = self.ommsystem.atmforce
         self.context.setParameter(atmforce.Lambda1(), par['lambda1'])
         self.context.setParameter(atmforce.Lambda2(), par['lambda2'])
         self.context.setParameter(atmforce.Alpha(), par['alpha']*kilojoules_per_mole)
@@ -70,11 +70,11 @@ class OMMWorkerATM:
 
     def get_energy(self):
         self.logger.debug("ommworker.get_energy")
-        fgroups = {0, self.system.atmforcegroup}
+        fgroups = {0, self.ommsystem.atmforcegroup}
         state = self.context.getState(getEnergy = True, groups = fgroups)
         pot = {}
         pot['potential_energy'] = state.getPotentialEnergy()
-        pot['perturbation_energy'] = self.system.atmforce.getPerturbationEnergy(self.context)
+        pot['perturbation_energy'] = self.ommsystem.atmforce.getPerturbationEnergy(self.context)
         pot['bias_energy'] = 0.0 * kilojoules_per_mole
         return pot
 

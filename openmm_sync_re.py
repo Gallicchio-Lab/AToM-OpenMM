@@ -94,6 +94,11 @@ class sync_re:
                 with Timer(self.logger.info, "update replicas"):
                     self.updateStatus()
 
+                with Timer(self.logger.info, "write replicas samples and trajectories"):
+                    for replica in self.openmm_replicas:
+                        replica.save_out()
+                        replica.save_dcd()
+
                 with Timer(self.logger.info, "checkpoint"):
                     for replica in self.openmm_replicas:
                         replica.save_checkpoint()
@@ -142,15 +147,8 @@ class openmm_job(sync_re):
         self.logger = logging.getLogger("async_re.openmm_sync_re")
 
     def _launchReplica(self, replica):
-
-        nsteps = int(self.config.get('PRODUCTION_STEPS'))
-        nprnt = int(self.config.get('PRNT_FREQUENCY'))
-        ntrj = int(self.config.get('TRJ_FREQUENCY'))
-        assert nprnt % nsteps == 0, "PRNT_FREQUENCY must be an integer multiple of PRODUCTION_STEPS."
-        assert ntrj % nsteps == 0, "TRJ_FREQUENCY must be an integer multiple of PRODUCTION_STEPS."
-
-        job_info = {"nsteps": nsteps, "nprnt": nprnt, "ntrj": ntrj}
-
+        nsteps = int(self.config['PRODUCTION_STEPS'])
+        job_info = {"nsteps": nsteps}
         return self.transport.launchJob(replica, job_info)
 
     def update_state_of_replica(self, repl):

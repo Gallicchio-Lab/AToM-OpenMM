@@ -52,9 +52,3 @@ class LocalOpenMMTransport(Transport):
 
         mdsteps = replica.get_mdsteps() + job_info['nsteps']
         replica.set_mdsteps(mdsteps)
-
-        #output data and trajectory file update 
-        if mdsteps % job_info['nprnt'] == 0:
-            replica.save_out()
-        if mdsteps % job_info['ntrj'] == 0:
-            replica.save_dcd()

@@ -10,6 +10,7 @@ from gibbs_sampling import pairwise_independence_sampling
 from ommreplica import OMMReplicaATM
 from ommsystem import OMMSystemAmberRBFE
 from ommworker_sync import OMMWorkerATM
+from utils.singal_guard import TerminationGuard
 from utils.timer import Timer
 
 
@@ -80,13 +81,15 @@ class openmm_job_AmberRBFE:
                     self.updateStatus()
 
                 with Timer(self.logger.info, "write replicas samples and trajectories"):
-                    for replica in self.openmm_replicas:
-                        replica.save_out()
-                        replica.save_dcd()
+                    with TerminationGuard():
+                        for replica in self.openmm_replicas:
+                            replica.save_out()
+                            replica.save_dcd()
 
                 with Timer(self.logger.info, "checkpointing"):
-                    for replica in self.openmm_replicas:
-                        replica.save_checkpoint()
+                    with TerminationGuard():
+                        for replica in self.openmm_replicas:
+                            replica.save_checkpoint()
 
     def updateStatus(self):
         for k in range(self.nreplicas):

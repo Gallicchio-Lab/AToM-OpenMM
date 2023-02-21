@@ -12,7 +12,7 @@ if __name__ == '__main__':
         print("Please specify ONE input file")
         sys.exit(1)
 
-    commandFile = sys.argv[1]
+    config_file = sys.argv[1]
 
     print("")
     print("=======================================")
@@ -20,10 +20,10 @@ if __name__ == '__main__':
     print("=======================================")
     print("")
     print("Started at: " + str(time.asctime()))
-    print("Input file:", commandFile)
+    print("Input file:", config_file)
     print("")
     sys.stdout.flush()
 
-    rx = openmm_job_AmberRBFE(commandFile, options=None)
+    rx = openmm_job_AmberRBFE(config_file)
     rx.setupJob()
     rx.scheduleJobs()

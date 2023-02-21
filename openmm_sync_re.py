@@ -13,56 +13,42 @@ from ommworker_sync import OMMWorkerATM
 from utils.timer import Timer
 
 
-class sync_re:
-    """
-    Class to set up and run asynchronous file-based RE calculations
-    """
-    logging.config.fileConfig(os.path.join(os.path.dirname(__file__), "utils/logging.conf"))
+class openmm_job_AmberRBFE:
 
-    def __init__(self, config_file, options):
-        self._setLogger()
-
-        self.command_file = config_file
-
-        self.jobname = os.path.splitext(os.path.basename(config_file))[0]
-        self.config = ConfigObj(self.command_file)
-
-        self._checkInput()
-        self._printStatus()
-
-    def _setLogger(self):
+    def __init__(self, config_file):
+        logging.config.fileConfig(os.path.join(os.path.dirname(__file__), "utils/logging.conf"))
         self.logger = logging.getLogger("async_re")
 
-    def _printStatus(self):
-        """Print a report of the input parameters."""
-        self.logger.info("ASyncRE-OpenMM, Version")
-        self.logger.info("command_file = %s", self.command_file)
-        self.logger.info("jobname = %s", self.jobname)
-        self.logger.info("Keywords:")
-        for k,v in self.config.iteritems():
-            self.logger.info("%s: %s", k, v)
+        self.logger.info("Configuration:")
+        self.config = ConfigObj(config_file)
+        for key, value in self.config.items():
+            self.logger.info(f"{key}: {value}")
 
-    def _checkInput(self):
-        """
-        Check that required parameters are specified. Parse these and other
-        optional settings.
-        """
-        # Required Options
-        #
-        # basename for the job
-        self.basename = self.config.get('BASENAME')
-        assert self.basename, 'BASENAME needs to be specified'
-
-        # number of replicas (may be determined by other means)
-        self.nreplicas = None
-
-        # verbose printing
         if self.config.get('VERBOSE').lower() == 'yes':
-            self.verbose = True
-            if self.logger:
-                self.logger.setLevel(logging.DEBUG)
-        else:
-            self.verbose = False
+            self.logger.setLevel(logging.DEBUG)
+
+        self.basename = self.config['BASENAME']
+        self.nreplicas = None
+        self.kb = 0.0019872041*kilocalories_per_mole/kelvin
+
+        self._checkInput()
+        self._buildStates()
+
+        # create system
+        prmtopfile = self.basename + ".prmtop"
+        crdfile = self.basename + ".inpcrd"
+        ommsystem = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
+        ommsystem.create_system()
+
+        # create worker
+        self.worker = OMMWorkerATM(ommsystem, self.config, self.logger)
+
+        #creates replicas
+        self.openmm_replicas = []
+        for i in range(self.nreplicas):
+            replica = OMMReplicaATM(i, self.basename, self.worker, self.logger)
+            replica.set_state(i, self.stateparams[i])
+            self.openmm_replicas.append(replica)
 
     def setupJob(self):
         # create status table
@@ -131,35 +117,6 @@ class sync_re:
                 self.logger.info("Replica %d new state %d" % (repl_i, sid_j))
                 self.logger.info("Replica %d new state %d" % (repl_j, sid_i))
 
-
-class openmm_job_AmberRBFE(sync_re):
-
-    def __init__(self, command_file, options):
-        super().__init__(command_file, options)
-        # self.openmm_replicas = None
-        self.stateparams = None
-        self.kb = 0.0019872041*kilocalories_per_mole/kelvin
-
-
-        if self.stateparams is None:
-            self._buildStates()
-
-        # create system
-        prmtopfile = self.basename + ".prmtop"
-        crdfile = self.basename + ".inpcrd"
-        ommsystem = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
-        ommsystem.create_system()
-
-        # create worker
-        self.worker = OMMWorkerATM(ommsystem, self.config, self.logger)
-
-        #creates replica
-        self.openmm_replicas = []
-        for i in range(self.nreplicas):
-            replica = OMMReplicaATM(i, self.basename, self.worker, self.logger)
-            replica.set_state(i, self.stateparams[i])
-            self.openmm_replicas.append(replica)
-
     def update_state_of_replica(self, repl):
         replica = self.openmm_replicas[repl]
         old_stateid, _ = replica.get_state()
@@ -223,7 +180,6 @@ class openmm_job_AmberRBFE(sync_re):
         return len(self.stateparams)
 
     def _checkInput(self):
-        super()._checkInput()
 
         assert self.config.get('LAMBDAS'), "LAMBDAS needs to be specified"
         self.lambdas = self.config.get('LAMBDAS').split(',')

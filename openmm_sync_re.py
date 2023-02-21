@@ -36,7 +36,7 @@ class sync_re:
 
     def replicas_to_exchange(self):
         # Return a list of replica that completed at least one cycle.
-        return [k for k in range(self.nreplicas) if self.status[k]['cycle_current'] > 1]
+        return range(self.nreplicas)
 
     def states_to_exchange(self):
         # Return a list of state ids of replicas that completed at least one cycle.
@@ -91,21 +91,19 @@ class sync_re:
         last_sample = self.openmm_replicas[0].get_cycle()
         for isample in range(last_sample, num_samples + 1):
             with Timer(self.logger.info, f"sample {isample}"):
+
                 for irepl, replica in enumerate(self.openmm_replicas):
                     with Timer(self.logger.info, f"sample {isample}, replica {irepl}"):
-
                         assert replica.get_cycle() == self.status[irepl]['cycle_current']
                         assert replica.get_cycle() == isample
+                        self._launchReplica(replica)
+                        self.status[irepl]['cycle_current'] += 1
 
-                        with Timer(self.logger.info, "run replica"):
-                            self._launchReplica(replica)
-                            self.status[irepl]['cycle_current'] += 1
+                with Timer(self.logger.info, "exchange replicas"):
+                    self.doExchanges()
 
-                        with Timer(self.logger.info, "exchange replicas"):
-                            self.doExchanges()
-
-                        with Timer(self.logger.info, "update replicas"):
-                            self.updateStatus()
+                with Timer(self.logger.info, "update replicas"):
+                    self.updateStatus()
 
                 with Timer(self.logger.info, "checkpoint"):
                     for replica in self.openmm_replicas:

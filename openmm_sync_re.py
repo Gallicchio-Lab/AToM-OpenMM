@@ -34,14 +34,6 @@ class sync_re:
     def _setLogger(self):
         self.logger = logging.getLogger("async_re")
 
-    def replicas_to_exchange(self):
-        # Return a list of replica that completed at least one cycle.
-        return range(self.nreplicas)
-
-    def states_to_exchange(self):
-        # Return a list of state ids of replicas that completed at least one cycle.
-        return [self.status[k]['stateid_current'] for k in self.replicas_to_exchange()]
-
     def _printStatus(self):
         """Print a report of the input parameters."""
         self.logger.info("ASyncRE-OpenMM, Version")
@@ -75,11 +67,10 @@ class sync_re:
 
     def setupJob(self):
         # create status table
-        self.status = [{'stateid_current': k, 'cycle_current': 1} for k in range(self.nreplicas)]
+        self.status = [{'stateid_current': k} for k in range(self.nreplicas)]
         for replica in self.openmm_replicas:
-            self.status[replica._id]['cycle_current'] = replica.get_cycle()
             self.status[replica._id]['stateid_current'] = replica.get_stateid()
-            self.logger.info("Replica %d Cycle %d Stateid %d" % (replica._id, self.status[replica._id]['cycle_current'], self.status[replica._id]['stateid_current']))
+            self.logger.info("Replica %d Cycle %d Stateid %d" % (replica._id, replica.get_cycle(), self.status[replica._id]['stateid_current']))
 
         self.updateStatus()
 
@@ -94,10 +85,8 @@ class sync_re:
 
                 for irepl, replica in enumerate(self.openmm_replicas):
                     with Timer(self.logger.info, f"sample {isample}, replica {irepl}"):
-                        assert replica.get_cycle() == self.status[irepl]['cycle_current']
                         assert replica.get_cycle() == isample
                         self._launchReplica(replica)
-                        self.status[irepl]['cycle_current'] += 1
 
                 with Timer(self.logger.info, "exchange replicas"):
                     self.doExchanges()
@@ -119,17 +108,9 @@ class sync_re:
     def doExchanges(self):
         self.logger.info("Replica exchange")
 
-        replicas_to_exchange = self.replicas_to_exchange()
-        states_to_exchange = self.states_to_exchange()
-
-        self.logger.debug(f"Replicas to exchange: {replicas_to_exchange}")
-        self.logger.debug(f"States to exchange: {states_to_exchange}")
-
-        if len(replicas_to_exchange) < 2:
-            return 0
-
         # Matrix of replica energies in each state.
-        # The computeSwapMatrix() function is defined by application classes
+        replicas_to_exchange = range(self.nreplicas)
+        states_to_exchange = [stat['stateid_current'] for stat in self.status]
         swap_matrix = self._computeSwapMatrix(replicas_to_exchange, states_to_exchange)
         # self.logger.debug(swap_matrix)
 

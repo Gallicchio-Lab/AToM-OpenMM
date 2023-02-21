@@ -297,8 +297,9 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
             self._buildStates()
 
         # creates openmm context objects
-        ommsys = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
-        self.worker = OMMWorkerATM(self.basename, ommsys, self.config, self.logger)
+        system = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
+        system.create_system()
+        self.worker = OMMWorkerATM(system, self.config, self.logger)
 
         #creates openmm replica objects
         self.openmm_replicas = []

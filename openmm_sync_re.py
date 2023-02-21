@@ -48,7 +48,8 @@ class openmm_job_AmberRBFE:
         self.openmm_replicas = []
         for i in range(self.nreplicas):
             replica = OMMReplicaATM(i, self.basename, self.worker, self.logger)
-            replica.set_state(i, self.stateparams[i])
+            if not replica.stateid:
+                replica.set_state(i, self.stateparams[i])
             self.openmm_replicas.append(replica)
 
     def setupJob(self):

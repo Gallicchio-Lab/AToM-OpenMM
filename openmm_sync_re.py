@@ -132,16 +132,33 @@ class sync_re:
                 self.logger.info("Replica %d new state %d" % (repl_j, sid_i))
 
 
-class openmm_job(sync_re):
+class openmm_job_AmberRBFE(sync_re):
 
     def __init__(self, command_file, options):
         super().__init__(command_file, options)
-        self.openmm_replicas = None
+        # self.openmm_replicas = None
         self.stateparams = None
         self.kb = 0.0019872041*kilocalories_per_mole/kelvin
 
-    def _setLogger(self):
-        self.logger = logging.getLogger("async_re.openmm_sync_re")
+
+        if self.stateparams is None:
+            self._buildStates()
+
+        # create system
+        prmtopfile = self.basename + ".prmtop"
+        crdfile = self.basename + ".inpcrd"
+        ommsystem = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
+        ommsystem.create_system()
+
+        # create worker
+        self.worker = OMMWorkerATM(ommsystem, self.config, self.logger)
+
+        #creates replica
+        self.openmm_replicas = []
+        for i in range(self.nreplicas):
+            replica = OMMReplicaATM(i, self.basename, self.worker, self.logger)
+            replica.set_state(i, self.stateparams[i])
+            self.openmm_replicas.append(replica)
 
     def update_state_of_replica(self, repl):
         replica = self.openmm_replicas[repl]
@@ -187,30 +204,6 @@ class openmm_job(sync_re):
                 #energy of replica i in state j
                 U[sid_j][repl_i] = self._reduced_energy(par[j],pot[i])
         return U
-
-
-class openmm_job_AmberRBFE(openmm_job):
-
-    def __init__(self, command_file, options):
-        super().__init__(command_file, options)
-
-        prmtopfile = self.basename + ".prmtop"
-        crdfile = self.basename + ".inpcrd"
-
-        if self.stateparams is None:
-            self._buildStates()
-
-        # creates openmm context objects
-        ommsystem = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
-        ommsystem.create_system()
-        self.worker = OMMWorkerATM(ommsystem, self.config, self.logger)
-
-        #creates openmm replica objects
-        self.openmm_replicas = []
-        for i in range(self.nreplicas):
-            replica = OMMReplicaATM(i, self.basename, self.worker, self.logger)
-            replica.set_state(i, self.stateparams[i])
-            self.openmm_replicas.append(replica)
 
     def _buildStates(self):
         temperature = self.temperatures[0]

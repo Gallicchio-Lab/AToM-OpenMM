@@ -133,8 +133,9 @@ class sync_re:
 
 
 class openmm_job(sync_re):
+
     def __init__(self, command_file, options):
-        sync_re.__init__(self, command_file, options)
+        super().__init__(command_file, options)
         self.openmm_replicas = None
         self.stateparams = None
         self.kb = 0.0019872041*kilocalories_per_mole/kelvin
@@ -188,32 +189,54 @@ class openmm_job(sync_re):
         return U
 
 
-class openmm_job_ATM(openmm_job):
+class openmm_job_AmberRBFE(openmm_job):
+
+    def __init__(self, command_file, options):
+        super().__init__(command_file, options)
+
+        prmtopfile = self.basename + ".prmtop"
+        crdfile = self.basename + ".inpcrd"
+
+        if self.stateparams is None:
+            self._buildStates()
+
+        # creates openmm context objects
+        ommsystem = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
+        ommsystem.create_system()
+        self.worker = OMMWorkerATM(ommsystem, self.config, self.logger)
+
+        #creates openmm replica objects
+        self.openmm_replicas = []
+        for i in range(self.nreplicas):
+            replica = OMMReplicaATM(i, self.basename, self.worker, self.logger)
+            replica.set_state(i, self.stateparams[i])
+            self.openmm_replicas.append(replica)
+
     def _buildStates(self):
+        temperature = self.temperatures[0]
         self.stateparams = []
         for (lambd,direction,intermediate,lambda1,lambda2,alpha,u0,w0) in zip(self.lambdas,self.directions,self.intermediates,self.lambda1s,self.lambda2s,self.alphas,self.u0s,self.w0coeffs):
-            for tempt in self.temperatures:
-                par = {}
-                par['lambda'] = float(lambd)
-                par['atmdirection'] = float(direction)
-                par['atmintermediate'] = float(intermediate)
-                par['lambda1'] = float(lambda1)
-                par['lambda2'] = float(lambda2)
-                par['alpha'] = float(alpha)/kilocalories_per_mole
-                par['u0'] = float(u0)*kilocalories_per_mole
-                par['w0'] = float(w0)*kilocalories_per_mole
-                par['temperature'] = float(tempt)*kelvin
-                self.stateparams.append(par)
+            par = {}
+            par['lambda'] = float(lambd)
+            par['atmdirection'] = float(direction)
+            par['atmintermediate'] = float(intermediate)
+            par['lambda1'] = float(lambda1)
+            par['lambda2'] = float(lambda2)
+            par['alpha'] = float(alpha)/kilocalories_per_mole
+            par['u0'] = float(u0)*kilocalories_per_mole
+            par['w0'] = float(w0)*kilocalories_per_mole
+            par['temperature'] = float(temperature)*kelvin
+            self.stateparams.append(par)
         return len(self.stateparams)
 
     def _checkInput(self):
-        sync_re._checkInput(self)
+        super()._checkInput()
 
         assert self.config.get('LAMBDAS'), "LAMBDAS needs to be specified"
         self.lambdas = self.config.get('LAMBDAS').split(',')
-        #list of temperatures
         assert self.config.get('TEMPERATURES'), "TEMPERATURES needs to be specified"
         self.temperatures = self.config.get('TEMPERATURES').split(',')
+        assert len(self.temperatures) == 1
 
         #flag to identify the intermediate states, typically the one at lambda=1/2
         self.intermediates = self.config.get('INTERMEDIATE').split(',')
@@ -284,26 +307,3 @@ class openmm_job_ATM(openmm_job):
             #prevent exchange
             large_energy = 1.e12
             return large_energy
-
-
-class openmm_job_AmberRBFE(openmm_job_ATM):
-    def __init__(self, command_file, options):
-        super().__init__(command_file, options)
-
-        prmtopfile = self.basename + ".prmtop"
-        crdfile = self.basename + ".inpcrd"
-
-        if self.stateparams is None:
-            self._buildStates()
-
-        # creates openmm context objects
-        ommsystem = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
-        ommsystem.create_system()
-        self.worker = OMMWorkerATM(ommsystem, self.config, self.logger)
-
-        #creates openmm replica objects
-        self.openmm_replicas = []
-        for i in range(self.nreplicas):
-            replica = OMMReplicaATM(i, self.basename, self.worker, self.logger)
-            replica.set_state(i, self.stateparams[i])
-            self.openmm_replicas.append(replica)

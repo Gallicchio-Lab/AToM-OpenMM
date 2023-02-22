@@ -48,16 +48,15 @@ class openmm_job_AmberRBFE:
         self.openmm_replicas = []
         for i in range(self.nreplicas):
             replica = OMMReplicaATM(i, self.basename, self.worker, self.logger)
-            if not replica.stateid:
+            if not replica.get_stateid():
                 replica.set_state(i, self.stateparams[i])
             self.openmm_replicas.append(replica)
 
     def setupJob(self):
         # create status table
-        self.status = [{'stateid_current': k} for k in range(self.nreplicas)]
-        for replica in self.openmm_replicas:
-            self.status[replica._id]['stateid_current'] = replica.get_stateid()
-            self.logger.info("Replica %d Cycle %d Stateid %d" % (replica._id, replica.get_cycle(), self.status[replica._id]['stateid_current']))
+        self.replica_states = [replica.get_stateid() for replica in self.openmm_replicas]
+        for i, replica in enumerate(self.openmm_replicas):
+            self.logger.info(f"Replica {i}: cycle {replica.get_cycle()}, state {replica.get_stateid()}")
 
         self.updateStatus()
 
@@ -76,7 +75,7 @@ class openmm_job_AmberRBFE:
                         self.worker.run(replica)
 
                 with Timer(self.logger.info, "exchange replicas"):
-                    self.doExchanges()
+                    self._exhangeReplicas()
 
                 with Timer(self.logger.info, "update replicas"):
                     self.updateStatus()
@@ -96,35 +95,35 @@ class openmm_job_AmberRBFE:
         for k in range(self.nreplicas):
             self.update_state_of_replica(k)
 
-    def doExchanges(self):
-        self.logger.info("Replica exchange")
+    def _exhangeReplicas(self):
 
         # Matrix of replica energies in each state.
-        replicas_to_exchange = range(self.nreplicas)
-        states_to_exchange = [stat['stateid_current'] for stat in self.status]
-        swap_matrix = self._computeSwapMatrix(replicas_to_exchange, states_to_exchange)
-        # self.logger.debug(swap_matrix)
+        swap_matrix = self._computeSwapMatrix(range(self.nreplicas), self.replica_states)
+        self.logger.debug("Swap matrix")
+        for row in swap_matrix:
+            self.logger.debug(f"    {row}")
 
-        for repl_i in replicas_to_exchange:
-            sid_i = self.status[repl_i]['stateid_current']
-            curr_states = [self.status[repl_j]['stateid_current']
-                           for repl_j in replicas_to_exchange]
+        self.logger.debug(f"Replica states before: {self.replica_states}")
+        for repl_i in range(self.nreplicas):
+            sid_i = self.replica_states[repl_i]
             repl_j = pairwise_independence_sampling(repl_i,sid_i,
-                                                    replicas_to_exchange,
-                                                    curr_states,
+                                                    range(self.nreplicas),
+                                                    self.replica_states,
                                                     swap_matrix)
             if repl_j != repl_i:
-                sid_i = self.status[repl_i]['stateid_current']
-                sid_j = self.status[repl_j]['stateid_current']
-                self.status[repl_i]['stateid_current'] = sid_j
-                self.status[repl_j]['stateid_current'] = sid_i
-                self.logger.info("Replica %d new state %d" % (repl_i, sid_j))
-                self.logger.info("Replica %d new state %d" % (repl_j, sid_i))
+                sid_i = self.replica_states[repl_i]
+                sid_j = self.replica_states[repl_j]
+                self.replica_states[repl_i] = sid_j
+                self.replica_states[repl_j] = sid_i
+                self.logger.info(f"Replica {repl_i}: {sid_i} --> {sid_j}")
+                self.logger.info(f"Replica {repl_j}: {sid_j} --> {sid_i}")
+
+        self.logger.debug(f"Replica states after: {self.replica_states}")
 
     def update_state_of_replica(self, repl):
         replica = self.openmm_replicas[repl]
         old_stateid, _ = replica.get_state()
-        new_stateid = self.status[repl]['stateid_current']
+        new_stateid = self.replica_states[repl]
         replica.set_state(new_stateid, self.stateparams[new_stateid])
 
     def _getPar(self, repl):
@@ -136,14 +135,7 @@ class openmm_job_AmberRBFE:
         Compute matrix of dimension-less energies: each column is a replica
         and each row is a state so U[i][j] is the energy of replica j in state
         i.
-
-        Note that the matrix is sized to include all of the replicas and states
-        but the energies of replicas not in waiting state, or those of waiting
-        replicas for states not belonging to waiting replicas list are
-        undefined.
         """
-        # U will be sparse matrix, but is convenient bc the indices of the
-        # rows and columns will always be the same.
         U = [[ 0. for j in range(self.nreplicas)]
              for i in range(self.nreplicas)]
 
@@ -241,7 +233,7 @@ class openmm_job_AmberRBFE:
     def _reduced_energy(self, par, pot):
         temperature = par['temperature']
         beta = 1./(self.kb*temperature)
-        direction = par['atmdirection']
+        # direction = par['atmdirection']
         lambda1 = par['lambda1']
         lambda2 = par['lambda2']
         alpha = par['alpha']

@@ -18,7 +18,7 @@ class openmm_job_AmberRBFE:
 
     def __init__(self, config_file):
         logging.config.fileConfig(os.path.join(os.path.dirname(__file__), "utils/logging.conf"))
-        self.logger = logging.getLogger("async_re")
+        self.logger = logging.getLogger("sync_re")
 
         self.logger.info("Configuration:")
         self.config = ConfigObj(config_file)
@@ -90,6 +90,8 @@ class openmm_job_AmberRBFE:
                     with TerminationGuard():
                         for replica in self.openmm_replicas:
                             replica.save_checkpoint()
+
+        self.logger.info("Done!")
 
     def updateStatus(self):
         for k in range(self.nreplicas):

@@ -24,7 +24,7 @@ from async_re import __version__ as VERSION
 
 NAME = 'async_re'
 
-MODULES = 'async_re', 'ommreplica', 'ommsystem', 'ommworker', 'local_openmm_transport', 'transport', 'gibbs_sampling', 'openmm_async_re', 'ommoworker_sync', 'openmm_sync_re',
+MODULES = 'async_re', 'ommreplica', 'ommsystem', 'ommworker', 'local_openmm_transport', 'transport', 'gibbs_sampling', 'openmm_async_re', 'ommworker_sync', 'openmm_sync_re',
 
 
 SCRIPTS = 'abfe_explicit.py', 'rbfe_explicit.py', 'abfe_structprep.py', 'rbfe_structprep.py', 'rbfe_explicit_sync.py'

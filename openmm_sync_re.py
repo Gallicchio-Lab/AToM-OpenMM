@@ -119,7 +119,8 @@ class openmm_job_AmberRBFE:
                         with TerminationGuard():
                             for replica in self.replicas:
                                 replica.save_out()
-                                replica.save_dcd()
+                                if replica.get_mdsteps() % int(self.config['TRJ_FREQUENCY']) == 0:
+                                    replica.save_dcd()
 
                     with Timer(self.logger.info, "checkpointing"):
                         with TerminationGuard():

@@ -1,5 +1,4 @@
 import os
-import re
 
 from openmm import Platform
 from openmm.app import Simulation, StateDataReporter
@@ -21,6 +20,11 @@ class OMMWorkerATM:
         nodefile = self.config.get('NODEFILE')
         assert nodefile, "NODEFILE needs to be specified"
         device = open(nodefile, 'r').readline().split(',')[1].strip().split(':')[1].strip()
+
+        if Platform.getNumPlatforms() == 1:
+            if conda_prefix := os.environ.get("CONDA_PREFIX"):
+                plugin_dir = os.path.join(conda_prefix, "lib", "plugins")
+                Platform.loadPluginsFromDirectory(plugin_dir)
 
         platform = Platform.getPlatformByName("CUDA")
         properties = {"DeviceIndex": device, "Precision": "mixed"}

@@ -52,13 +52,57 @@ class openmm_job_AmberRBFE:
                 replica.set_state(i, self.stateparams[i])
             self.openmm_replicas.append(replica)
 
+    def _checkInput(self):
+
+        assert self.config.get('LAMBDAS'), "LAMBDAS needs to be specified"
+        self.lambdas = self.config.get('LAMBDAS').split(',')
+        assert self.config.get('TEMPERATURES'), "TEMPERATURES needs to be specified"
+        self.temperatures = self.config.get('TEMPERATURES').split(',')
+        assert len(self.temperatures) == 1
+
+        #flag to identify the intermediate states, typically the one at lambda=1/2
+        self.intermediates = self.config.get('INTERMEDIATE').split(',')
+
+        #direction of transformation at each lambda
+        #ABFE 1 from RA to R+A, -1 from R+A to A
+        #RBFE 1 from RA+B to RB+A, -1 from RB+A to RA+B
+        self.directions = self.config.get('DIRECTION').split(',')
+
+        #parameters of the softplus alchemical potential
+        #lambda1 = lambda2 gives the linear potential
+        self.lambda1s = self.config.get('LAMBDA1').split(',')
+        self.lambda2s = self.config.get('LAMBDA2').split(',')
+        self.alphas = self.config.get('ALPHA').split(',')
+        self.u0s = self.config.get('U0').split(',')
+        self.w0coeffs = self.config.get('W0COEFF').split(',')
+
+        #build parameters for the lambda/temperatures combined states
+        self.nreplicas = self._buildStates()
+
+    def _buildStates(self):
+        temperature = self.temperatures[0]
+        self.stateparams = []
+        for (lambd,direction,intermediate,lambda1,lambda2,alpha,u0,w0) in zip(self.lambdas,self.directions,self.intermediates,self.lambda1s,self.lambda2s,self.alphas,self.u0s,self.w0coeffs):
+            par = {}
+            par['lambda'] = float(lambd)
+            par['atmdirection'] = float(direction)
+            par['atmintermediate'] = float(intermediate)
+            par['lambda1'] = float(lambda1)
+            par['lambda2'] = float(lambda2)
+            par['alpha'] = float(alpha)/kilocalories_per_mole
+            par['u0'] = float(u0)*kilocalories_per_mole
+            par['w0'] = float(w0)*kilocalories_per_mole
+            par['temperature'] = float(temperature)*kelvin
+            self.stateparams.append(par)
+        return len(self.stateparams)
+
     def setupJob(self):
         # create status table
         self.replica_states = [replica.get_stateid() for replica in self.openmm_replicas]
         for i, replica in enumerate(self.openmm_replicas):
             self.logger.info(f"Replica {i}: cycle {replica.get_cycle()}, state {replica.get_stateid()}")
 
-        self.updateStatus()
+        self._updateReplicas()
 
     def scheduleJobs(self):
 
@@ -78,7 +122,7 @@ class openmm_job_AmberRBFE:
                     self._exhangeReplicas()
 
                 with Timer(self.logger.info, "update replicas"):
-                    self.updateStatus()
+                    self._updateReplicas()
 
                 with Timer(self.logger.info, "write replicas samples and trajectories"):
                     with TerminationGuard():
@@ -93,9 +137,15 @@ class openmm_job_AmberRBFE:
 
         self.logger.info("Done!")
 
-    def updateStatus(self):
+    def _updateReplicas(self):
         for k in range(self.nreplicas):
-            self.update_state_of_replica(k)
+            self._updateReplica(k)
+
+    def _updateReplica(self, repl):
+        replica = self.openmm_replicas[repl]
+        old_stateid, _ = replica.get_state()
+        new_stateid = self.replica_states[repl]
+        replica.set_state(new_stateid, self.stateparams[new_stateid])
 
     def _exhangeReplicas(self):
 
@@ -121,16 +171,6 @@ class openmm_job_AmberRBFE:
                 self.logger.info(f"Replica {repl_j}: {sid_j} --> {sid_i}")
 
         self.logger.debug(f"Replica states after: {self.replica_states}")
-
-    def update_state_of_replica(self, repl):
-        replica = self.openmm_replicas[repl]
-        old_stateid, _ = replica.get_state()
-        new_stateid = self.replica_states[repl]
-        replica.set_state(new_stateid, self.stateparams[new_stateid])
-
-    def _getPar(self, repl):
-        _, par = self.openmm_replicas[repl].get_state()
-        return par
 
     def _computeSwapMatrix(self, repls, states):
         """
@@ -160,57 +200,9 @@ class openmm_job_AmberRBFE:
                 U[sid_j][repl_i] = self._reduced_energy(par[j],pot[i])
         return U
 
-    def _buildStates(self):
-        temperature = self.temperatures[0]
-        self.stateparams = []
-        for (lambd,direction,intermediate,lambda1,lambda2,alpha,u0,w0) in zip(self.lambdas,self.directions,self.intermediates,self.lambda1s,self.lambda2s,self.alphas,self.u0s,self.w0coeffs):
-            par = {}
-            par['lambda'] = float(lambd)
-            par['atmdirection'] = float(direction)
-            par['atmintermediate'] = float(intermediate)
-            par['lambda1'] = float(lambda1)
-            par['lambda2'] = float(lambda2)
-            par['alpha'] = float(alpha)/kilocalories_per_mole
-            par['u0'] = float(u0)*kilocalories_per_mole
-            par['w0'] = float(w0)*kilocalories_per_mole
-            par['temperature'] = float(temperature)*kelvin
-            self.stateparams.append(par)
-        return len(self.stateparams)
-
-    def _checkInput(self):
-
-        assert self.config.get('LAMBDAS'), "LAMBDAS needs to be specified"
-        self.lambdas = self.config.get('LAMBDAS').split(',')
-        assert self.config.get('TEMPERATURES'), "TEMPERATURES needs to be specified"
-        self.temperatures = self.config.get('TEMPERATURES').split(',')
-        assert len(self.temperatures) == 1
-
-        #flag to identify the intermediate states, typically the one at lambda=1/2
-        self.intermediates = self.config.get('INTERMEDIATE').split(',')
-
-        #direction of transformation at each lambda
-        #ABFE 1 from RA to R+A, -1 from R+A to A
-        #RBFE 1 from RA+B to RB+A, -1 from RB+A to RA+B
-        self.directions = self.config.get('DIRECTION').split(',')
-
-        #parameters of the softplus alchemical potential
-        #lambda1 = lambda2 gives the linear potential
-        self.lambda1s = self.config.get('LAMBDA1').split(',')
-        self.lambda2s = self.config.get('LAMBDA2').split(',')
-        self.alphas = self.config.get('ALPHA').split(',')
-        self.u0s = self.config.get('U0').split(',')
-        self.w0coeffs = self.config.get('W0COEFF').split(',')
-
-        #build parameters for the lambda/temperatures combined states
-        self.nreplicas = self._buildStates()
-
-    #evaluates the softplus function
-    def _softplus(self, lambda1, lambda2, alpha, u0, w0, uf):
-        ee = 1.0 + math.exp(-alpha*(uf-u0))
-        softplusf = lambda2 * uf + w0
-        if alpha._value > 0.:
-            softplusf += ((lambda2 - lambda1)/alpha) * math.log(ee)
-        return softplusf
+    def _getPar(self, repl):
+        _, par = self.openmm_replicas[repl].get_state()
+        return par
 
     #customized getPot to return the unperturbed potential energy
     #of the replica U0 = U - W_lambda(u)
@@ -254,3 +246,11 @@ class openmm_job_AmberRBFE:
             #prevent exchange
             large_energy = 1.e12
             return large_energy
+
+    #evaluates the softplus function
+    def _softplus(self, lambda1, lambda2, alpha, u0, w0, uf):
+        ee = 1.0 + math.exp(-alpha*(uf-u0))
+        softplusf = lambda2 * uf + w0
+        if alpha._value > 0.:
+            softplusf += ((lambda2 - lambda1)/alpha) * math.log(ee)
+        return softplusf

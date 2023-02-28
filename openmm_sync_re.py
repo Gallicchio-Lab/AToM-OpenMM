@@ -28,28 +28,8 @@ class openmm_job_AmberRBFE:
             self.logger.setLevel(logging.DEBUG)
 
         self.basename = self.config['BASENAME']
-        self.kb = 0.0019872041*kilocalories_per_mole/kelvin
-
-        # get state parameters
         self.state_params = self._getStateParams()
         self.nreplicas = len(self.state_params)
-
-        # create system
-        prmtopfile = self.basename + ".prmtop"
-        crdfile = self.basename + ".inpcrd"
-        ommsystem = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
-        ommsystem.create_system()
-
-        # create worker
-        self.worker = OMMWorkerATM(ommsystem, self.config, self.logger)
-
-        #creates replicas
-        self.openmm_replicas = []
-        for i in range(self.nreplicas):
-            replica = OMMReplicaATM(i, self.basename, self.worker, self.logger)
-            if not replica.get_stateid():
-                replica.set_state(i, self.state_params[i])
-            self.openmm_replicas.append(replica)
 
     def _getStateParams(self):
         lambdas = self.config['LAMBDAS'].split(',')
@@ -90,55 +70,65 @@ class openmm_job_AmberRBFE:
         return state_params
 
     def setupJob(self):
-        # create status table
-        self.replica_states = [replica.get_stateid() for replica in self.openmm_replicas]
-        for i, replica in enumerate(self.openmm_replicas):
-            self.logger.info(f"Replica {i}: cycle {replica.get_cycle()}, state {replica.get_stateid()}")
+        with Timer(self.logger.info, "ATM setup"):
 
-        self._updateReplicas()
+            with Timer(self.logger.info, "create system"):
+                prmtopfile = self.basename + ".prmtop"
+                crdfile = self.basename + ".inpcrd"
+                ommsystem = OMMSystemAmberRBFE(self.basename, self.config, prmtopfile, crdfile, self.logger)
+                ommsystem.create_system()
+
+            with Timer(self.logger.info, "create worker"):
+                self.worker = OMMWorkerATM(ommsystem, self.config, self.logger)
+
+            with Timer(self.logger.info, "create replicas"):
+                self.replicas = []
+                for i in range(self.nreplicas):
+                    replica = OMMReplicaATM(i, self.basename, self.worker, self.logger)
+                    if not replica.get_stateid():
+                        replica.set_state(i, self.state_params[i])
+                    self.replicas.append(replica)
+
+                self.replica_states = [replica.get_stateid() for replica in self.replicas]
+                for i, replica in enumerate(self.replicas):
+                    self.logger.info(f"Replica {i}: cycle {replica.get_cycle()}, state {replica.get_stateid()}")
+
+            with Timer(self.logger.info, "update replicas"):
+                self._updateReplicas()
 
     def scheduleJobs(self):
+        with Timer(self.logger.info, "ATM simulations"):
 
-        assert 'MAX_SAMPLES' in self.config, "MAX_SAMPLES has to be specified"
-        num_samples = int(self.config['MAX_SAMPLES'])
+            num_samples = int(self.config['MAX_SAMPLES'])
+            last_sample = self.replicas[0].get_cycle()
+            for isample in range(last_sample, num_samples + 1):
+                with Timer(self.logger.info, f"sample {isample}"):
 
-        last_sample = self.openmm_replicas[0].get_cycle()
-        for isample in range(last_sample, num_samples + 1):
-            with Timer(self.logger.info, f"sample {isample}"):
+                    for irepl, replica in enumerate(self.replicas):
+                        with Timer(self.logger.info, f"sample {isample}, replica {irepl}"):
+                            assert replica.get_cycle() == isample
+                            self.worker.run(replica)
 
-                for irepl, replica in enumerate(self.openmm_replicas):
-                    with Timer(self.logger.info, f"sample {isample}, replica {irepl}"):
-                        assert replica.get_cycle() == isample
-                        self.worker.run(replica)
+                    with Timer(self.logger.info, "exchange replicas"):
+                        self._exhangeReplicas()
 
-                with Timer(self.logger.info, "exchange replicas"):
-                    self._exhangeReplicas()
+                    with Timer(self.logger.info, "update replicas"):
+                        self._updateReplicas()
 
-                with Timer(self.logger.info, "update replicas"):
-                    self._updateReplicas()
+                    with Timer(self.logger.info, "write replicas samples and trajectories"):
+                        with TerminationGuard():
+                            for replica in self.replicas:
+                                replica.save_out()
+                                replica.save_dcd()
 
-                with Timer(self.logger.info, "write replicas samples and trajectories"):
-                    with TerminationGuard():
-                        for replica in self.openmm_replicas:
-                            replica.save_out()
-                            replica.save_dcd()
-
-                with Timer(self.logger.info, "checkpointing"):
-                    with TerminationGuard():
-                        for replica in self.openmm_replicas:
-                            replica.save_checkpoint()
-
-        self.logger.info("Done!")
+                    with Timer(self.logger.info, "checkpointing"):
+                        with TerminationGuard():
+                            for replica in self.replicas:
+                                replica.save_checkpoint()
 
     def _updateReplicas(self):
-        for k in range(self.nreplicas):
-            self._updateReplica(k)
-
-    def _updateReplica(self, repl):
-        replica = self.openmm_replicas[repl]
-        old_stateid, _ = replica.get_state()
-        new_stateid = self.replica_states[repl]
-        replica.set_state(new_stateid, self.state_params[new_stateid])
+        for replica, stateid in zip(self.replicas, self.replica_states):
+            replica.set_state(stateid, self.state_params[stateid])
 
     def _exhangeReplicas(self):
 
@@ -151,10 +141,7 @@ class openmm_job_AmberRBFE:
         self.logger.debug(f"Replica states before: {self.replica_states}")
         for repl_i in range(self.nreplicas):
             sid_i = self.replica_states[repl_i]
-            repl_j = pairwise_independence_sampling(repl_i,sid_i,
-                                                    range(self.nreplicas),
-                                                    self.replica_states,
-                                                    swap_matrix)
+            repl_j = pairwise_independence_sampling(repl_i,sid_i, range(self.nreplicas), self.replica_states, swap_matrix)
             if repl_j != repl_i:
                 sid_i = self.replica_states[repl_i]
                 sid_j = self.replica_states[repl_j]
@@ -171,19 +158,13 @@ class openmm_job_AmberRBFE:
         and each row is a state so U[i][j] is the energy of replica j in state
         i.
         """
-        U = [[ 0. for j in range(self.nreplicas)]
-             for i in range(self.nreplicas)]
+        U = [[ 0. for _ in range(self.nreplicas)] for _ in range(self.nreplicas)]
 
         n = len(repls)
 
         #collect replica parameters and potentials
-        par = []
-        pot = []
-        for k in repls:
-            v = self._getPot(k)
-            l = self._getPar(k)
-            par.append(l)
-            pot.append(v)
+        par = [self._getPar(k) for k in repls]
+        pot = [self._getPot(k) for k in repls]
 
         for i in range(n):
             repl_i = repls[i]
@@ -194,18 +175,17 @@ class openmm_job_AmberRBFE:
         return U
 
     def _getPar(self, repl):
-        _, par = self.openmm_replicas[repl].get_state()
+        _, par = self.replicas[repl].get_state()
         return par
 
     #customized getPot to return the unperturbed potential energy
     #of the replica U0 = U - W_lambda(u)
     def _getPot(self, repl):
-        replica = self.openmm_replicas[repl]
+        replica = self.replicas[repl]
         pot = replica.get_energy()
         epot = pot['potential_energy']
         pertpot = pot['perturbation_energy']
-        (stateid, par) = replica.get_state()
-        # direction = par['atmdirection']
+        _, par = replica.get_state()
         lambda1 = par['lambda1']
         lambda2 = par['lambda2']
         alpha = par['alpha']
@@ -218,9 +198,6 @@ class openmm_job_AmberRBFE:
         return pot
 
     def _reduced_energy(self, par, pot):
-        temperature = par['temperature']
-        beta = 1./(self.kb*temperature)
-        # direction = par['atmdirection']
         lambda1 = par['lambda1']
         lambda2 = par['lambda2']
         alpha = par['alpha']
@@ -232,6 +209,10 @@ class openmm_job_AmberRBFE:
         pertpot = pot['perturbation_energy']
         replica_direction = pot['direction']
         replica_intermediate = pot['intermediate']
+
+        kb = 0.0019872041*kilocalories_per_mole/kelvin
+        beta = 1./(kb*par['temperature'])
+
         if (replica_direction == state_direction) or (state_intermediate > 0 and replica_intermediate > 0):
             ebias = self._softplus(lambda1, lambda2, alpha, u0, w0, pertpot)
             return beta*(epot0 + ebias)

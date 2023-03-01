@@ -8,7 +8,7 @@ from openmm.unit import kelvin, kilocalories_per_mole
 from gibbs_sampling import pairwise_independence_sampling
 from ommreplica import OMMReplicaATM
 from ommsystem import OMMSystemAmberRBFE
-from ommworker_sync import OMMWorkerATM
+from sync.worker import OMMWorkerATM
 from utils.singal_guard import TerminationGuard
 from utils.timer import Timer
 
@@ -16,7 +16,7 @@ from utils.timer import Timer
 class openmm_job_AmberRBFE:
 
     def __init__(self, config_file):
-        logging.config.fileConfig(os.path.join(os.path.dirname(__file__), "utils/logging.conf"))
+        logging.config.fileConfig(os.path.join(os.path.dirname(__file__), "..", "utils", "logging.conf"))
         self.logger = logging.getLogger("sync_re")
 
         self.logger.info("Configuration:")

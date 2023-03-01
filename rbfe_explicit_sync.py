@@ -1,7 +1,7 @@
 import sys
 import time
 
-from openmm_sync_re import openmm_job_AmberRBFE
+from sync.atm import openmm_job_AmberRBFE
 
 if __name__ == '__main__':
 

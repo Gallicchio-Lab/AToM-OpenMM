@@ -1,7 +1,7 @@
 #!/bin/bash
 # OPENMM_DIR should probably point to your CONDA environment
 # export OPENMM_DIR=$HOME/miniconda3/envs/atm 
-openmm_dir=$OPENMM_DIR
+openmm_dir=$CONDA_PREFIX
 export OPENMM_PLUGIN_DIR=${openmm_dir}/lib/plugins
 export LD_LIBRARY_PATH=${openmm_dir}/lib:${openmm_dir}/lib/plugins:$LD_LIBRARY_PATH
 python "$@"

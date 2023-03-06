@@ -1,6 +1,7 @@
 import os
+import sys
 
-from openmm import Platform
+from openmm import OpenMMException, Platform
 from openmm.app import Simulation, StateDataReporter
 from openmm.unit import kelvin, kilojoules_per_mole
 
@@ -97,7 +98,16 @@ class OMMWorkerATM:
 
         with Timer(self.logger.debug, "run replica"):
             nsteps = int(self.config['PRODUCTION_STEPS'])
-            self.simulation.step(nsteps)
+            ntry = 5
+            for _ in range(ntry):
+                try:
+                    self.simulation.step(nsteps)
+                    break
+                except OpenMMException as e:
+                    self.logger.warning(f"Simulation failed: {e}")
+            else:
+                self.logger.error(f"Simulation failed {ntry} times!")
+                sys.exit(0)
 
         with Timer(self.logger.debug, "get replica state"):
             pos, vel = self.get_posvel()

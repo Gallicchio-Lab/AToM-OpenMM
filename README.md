@@ -34,11 +34,12 @@ Please [cite us](http://www.compmolbiophysbc.org/publications) if you use this s
 Installation & Usage
 --------------------
 
-It is recommended that the installation is performed in a personal python environment (`conda`, `miniconda`, or similar). AToM requires the `configobj` and `numpy` python modules. 
+It is recommended that the installation is performed in a personal python environment (`conda`, `miniconda`, or similar). AToM requires the `ambertools`, `openmm`, `configobj` and `numpy` python modules. 
 
 ```
-conda create -n atm -c conda-forge openmm-atmmetaforce-plugin configobj
+conda create -n atm 
 conda activate atm
+conda install -c conda-forge ambertools openmm openmm-atmmetaforce-plugin configobj
 git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
 cd AToM-OpenMM
 python setup.py install

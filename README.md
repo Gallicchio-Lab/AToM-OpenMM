@@ -41,9 +41,11 @@ conda create -n atm -c conda-forge openmm openmm-atmmetaforce-plugin configobj s
 git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
 cd AToM-OpenMM
 python setup.py install
+mamba install -y r-base
+Rscript -e 'install.packages("UWHAM", repos = "http://cran.us.r-project.org")' 
 ```
 
-`setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. See [examples](examples/) for examples and tutorials.
+`setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. See [examples](examples/) for examples and tutorials. The `r-base`, and the `UWHAM R package` is required to run [example of free energy](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/RBFE/cdk2).
 
 While we strive to develop and distribute high-quality and bug-free software, keep in mind that this is research software under heavy development. AToM is provided without any guarantees of correctness. Please report issues [here](https://github.com/Gallicchio-Lab/AToM-OpenMM/issues). We welcome contributions and pull requests.
 

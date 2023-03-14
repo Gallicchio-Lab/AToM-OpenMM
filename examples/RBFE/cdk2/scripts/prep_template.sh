@@ -9,7 +9,7 @@
 #SBATCH --no-requeue
 #SBATCH --account=<account>
 #SBATCH -t 12:00:00
-. ~/miniconda3/bin/activate atm
+conda activate atm
 
 for pair in <LIGPAIRS> ; do
     jobname=<RECEPTOR>-$pair

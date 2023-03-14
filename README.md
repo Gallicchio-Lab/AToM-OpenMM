@@ -37,11 +37,10 @@ Installation & Usage
 It is recommended that the installation is performed in a personal python environment (`conda`, `miniconda`, or similar). AToM requires the `openmm`, `configobj` and `numpy` python modules. 
 
 ```
-conda create -n atm -c conda-forge openmm openmm-atmmetaforce-plugin configobj setproctitle ambertools 
+conda create -n atm -c conda-forge ambertools openmm openmm-atmmetaforce-plugin configobj setproctitle r-base
 git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
 cd AToM-OpenMM
 python setup.py install
-mamba install -y r-base
 Rscript -e 'install.packages("UWHAM", repos = "http://cran.us.r-project.org")' 
 ```
 

@@ -6,7 +6,7 @@ In this tutorial we will calculate the relative binding free energies between co
 
 ### System preparation
 
-We assume in this tutorial that the examples directory of this repository has been copied under `$HOME/examples`. We assume that AToM-OpenMM is available under `$HOME/software/AToM-OpenMM`. Adjust the pathname pointing to the AToM-OpenMM installation folder in `setup-settings.sh` as needed. This tutorial assumes that the Ambertools executables are in the search path. They can be conveniently installed under the same conda environment:
+We assume in this tutorial that the examples directory of this repository has been copied under `$HOME/examples`. We assume that AToM-OpenMM is available under `$HOME/software/AToM-OpenMM`. Adjust the pathname (`asyncre_dir` variable) pointing to the AToM-OpenMM installation folder in `setup-settings.sh` as needed; default is `asyncre_dir=~/AToM-OpenMM`. This tutorial assumes that the Ambertools executables are in the search path when installing from [the first tutorial](https://github.com/Gallicchio-Lab/AToM-OpenMM#installation--usage). They can be conveniently installed under the same conda environment but it takes a lot of time to resolve conflicts:
 
 `conda install -c conda-forge ambertools`
 
@@ -47,3 +47,9 @@ bash ./free_energies.sh
 The free energy values produced here may or may not match with the literature set mentioned in the [reference paper](https://pubs.acs.org/doi/10.1021/ct300911a). Some ligands, `1H1R` and `1H1S` in particular, need enhanced sampling to reach convergence. The mentioned ligands are trapped in their starting conformations in the binding site failing to adopt alternative conformations because of certain torsional barriers. 
 
 Edit the `free_energies.sh` script to change the number of samples discarded. Usually the first half of total samples are disarded. 
+
+If it throws an error named `./analyze.sh: line 34: R: command not found`, please install `r-base` and `UWHAM R package` as follow command:
+```
+mamba install -y r-base
+Rscript -e 'install.packages("UWHAM", repos = "http://cran.us.r-project.org")' 
+```

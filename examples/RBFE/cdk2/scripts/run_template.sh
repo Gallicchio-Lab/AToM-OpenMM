@@ -12,7 +12,7 @@
 
 jobname=<JOBNAME>
 
-. ~/miniconda3/bin/activate atm
+conda activate atm
 echo "Running on $(hostname)"
 
 if [ ! -f ${jobname}_0.xml ]; then

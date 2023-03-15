@@ -27,7 +27,7 @@ NAME = 'async_re'
 MODULES = 'async_re', 'ommreplica', 'ommsystem', 'ommworker', 'local_openmm_transport', 'transport', 'gibbs_sampling', 'openmm_async_re'
 
 
-SCRIPTS = 'abfe_explicit.py', 'rbfe_explicit.py', 'abfe_structprep.py', 'rbfe_structprep.py'
+SCRIPTS = 'abfe_explicit.py', 'rbfe_explicit.py', 'abfe_structprep.py', 'rbfe_structprep.py', 'rbfe_explicit_sync.py'
 
 REQUIRES = 'configobj', 'numpy'
 
@@ -44,7 +44,7 @@ setup(name=NAME,
       author_email=AUTHOR_EMAIL,
       py_modules=MODULES,
       scripts=SCRIPTS,
-      # Fake a package to include the config file
-      packages=['utils'], package_data={'utils': ['logging.conf']},
+      packages=['sync', 'utils'],
+      package_data={'utils': ['logging.conf']},
       requires=REQUIRES
      )

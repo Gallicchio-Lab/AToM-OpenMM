@@ -9,8 +9,8 @@
 #SBATCH --no-requeue
 #SBATCH --account=<account>
 #SBATCH -t 12:00:00
-. ~/miniconda3/bin/activate atm
 
+. ~/miniconda3/bin/activate atm
 for pair in <LIGPAIRS> ; do
     jobname=<RECEPTOR>-$pair
     echo "Prepping $jobname"

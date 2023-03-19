@@ -37,13 +37,14 @@ Installation & Usage
 It is recommended that the installation is performed in a personal python environment (`conda`, `miniconda`, or similar). AToM requires the `openmm`, `configobj` and `numpy` python modules. 
 
 ```
-conda create -n atm -c conda-forge openmm openmm-atmmetaforce-plugin configobj setproctitle ambertools 
+conda create -n atm -c conda-forge ambertools openmm openmm-atmmetaforce-plugin configobj setproctitle r-base
 git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
 cd AToM-OpenMM
 python setup.py install
+Rscript -e 'install.packages("UWHAM", repos = "http://cran.us.r-project.org")' 
 ```
 
-`setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. See [examples](examples/) for examples and tutorials.
+`setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. `r-base`, and the `UWHAM R package` is required for free energy estimation. See [examples](examples/) for examples and tutorials.
 
 While we strive to develop and distribute high-quality and bug-free software, keep in mind that this is research software under heavy development. AToM is provided without any guarantees of correctness. Please report issues [here](https://github.com/Gallicchio-Lab/AToM-OpenMM/issues). We welcome contributions and pull requests.
 

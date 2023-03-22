@@ -129,7 +129,7 @@ class openmm_job_AmberRBFE:
 
                     # Report progress on GPUGRID
                     progress = float(isample)/float(num_samples - last_sample)
-                    open("progress", "w").write(progress)
+                    open("progress", "w").write(str(progress))
 
     def _updateReplicas(self):
         for replica, stateid in zip(self.replicas, self.replica_states):

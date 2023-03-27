@@ -99,8 +99,16 @@ class openmm_job_AmberRBFE:
     def scheduleJobs(self):
         with Timer(self.logger.info, "ATM simulations"):
 
-            num_samples = int(self.config['MAX_SAMPLES'])
             last_sample = self.replicas[0].get_cycle()
+            num_samples = self.config['MAX_SAMPLES']
+            if num_samples.startswith("+"):
+                num_extra_samples = int(num_samples[1:])
+                num_samples = num_extra_samples + last_sample - 1
+                self.logger.info(f"Additional number of samples: {num_extra_samples}")
+            else:
+                num_samples = int(num_samples)
+                self.logger.info(f"Target number of samples: {num_samples}")
+
             for isample in range(last_sample, num_samples + 1):
                 with Timer(self.logger.info, f"sample {isample}"):
 

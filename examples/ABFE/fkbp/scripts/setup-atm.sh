@@ -148,7 +148,7 @@ done
 
 #prepare prep script
 ligs=${ligands[@]}
-sed "s#<RECEPTOR>#${receptor}#;s#<LIGS>#${ligs}# " < ${work_dir}/scripts/prep_template.sh > ${work_dir}/complexes/prep.sh
+sed "s#<RECEPTOR>#${receptor}#;s#<LIGS>#${ligs}#  ; s#<ASYNCRE_DIR>#${asyncre_dir}#g "< ${work_dir}/scripts/prep_template.sh > ${work_dir}/complexes/prep.sh
 
 #prepare free energy calculation script
 sed "s#<RECEPTOR>#${receptor}#;s#<LIGS>#${ligs}# " < ${work_dir}/scripts/free_energies_template.sh > ${work_dir}/complexes/free_energies.sh

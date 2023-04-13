@@ -68,7 +68,7 @@ class OMMSystemAmber(OMMSystem):
         self.parameter['temperature'] = 'RETemperature'
         self.parameter['potential_energy'] = 'REPotEnergy'
 
-    def load_amber_system(self):
+    def load_amber_system(self, droplet=False):
         """
         sets the value of
         prmtop : Amber topology file
@@ -85,13 +85,19 @@ class OMMSystemAmber(OMMSystem):
             hmass = float(self.keywords.get('HMASS'))*amu
         else:
             hmass = 1.0*amu
-        self.system = self.prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=0.9*nanometer,
-                                               constraints=HBonds, hydrogenMass = hmass)
+
+        if not droplet:
+            self.system = self.prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=0.9*nanometer,
+                                                   constraints=HBonds, hydrogenMass = hmass)
+        else:
+            self.system = self.prmtop.createSystem(nonbondedMethod=CutoffNonPeriodic, nonbondedCutoff=1.*nanometer,
+                                                   constraints=HBonds)
+
         self.topology = self.prmtop.topology
         self.positions = self.inpcrd.positions
         self.boxvectors = self.inpcrd.boxVectors
 
-    def set_barostat(self,temperature,pressure,frequency):
+    #def set_barostat(self,temperature,pressure,frequency):
         """
         sets the system Barostat; Currently applies the MonteCarlo Barostat
 
@@ -101,9 +107,9 @@ class OMMSystemAmber(OMMSystem):
         frequency : 0 - disable the barostat
 
         """
-        self.barostat = MonteCarloBarostat(pressure, temperature)
-        self.barostat.setFrequency(frequency)
-        self.system.addForce(self.barostat)
+       # self.barostat = MonteCarloBarostat(pressure, temperature)
+       # self.barostat.setFrequency(frequency)
+       # self.system.addForce(self.barostat)
 
     def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
         #place non-bonded force in group 1, assume all other bonded forces are in group 0
@@ -201,6 +207,7 @@ class OMMSystemAmberABFE(OMMSystemAmber):
         self.parameter['bias_energy'] = 'BiasEnergy'
         self.atmforce = None
         self.lig_atoms = None
+        self.solv_atoms = None
         self.displ = None
 
     def set_ligand_atoms(self):
@@ -238,6 +245,70 @@ class OMMSystemAmberABFE(OMMSystemAmber):
                                                                    kfcm = kf,
                                                                    tolcm = r0,
                                                                    offset = ligoffset)
+
+    # droplet = self.keywords.get('DROPLET')
+    # print("DROPLET =", droplet)
+
+    def set_solv_atoms(self):
+        self.solv_atoms = []
+        self.total_atoms = list(range(self.topology.getNumAtoms()))
+        print("Total atoms of system = ", len(self.total_atoms))
+        print("Ligand atoms are = ", self.lig_atoms)
+        #print("Solvent atom starts at = ", self.lig_atoms[-1]+1)
+        self.last_lig_atom = self.lig_atoms[-1]
+        print("Solvent atom starts at = ", self.last_lig_atom+1)
+
+        for i in range(self.topology.getNumAtoms()):
+            if i > self.last_lig_atom:
+                self.solv_atoms.append(int(i))
+        print("1st solvent atom = ", self.solv_atoms[0], " and last = ", self.solv_atoms[-1])
+    def set_solute_restraint(self):
+        cmkf = float(self.keywords.get('CM_KF'))
+        cmrd = float(self.keywords.get('CM_TOL'))
+        restrained_atoms = self.keywords.get('POS_RESTRAINED_ATOMS')
+        if restrained_atoms is not None:
+            solute_atoms_restr = [int(i) for i in restrained_atoms]
+        else:
+            solute_atoms_restr = None
+        solv_atoms_restr = self.solv_atoms
+        if (solute_atoms_restr is not None) and (solv_atoms_restr is not None):
+            print("Solute restrained to center of droplet")
+            kf = cmkf * kilocalorie_per_mole/angstrom**2
+            r0 = cmtol * angstrom
+            ligoffset = self.keywords.get('LIGOFFSET')
+            if ligoffset is not None:
+                ligoffset = [float(offset) for offset in ligoffset.split(',')]*angstrom
+            self.vsiterestraintForce = self.atm_utils.addRestraintForce(lig_cm_particles = solute_atoms_restr,
+                                                               rcpt_cm_particles = solv_atoms_restr,
+                                                               kfcm = kf,
+                                                               tolcm = r0,
+                                                               offset = ligoffset)
+
+    def set_droplet_restraint(self):
+        dfc = float(self.keywords.get('D_FC'))
+        fc = dfc * kilocalorie_per_mole/(angstrom*angstrom)  #force constant for confinement potential
+        dr0 = float(self.keywords.get('D_R0'))
+        r0 = dr0 * angstrom
+        dx0 = float(self.keywords.get('X0'))
+        dy0 = float(self.keywords.get('Y0'))
+        dz0 = float(self.keywords.get('X0'))
+        x0 = dx0 * angstrom
+        y0 = dy0 * angstrom
+        z0 = dz0 * angstrom
+        udroplet = mm.CustomExternalForce(' (fc/2)*step(d12-r0)*(d12-r0)^2  ; d12 = sqrt((x-x0)^2 + (y-y0)^2 + (z-z0)^2)')
+        udroplet.addGlobalParameter('fc', fc / (kilojoule_per_mole/(nanometer*nanometer)) )
+        udroplet.addGlobalParameter('r0', r0 / nanometer)
+        udroplet.addGlobalParameter('x0', x0 / nanometer)
+        udroplet.addGlobalParameter('y0', y0 / nanometer)
+        udroplet.addGlobalParameter('z0', z0 / nanometer)
+        droplet_restr = self.solv_atoms
+        if droplet_restr is not None:
+            print("Confinement potential on droplet active")
+            for i in droplet_restr:
+                udroplet.addParticle(i,[])
+            self.system.addForce(udroplet)
+
+
 
     def set_orientation_restraints(self):
         #orientation VSite restraints
@@ -340,6 +411,12 @@ class OMMSystemAmberABFE(OMMSystemAmber):
         self.set_ligand_atoms()
 
         self.set_vsite_restraints()
+
+        self.set_solv_atoms()
+
+        self.set_solute_restraint()
+
+        self.set_droplet_restraint()
 
         self.set_orientation_restraints()
 

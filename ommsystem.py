@@ -262,6 +262,7 @@ class OMMSystemAmberABFE(OMMSystemAmber):
             if i > self.last_lig_atom:
                 self.solv_atoms.append(int(i))
         print("1st solvent atom = ", self.solv_atoms[0], " and last = ", self.solv_atoms[-1])
+
     def set_solute_restraint(self):
         cmkf = float(self.keywords.get('CM_KF'))
         cmrd = float(self.keywords.get('CM_TOL'))
@@ -274,7 +275,7 @@ class OMMSystemAmberABFE(OMMSystemAmber):
         if (solute_atoms_restr is not None) and (solv_atoms_restr is not None):
             print("Solute restrained to center of droplet")
             kf = cmkf * kilocalorie_per_mole/angstrom**2
-            r0 = cmtol * angstrom
+            r0 = cmrd * angstrom
             ligoffset = self.keywords.get('LIGOFFSET')
             if ligoffset is not None:
                 ligoffset = [float(offset) for offset in ligoffset.split(',')]*angstrom
@@ -429,7 +430,7 @@ class OMMSystemAmberABFE(OMMSystemAmber):
 
         #add barostat
         pressure=1*bar
-        self.set_barostat(temperature,pressure,900000000)
+        # self.set_barostat(temperature,pressure,900000000)
 
         #hack to store ASyncRE quantities in the openmm State
         sforce = mm.CustomBondForce("1")

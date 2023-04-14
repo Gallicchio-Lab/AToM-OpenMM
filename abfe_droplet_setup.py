@@ -24,7 +24,7 @@ from ommsystem import *
 
 class OMMSystemAmberABFEnoATM(OMMSystemAmberABFE):
     def create_system(self):
-
+        super().create_system()
         droplet = self.keywords.get('DROPLET')
         print("DROPLET =", droplet)
         self.load_amber_system(droplet)

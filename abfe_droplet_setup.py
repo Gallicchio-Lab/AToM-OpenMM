@@ -24,18 +24,15 @@ from ommsystem import *
 
 class OMMSystemAmberABFEnoATM(OMMSystemAmberABFE):
     def create_system(self):
-        super().create_system()
-        droplet = self.keywords.get('DROPLET')
-        print("DROPLET =", droplet)
+        super().create_system(True, True, False)
+        droplet = self.keywords.get('DROPLET').lower() == "true"
+        if (droplet):
+            print("Droplet calculation")
+        else:
+            msg = "Not a DROPLET calculation. ---- Use abfe_structprep.py"
+            sys._exit(msg)
         self.load_amber_system(droplet)
         self.atm_utils = ATMMetaForceUtils(self.system)
-        
-        if droplet:
-            self.set_ligand_atoms()
-            self.set_solv_atoms()
-            self.set_vsite_restraints()
-        self.set_orientation_restraints()
-        self.set_positional_restraints()
         
         #target temperature
         temp = self.keywords.get("TEMPERATURES")
@@ -99,11 +96,12 @@ def do_mintherm(keywords, logger):
     print("Thermalization ...")
 
     #FIX ME - get from control file
-    totalSteps = 150000
+    totalSteps = 100000
     steps_per_cycle = 5000
     number_of_cycles = int(totalSteps/steps_per_cycle)
     simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True, volume=True))    
-    
+    simulation.reporters.append(DCDReporter(jobname + "_therm.dcd", steps_per_cycle))
+
     # initial temperature
     initial_temp = keywords.get("INITIAL_TEMPERATURE")
     if initial_temp == None:
@@ -125,7 +123,9 @@ def do_mintherm(keywords, logger):
         syst.integrator.setTemperature(temperature)
 
     #saves thermalized checkpoint
+    print( "SaveState ...")
     simulation.saveState(jobname + '_therm.xml')
+
     #saves a pdb file
     positions = simulation.context.getState(getPositions=True).getPositions()
     boxsize = simulation.context.getState().getPeriodicBoxVectors()
@@ -141,7 +141,8 @@ def do_equil(keywords, logger):
     prmtopfile = basename + ".prmtop"
     crdfile = basename + ".inpcrd"
 
-    syst = OMMSystemAmberABFE(basename, keywords, prmtopfile, crdfile, logger)
+    #syst = OMMSystemAmberABFE(basename, keywords, prmtopfile, crdfile, logger)
+    syst = OMMSystemAmberABFEnoATM(basename, keywords, prmtopfile, crdfile, logger)
     syst.create_system()
     
     platform_properties = {}
@@ -164,14 +165,19 @@ def do_equil(keywords, logger):
     print( "LoadState ...")
     simulation.loadState(jobname + '_therm.xml')
 
+    if syst.doMetaD:
+        fgroups = {0,syst.metaDforcegroup,syst.atmforcegroup}
+    else:
+        fgroups = {0,syst.atmforcegroup}
+
 
     state = simulation.context.getState(getEnergy = True, groups = fgroups)
     print("Potential Energy =", state.getPotentialEnergy())
 
     #FIX ME: get from keywords
-    totalSteps = 1500000
+    totalSteps = 100000
     steps_per_cycle = 5000
-    simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True))
+    simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True, volume=True))
     simulation.reporters.append(DCDReporter(jobname + "_0.dcd", steps_per_cycle))
 
     state = simulation.context.getState(getEnergy = True, groups = fgroups)
@@ -189,7 +195,7 @@ def do_equil(keywords, logger):
     with open(jobname + '_0.pdb', 'w') as output:
         PDBFile.writeFile(simulation.topology, positions, output)
 
-def massage_keywords(keywords, restrain_solutes = True):
+def massage_keywords(keywords, restrain_solutes = False):
 
     #use 1 fs time step
     keywords['TIME_STEP'] = 0.001
@@ -223,12 +229,11 @@ if __name__ == '__main__':
     keywords = ConfigObj(commandFile)
     logger = logging.getLogger("rbfe_structprep")
 
-    restrain_solutes = True
+    restrain_solutes = False
     old_keywords = keywords.copy()
     massage_keywords(keywords, restrain_solutes)
     
     do_mintherm(keywords, logger)
-    # do_lambda_annealing(keywords, logger)
 
     #reestablish the restrained atoms
     if restrain_solutes:

@@ -200,10 +200,11 @@ def massage_keywords(keywords, restrain_solutes = False):
     #use 1 fs time step
     keywords['TIME_STEP'] = 0.001
 
-    #restrain all solutes: receptor and ligands
-    nlig = len(keywords.get('LIGAND_ATOMS'))
-    last_lig_atom = int(keywords.get('LIGAND_ATOMS')[nlig-1])
-    keywords['POS_RESTRAINED_ATOMS'] = [i for i in range(last_lig_atom+1)]
+    if (restrain_solutes):
+        #restrain all solutes: receptor and ligands
+        nlig = len(keywords.get('LIGAND_ATOMS'))
+        last_lig_atom = int(keywords.get('LIGAND_ATOMS')[nlig-1])
+        keywords['POS_RESTRAINED_ATOMS'] = [i for i in range(last_lig_atom+1)]
 
 if __name__ == '__main__':
 

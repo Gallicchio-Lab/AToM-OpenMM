@@ -212,11 +212,13 @@ class OMMSystemAmberABFE(OMMSystemAmber):
 
     def set_ligand_atoms(self):
         lig_atoms_in = self.keywords.get('LIGAND_ATOMS')   #indexes of ligand atoms
-        if lig_atoms_in is not None:
+        if len(lig_atoms_in):
+            print("Ligand atoms = ", lig_atoms_in)
             self.lig_atoms = [int(i) for i in lig_atoms_in]
         else:
-            msg = "Error: LIGAND_ATOMS is required"
-            self._exit(msg)
+            msg = "No LIGAND atoms provided"
+            print(msg)
+            self.lig_atoms = None
 
     def set_vsite_restraints(self):
         #CM-CM Vsite restraints
@@ -251,17 +253,37 @@ class OMMSystemAmberABFE(OMMSystemAmber):
 
     def set_solv_atoms(self):
         self.solv_atoms = []
+        self.receptor_atoms = []
         self.total_atoms = list(range(self.topology.getNumAtoms()))
         print("Total atoms of system = ", len(self.total_atoms))
-        print("Ligand atoms are = ", self.lig_atoms)
-        #print("Solvent atom starts at = ", self.lig_atoms[-1]+1)
-        self.last_lig_atom = self.lig_atoms[-1]
-        print("Solvent atom starts at = ", self.last_lig_atom+1)
 
-        for i in range(self.topology.getNumAtoms()):
-            if i > self.last_lig_atom:
-                self.solv_atoms.append(int(i))
-        print("1st solvent atom = ", self.solv_atoms[0], " and last = ", self.solv_atoms[-1])
+        if  self.lig_atoms is None or not len(self.lig_atoms):
+            print("Ligand atoms is None")
+            pos_receptor_atoms = self.keywords.get("POS_RESTRAINED_ATOMS")
+            for i in pos_receptor_atoms:
+                self.receptor_atoms.append(int(i))
+            if pos_receptor_atoms is not None:
+                for i in range(self.topology.getNumAtoms()):
+                    if i > self.receptor_atoms[-1]:
+                        self.solv_atoms.append(int(i))
+                print("1st solvent atom = ", self.solv_atoms[0], "and last = ", self.solv_atoms[-1])
+
+        else:
+            print("Ligand atoms are = ", self.lig_atoms)
+            #print("Solvent atom starts at = ", self.lig_atoms[-1]+1)
+            self.last_lig_atom = self.lig_atoms[-1]
+            print("Solvent atom starts at = ", self.last_lig_atom+1)
+
+            for i in range(self.topology.getNumAtoms()):
+                if i < self.lig_atoms[0]:
+                    self.receptor_atoms.append(int(i))
+            print("Receptor atoms = ", self.receptor_atoms)
+
+            for i in range(self.topology.getNumAtoms()):
+                if i > self.last_lig_atom:
+                    self.solv_atoms.append(int(i))
+            print("1st solvent atom = ", self.solv_atoms[0], " and last = ", self.solv_atoms[-1])
+
 
     def set_solute_restraint(self):
         cmkf = float(self.keywords.get('CM_KF'))
@@ -404,14 +426,15 @@ class OMMSystemAmberABFE(OMMSystemAmber):
         self.cparams["ATMUbcore"] = ubcore/kilojoules_per_mole
         self.cparams["ATMAcore"] = acore
 
-    def create_system(self):
+    def create_system(self, vsite=True, additional_restraints=True, atmforce=True):
         self.load_amber_system()
 
         self.atm_utils = ATMMetaForceUtils(self.system)
 
         self.set_ligand_atoms()
 
-        self.set_vsite_restraints()
+        if vsite:
+            self.set_vsite_restraints()
 
         self.set_solv_atoms()
 
@@ -419,11 +442,13 @@ class OMMSystemAmberABFE(OMMSystemAmber):
 
         self.set_droplet_restraint()
 
-        self.set_orientation_restraints()
+        if additional_restraints:
+            self.set_orientation_restraints()
 
-        self.set_positional_restraints()
+            self.set_positional_restraints()
 
-        self.set_atmforce()
+        if atmforce:
+            self.set_atmforce()
 
         #temperature is part of the state and is maybe overriden in set_state()
         temperature = 300 * kelvin

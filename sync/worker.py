@@ -52,7 +52,7 @@ class OMMWorkerATM:
             os.mkdir(wdir)
         self.logfile = open(os.path.join(wdir, basename), 'a+')
         nprnt = int(self.config.get('PRNT_FREQUENCY'))
-        self.simulation.reporters.append(StateDataReporter(self.logfile, nprnt, step=True, temperature=True))
+        self.simulation.reporters.append(StateDataReporter(self.logfile, nprnt, step=True, temperature=True, speed=True))
 
     def set_state(self, par):
         self.logger.debug("ommworker.set_state")

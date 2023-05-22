@@ -91,6 +91,16 @@ class OMMSystemAmber(OMMSystem):
         self.positions = self.inpcrd.positions
         self.boxvectors = self.inpcrd.boxVectors
 
+        if nnp_model := self.keywords.get('NNP_MODEL'):
+            from openmmml import MLPotential
+            self.logger.info(f'NNP model: {nnp_model}')
+            nnp = MLPotential(nnp_model)
+            nnp_atoms = list(map(int, self.keywords['LIGAND1_ATOMS'] + self.keywords['LIGAND2_ATOMS']))
+            self.logger.info(f'NNP atoms: {nnp_atoms}')
+            self.logger.info(f'Number of NNP atoms: {len(nnp_atoms)}')
+            assert len(nnp_atoms) > 0
+            self.system = nnp.createMixedSystem(self.topology, self.system, nnp_atoms, removeConstraints=False)
+
     def set_barostat(self,temperature,pressure,frequency):
         """
         sets the system Barostat; Currently applies the MonteCarlo Barostat

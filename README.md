@@ -44,6 +44,11 @@ python setup.py install
 Rscript -e 'install.packages("UWHAM", repos = "http://cran.us.r-project.org")' 
 ```
 
+For NNP, install `openmm-ml` and `nnpops`:
+```
+conda install -c conda-forge openmm-ml nnpops
+```
+
 `setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. `r-base`, and the `UWHAM R package` is required for free energy estimation. See [examples](examples/) for examples and tutorials.
 
 While we strive to develop and distribute high-quality and bug-free software, keep in mind that this is research software under heavy development. AToM is provided without any guarantees of correctness. Please report issues [here](https://github.com/Gallicchio-Lab/AToM-OpenMM/issues). We welcome contributions and pull requests.

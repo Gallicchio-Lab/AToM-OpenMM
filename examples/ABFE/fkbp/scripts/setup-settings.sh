@@ -15,5 +15,5 @@ displacement=("22.0" "22.0" "22.0")
 #residue ids of the receptor that define the center of the binding site
 vsite_rcpt_residues=(26 36 37 42 46 48 54 55 56 82)
 
-#path to ASyncRE
-asyncre_dir=$HOME/software/async_re-openmm
+#path to AToM-OpenMM
+AToM_dir=$HOME/Dropbox/devel/src/AToM-OpenMM

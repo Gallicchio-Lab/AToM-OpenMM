@@ -269,6 +269,13 @@ mollig1 = Molecule.from_file(lig1sdffile, file_format='SDF',
                              allow_undefined_stereo=True)
 ligandmolecules.append(mollig1)
 lig1_ommtopology = mollig1.to_topology().to_openmm(ensure_unique_atom_names=True)
+
+#assign the residue name, assumes one residue
+resfile = os.path.split(lig1sdffile)[1]
+resname = os.path.splitext(resfile)[0]
+for residue in lig1_ommtopology.residues():
+    residue.name = resname.upper()
+
 pos = mollig1.conformers[0].to('angstrom').magnitude
 lig1_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
 nlig1 = lig1_ommtopology.getNumAtoms()
@@ -291,6 +298,13 @@ else:
                                  allow_undefined_stereo=True)
     ligandmolecules.append(mollig2)
     lig2_ommtopology = mollig2.to_topology().to_openmm(ensure_unique_atom_names=True)
+
+    #assign the residue name, assumes one residue
+    resfile = os.path.split(lig2sdffile)[1]
+    resname = os.path.splitext(resfile)[0]
+    for residue in lig2_ommtopology.residues():
+        residue.name = resname.upper()
+
     pos = mollig2.conformers[0].to('angstrom').magnitude
     lig2_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
     nlig2 = lig2_ommtopology.getNumAtoms()

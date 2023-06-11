@@ -353,7 +353,7 @@ print("boxVectors:", (xBoxvec,yBoxvec,zBoxvec ))
 print('\nSet up the combined protein + ligand + water system for simulation')
 # Create the SMIRNOFF template generator with up to date OpenFF force field
 print('Call SMIRNOFFTemplateGenerator function for ligand')
-smirnoff = SMIRNOFFTemplateGenerator(molecules=ligandmolecules, forcefield=ligandforcefield, cache='db.json')
+smirnoff = SMIRNOFFTemplateGenerator(molecules=ligandmolecules, forcefield=ligandforcefield, cache=ffcachefile )
 
 # Register the SMIRNOFF template generator
 # NOTE: forcefield object was initialized (above)

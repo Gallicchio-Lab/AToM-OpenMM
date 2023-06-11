@@ -9,10 +9,10 @@ import multiprocessing as mp
 #from multiprocessing import Process, Queue, Event
 import logging
 
-from simtk import openmm as mm
-from simtk.openmm.app import *
-from simtk.openmm import *
-from simtk.unit import *
+import openmm as mm
+from openmm.app import *
+from openmm import *
+from openmm.unit import *
 from datetime import datetime
 from configobj import ConfigObj
 
@@ -218,11 +218,11 @@ class OMMSystemABFE(OMMSystem):
             ligoffset = self.keywords.get('LIGOFFSET')
             if ligoffset is not None:
                 ligoffset = [float(offset) for offset in ligoffset.split(',')]*angstrom
-            self.vsiterestraintForce = self.atm_utils.addRestraintForce(lig_cm_particles = lig_atom_restr,
-                                                                   rcpt_cm_particles = rcpt_atom_restr,
-                                                                   kfcm = kf,
-                                                                   tolcm = r0,
-                                                                   offset = ligoffset)
+            self.vsiterestraintForce = self.atm_utils.addVsiteRestraintForceCMCM(lig_cm_particles = lig_atom_restr,
+                                                                                 rcpt_cm_particles = rcpt_atom_restr,
+                                                                                 kfcm = kf,
+                                                                                 tolcm = r0,
+                                                                                 offset = ligoffset)
 
     def set_orientation_restraints(self):
         #orientation VSite restraints
@@ -419,12 +419,12 @@ class OMMSystemRBFE(OMMSystem):
             r0 = cmtol * angstrom #radius of Vsite sphere
 
             #Vsite restraints for ligands 1 and 2
-            self.vsiterestraintForce1 = self.atm_utils.addRestraintForce(lig_cm_particles = lig1_atom_restr,
+            self.vsiterestraintForce1 = self.atm_utils.addVsiteRestraintForceCMCM(lig_cm_particles = lig1_atom_restr,
                                         rcpt_cm_particles = rcpt_atom_restr,
                                         kfcm = kf,
                                         tolcm = r0,
                                         offset = self.lig1offset)
-            self.vsiterestraintForce2 = self.atm_utils.addRestraintForce(lig_cm_particles = lig2_atom_restr,
+            self.vsiterestraintForce2 = self.atm_utils.addVsiteRestraintForceCMCM(lig_cm_particles = lig2_atom_restr,
                                         rcpt_cm_particles = rcpt_atom_restr,
                                         kfcm = kf,
                                         tolcm = r0,

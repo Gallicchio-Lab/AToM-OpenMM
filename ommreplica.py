@@ -5,10 +5,10 @@ Multiprocessing job transport for AsyncRE/OpenMM
 import os, re, sys, time, shutil, copy, random, signal
 import logging
 
-from simtk import openmm as mm
-from simtk.openmm.app import *
-from simtk.openmm import *
-from simtk.unit import *
+import openmm as mm
+from openmm.app import *
+from openmm import *
+from openmm.unit import *
 from datetime import datetime
 
 from atmmetaforce import *

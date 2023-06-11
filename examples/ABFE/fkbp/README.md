@@ -9,11 +9,6 @@ It is highly recommended to go through the [TEMOA G1 ABFE tutorial](https://gith
 
 We assume in this tutorial that this repository has been cloned under `$HOME`. Adjust the pathname pointing to the AToM-OpenMM installation folder in `setup-settings.sh` as needed. See the [TEMOA G1 ABFE tutorial](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/ABFE/temoa-g1) for help setting up OpenMM and the AToM-OpenMM software.
 
-This tutorial assumes that the [Ambertools](http://ambermd.org) executables are in the search path. They can be conveniently installed under the same conda environment:
-```
-conda install -c conda-forge ambertools
-```
-
 Setup the simulation input files. The automated setup script below reads the parameters from the `setup-settings.sh` file.
 ```
 cd $HOME/AToM-OpenMM/examples/ABFE/fkbp/

@@ -15,7 +15,7 @@ We assume in this tutorial that this repository has been cloned under `$HOME`. A
 
 Prepare, minimize, thermalize, relax, and equilibrate the complex:
 ```
-cd $HOME/AToM-OpenMM/RBFE/temoa-g1-g4
+cd $HOME/AToM-OpenMM/examples/RBFE/temoa-g1-g4
 python $HOME/AToM-OpenMM/make_atm_system_from_Amber.py --AmberPrmtopinFile temoa-g1-g4.prmtop --AmberInpcrdinFile temoa-g1-g4.inpcrd --systemXMLoutFile temoa-g1-g4_sys.xml --systemPDBoutFile temoa-g1-g4.pdb
 python $HOME/AToM-OpenMM/rbfe_structprep.py temoa-g1-g4_asyncre.cntl
 ```

@@ -17,7 +17,7 @@ from simtk.openmm import *
 from simtk.unit import *
 from datetime import datetime
 
-from openmm_async_re import openmm_job_AmberABFE
+from openmm_async_re import openmm_job_ABFE
 
 if __name__ == '__main__':
 
@@ -40,7 +40,7 @@ if __name__ == '__main__':
     print("")
     sys.stdout.flush()
 
-    rx = openmm_job_AmberABFE(commandFile, options=None)
+    rx = openmm_job_ABFE(commandFile, options=None)
 
     rx.setupJob()
 

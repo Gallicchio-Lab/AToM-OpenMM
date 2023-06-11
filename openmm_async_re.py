@@ -145,8 +145,39 @@ class openmm_job(async_re):
                 U[sid_j][repl_i] = self._reduced_energy(par[j],pot[i])
         return U
 
-
 class openmm_job_TRE(openmm_job):
+    def __init__(self, command_file, options):
+        super().__init__(command_file, options)
+
+        pdbtopfile = self.basename + ".pdb"
+        systemfile = self.basename + "_sys.xml"
+
+        if self.stateparams is None:
+            self._buildStates()
+
+        #builds service worker for replicas use
+        service_ommsys = OMMSystemTRE(self.basename, self.keywords, pdbtopfile,  systemfile, self.logger)
+        self.service_worker = OMMWorkerTRE(self.basename, ommsys, self.keywords, compute = False, logger = self.logger)
+        #creates openmm replica objects
+        self.openmm_replicas = []
+        for i in range(self.nreplicas):
+            replica = OMMReplicaTRE(i, self.basename, self.service_worker, self.logger)
+            if replica.stateid == None:
+                replica.set_state(i, self.stateparams[i])#initial setting
+            self.openmm_replicas.append(replica)
+
+        # creates openmm workers
+        self.openmm_workers = []
+        pattern = re.compile('(\d+):(\d+)')
+        for node in self.compute_nodes:
+            slot_id = node["slot_number"]
+            matches = pattern.search(slot_id)
+            platform_id = int(matches.group(1))
+            device_id = int(matches.group(2))
+            gpu_platform_name = node["arch"]
+            ommsys = OMMSystemTRE(self.basename, self.keywords,  pdbtopfile,  systemfile, self.logger)
+            self.openmm_workers.append(OMMWorkerTRE(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
+
     def _buildStates(self):
         self.stateparams = []
         for tempt in self.temperatures:
@@ -188,6 +219,7 @@ class openmm_job_TRE(openmm_job):
         potential_energy = pot['potential_energy']
         beta = 1./(self.kb*temperature)
         return beta*potential_energy
+
         
 class openmm_job_ATM(openmm_job):
     def _buildStates(self):
@@ -319,52 +351,19 @@ class openmm_job_ATM(openmm_job):
         #changes the format of the positions in case of an exchange between replicas with two different directions 
         #replica.convert_pos_into_direction_format()
         pass
-
-class openmm_job_AmberTRE(openmm_job_TRE):
+            
+class openmm_job_ABFE(openmm_job_ATM):
     def __init__(self, command_file, options):
         super().__init__(command_file, options)
 
-        prmtopfile = self.basename + ".prmtop"
-        crdfile = self.basename + ".inpcrd"
+        pdbtopfile = self.basename + ".pdb"
+        systemfile = self.basename + "_sys.xml"
 
         if self.stateparams is None:
             self._buildStates()
 
         #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberTRE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
-        self.service_worker = OMMWorkerTRE(self.basename, ommsys, self.keywords, compute = False, logger = self.logger)
-        #creates openmm replica objects
-        self.openmm_replicas = []
-        for i in range(self.nreplicas):
-            replica = OMMReplicaTRE(i, self.basename, self.service_worker, self.logger)
-            if replica.stateid == None:
-                replica.set_state(i, self.stateparams[i])#initial setting
-            self.openmm_replicas.append(replica)
-
-        # creates openmm workers
-        self.openmm_workers = []
-        pattern = re.compile('(\d+):(\d+)')
-        for node in self.compute_nodes:
-            slot_id = node["slot_number"]
-            matches = pattern.search(slot_id)
-            platform_id = int(matches.group(1))
-            device_id = int(matches.group(2))
-            gpu_platform_name = node["arch"]
-            ommsys = OMMSystemAmberTRE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
-            self.openmm_workers.append(OMMWorkerTRE(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
-
-class openmm_job_AmberABFE(openmm_job_ATM):
-    def __init__(self, command_file, options):
-        super().__init__(command_file, options)
-
-        prmtopfile = self.basename + ".prmtop"
-        crdfile = self.basename + ".inpcrd"
-
-        if self.stateparams is None:
-            self._buildStates()
-
-        #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberABFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
+        service_ommsys = OMMSystemABFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger)
         self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
         #creates openmm replica objects
         self.openmm_replicas = []
@@ -377,21 +376,21 @@ class openmm_job_AmberABFE(openmm_job_ATM):
         # creates openmm workers objects
         self.openmm_workers = []
         for node in self.compute_nodes:
-            ommsys = OMMSystemAmberABFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
+            ommsys = OMMSystemABFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger) 
             self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
 
-class openmm_job_AmberRBFE(openmm_job_ATM):
+class openmm_job_RBFE(openmm_job_ATM):
     def __init__(self, command_file, options):
         super().__init__(command_file, options)
-
-        prmtopfile = self.basename + ".prmtop"
-        crdfile = self.basename + ".inpcrd"
+        
+        pdbtopfile = self.basename + ".pdb"
+        systemfile = self.basename + "_sys.xml"
 
         if self.stateparams is None:
             self._buildStates()
 
         #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
+        service_ommsys = OMMSystemRBFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger)
         self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
         #creates openmm replica objects
         self.openmm_replicas = []
@@ -404,6 +403,6 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
         # creates openmm context objects
         self.openmm_workers = []
         for node in self.compute_nodes:
-            ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
+            ommsys = OMMSystemRBFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger) 
             self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
 

@@ -24,7 +24,7 @@ class ATMMTSLangevinIntegrator(MTSLangevinIntegrator):
         self.setGlobalVariableByName('kT', MOLAR_GAS_CONSTANT_R*temperature)
 
 class OMMSystem(object):
-    def __init__(self, basename, keywords, logger):
+    def __init__(self, basename, keywords, pdbtopfile, systemfile, logger):
         self.system = None
         self.topology = None
         self.positions = None
@@ -34,12 +34,16 @@ class OMMSystem(object):
         self.keywords = keywords
         self.basename = basename
         self.logger = logger
+        self.pdbtopfile = pdbtopfile
+        self.systemfile = systemfile
 
         #parameters stored in the openmm state
         self.parameter = {}
         self.parameter['stateid'] = 'REStateId'
         self.parameter['cycle'] = 'RECycle'
         self.parameter['mdsteps'] = 'REMDSteps'
+        self.parameter['temperature'] = 'RETemperature'
+        self.parameter['potential_energy'] = 'REPotEnergy'
         #more ATM property names are in atmmetaforce
 
         #parameters from the cntl file
@@ -60,36 +64,17 @@ class OMMSystem(object):
         sys.stdout.flush()
         sys.exit(1)
 
-class OMMSystemAmber(OMMSystem):
-    def __init__(self, basename, keywords, prmtopfile, crdfile, logger):
-        super().__init__(basename, keywords, logger)
-        self.prmtopfile = prmtopfile
-        self.crdfile = crdfile
-        self.parameter['temperature'] = 'RETemperature'
-        self.parameter['potential_energy'] = 'REPotEnergy'
-
-    def load_amber_system(self):
+    def load_system(self):
         """
-        sets the value of
-        prmtop : Amber topology file
-        inpcrd : Amber coordinates
-        system : creates a OpenMM system with topology, coordinates
-        topology : defines the OpenMM topology of the system
-        positions : defines positions of all atoms of the system in OpenMM
-        boxvectors : stores the dimension of the simulation box
-
+        load the topology from a pdb file and the system from an xml file
         """
-        self.prmtop = AmberPrmtopFile(self.prmtopfile)
-        self.inpcrd = AmberInpcrdFile(self.crdfile)
-        if self.keywords.get('HMASS') is not None:
-            hmass = float(self.keywords.get('HMASS'))*amu
-        else:
-            hmass = 1.0*amu
-        self.system = self.prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=0.9*nanometer,
-                                               constraints=HBonds, hydrogenMass = hmass)
-        self.topology = self.prmtop.topology
-        self.positions = self.inpcrd.positions
-        self.boxvectors = self.inpcrd.boxVectors
+        self.pdb = PDBFile(self.pdbtopfile)
+        self.topology = self.pdb.topology
+        self.positions = self.pdb.positions
+        self.boxvectors = self.topology.getPeriodicBoxVectors()
+        #HMASS is set in the system file
+        with open(self.systemfile) as input:
+            self.system = XmlSerializer.deserialize(input.read())
 
     def set_barostat(self,temperature,pressure,frequency):
         """
@@ -176,13 +161,13 @@ class OMMSystemAmber(OMMSystem):
         self.doMetaD = True
 
 #Temperature RE
-class OMMSystemAmberTRE(OMMSystemAmber):
+class OMMSystemTRE(OMMSystem):
     def create_system(self):
-        self.load_amber_system()
+        self.load_system()
         #the temperature defines the state and will be overriden in set_state()
         temperature = 300 * kelvin
         #set barostat
-        self.set_barostat(temperature,1*bar,900000000)
+        self.set_barostat(temperature,1*bar,0)
 
         #hack to store ASyncRE quantities in the openmm State
         sforce = mm.CustomBondForce("1")
@@ -192,9 +177,9 @@ class OMMSystemAmberTRE(OMMSystemAmber):
 
         self.set_integrator(temperature, self.frictionCoeff, self.MDstepsize)
 
-class OMMSystemAmberABFE(OMMSystemAmber):
-    def __init__(self, basename, keywords, prmtopfile, crdfile, logger):
-        super().__init__(basename, keywords, prmtopfile, crdfile, logger)
+class OMMSystemABFE(OMMSystem):
+    def __init__(self, basename, keywords, pdbtopfile, systemfile, logger):
+        super().__init__(basename, keywords, pdbtopfile, systemfile, logger)
 
         self.parameter['perturbation_energy'] = 'REPertEnergy'
         self.parameter['atmintermediate'] = 'REAlchemicalIntermediate'
@@ -333,7 +318,7 @@ class OMMSystemAmberABFE(OMMSystemAmber):
         self.cparams["ATMAcore"] = acore
 
     def create_system(self):
-        self.load_amber_system()
+        self.load_system()
 
         self.atm_utils = ATMMetaForceUtils(self.system)
 
@@ -363,9 +348,9 @@ class OMMSystemAmberABFE(OMMSystemAmber):
         self.set_integrator(temperature, self.frictionCoeff, self.MDstepsize)
 
 
-class OMMSystemAmberRBFE(OMMSystemAmber):
-    def __init__(self, basename, keywords, prmtopfile, crdfile, logger):
-        super().__init__(basename, keywords, prmtopfile, crdfile, logger)
+class OMMSystemRBFE(OMMSystem):
+    def __init__(self, basename, keywords, pdbtopfile, systemfile, logger):
+        super().__init__(basename, keywords, pdbtopfile, systemfile, logger)
 
         self.parameter['perturbation_energy'] = 'REPertEnergy'
         self.parameter['atmintermediate'] = 'REAlchemicalIntermediate'
@@ -592,7 +577,7 @@ class OMMSystemAmberRBFE(OMMSystemAmber):
 
     def create_system(self):
 
-        self.load_amber_system()
+        self.load_system()
         self.atm_utils = ATMMetaForceUtils(self.system)
         self.set_ligand_atoms()
         self.set_displacement()

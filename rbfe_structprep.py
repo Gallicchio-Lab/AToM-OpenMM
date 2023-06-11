@@ -24,10 +24,10 @@ from atmmetaforce import *
 from ommsystem import *
 
 
-class OMMSystemAmberRBFEnoATM(OMMSystemAmberRBFE):
+class OMMSystemRBFEnoATM(OMMSystemRBFE):
     def create_system(self):
 
-        self.load_amber_system()
+        self.load_system()
         self.atm_utils = ATMMetaForceUtils(self.system)
         self.set_ligand_atoms()
         self.set_displacement()
@@ -65,13 +65,13 @@ class OMMSystemAmberRBFEnoATM(OMMSystemAmberRBFE):
 def do_mintherm(keywords, logger):
     basename = keywords.get('BASENAME')
     jobname = basename
-    
-    prmtopfile = basename + ".prmtop"
-    crdfile = basename + ".inpcrd"
+
+    pdbtopfile = basename + ".pdb"
+    systemfile = basename + "_sys.xml"
 
     #OpenMM system for minimization, thermalization, NPT, NVT
     #does not include ATM Force
-    syst = OMMSystemAmberRBFEnoATM(basename, keywords, prmtopfile, crdfile, logger)
+    syst = OMMSystemRBFEnoATM(basename, keywords, pdbtopfile, systemfile, logger)
     syst.create_system()
     
     platform_properties = {}
@@ -84,8 +84,8 @@ def do_mintherm(keywords, logger):
     
     simulation = Simulation(syst.topology, syst.system, syst.integrator, platform, platform_properties)
     simulation.context.setPositions(syst.positions)
-    if syst.inpcrd.boxVectors is not None:
-        simulation.context.setPeriodicBoxVectors(*syst.inpcrd.boxVectors)
+    if syst.boxvectors is not None:
+        simulation.context.setPeriodicBoxVectors(syst.boxvectors[0], syst.boxvectors[1], syst.boxvectors[2] )
 
     print ("Using platform %s" % simulation.context.getPlatform().getName())
         
@@ -121,7 +121,7 @@ def do_mintherm(keywords, logger):
     final_temperature = syst.temperature
     delta_temperature = (final_temperature - initial_temperature)/number_of_cycles
 
-    syst.barostat.setFrequency(999999999)#disabled
+    syst.barostat.setFrequency(0)#disabled
 
     #MD with temperature ramp
     temperature = initial_temperature
@@ -158,7 +158,7 @@ def do_mintherm(keywords, logger):
         PDBFile.writeFile(simulation.topology, positions, output)
 
     print("NVT equilibration ...")
-    syst.barostat.setFrequency(999999999)#disabled
+    syst.barostat.setFrequency(0)#disabled
 
     #MD at constant volume
     for i in range(number_of_cycles):
@@ -177,10 +177,10 @@ def do_lambda_annealing(keywords, logger):
     basename = keywords.get('BASENAME')
     jobname = basename
     
-    prmtopfile = basename + ".prmtop"
-    crdfile = basename + ".inpcrd"
+    pdbtopfile = basename + ".pdb"
+    systemfile = basename + "_sys.xml"
 
-    syst = OMMSystemAmberRBFE(basename, keywords, prmtopfile, crdfile, logger)
+    syst = OMMSystemRBFE(basename, keywords, pdbtopfile, systemfile, logger)
     syst.create_system()
     
     platform_properties = {}
@@ -193,12 +193,12 @@ def do_lambda_annealing(keywords, logger):
     
     simulation = Simulation(syst.topology, syst.system, syst.integrator, platform, platform_properties)
     simulation.context.setPositions(syst.positions)
-    if syst.inpcrd.boxVectors is not None:
-        simulation.context.setPeriodicBoxVectors(*syst.inpcrd.boxVectors)
+    if syst.boxvectors is not None:
+        simulation.context.setPeriodicBoxVectors(syst.boxvectors[0], syst.boxvectors[1], syst.boxvectors[2])
 
     print ("Using platform %s" % simulation.context.getPlatform().getName())
     
-    syst.barostat.setFrequency(999999999)#disabled
+    syst.barostat.setFrequency(0)#disabled
 
     #target temperature
     temp = keywords.get("TEMPERATURES")
@@ -291,11 +291,11 @@ def do_lambda_annealing(keywords, logger):
 def do_equil(keywords, logger):
     basename = keywords.get('BASENAME')
     jobname = basename
-    
-    prmtopfile = basename + ".prmtop"
-    crdfile = basename + ".inpcrd"
 
-    syst = OMMSystemAmberRBFE(basename, keywords, prmtopfile, crdfile, logger)
+    pdbtopfile = basename + ".pdb"
+    systemfile = basename + "_sys.xml"
+
+    syst = OMMSystemRBFE(basename, keywords, pdbtopfile,  systemfile, logger)
     syst.create_system()
     
     platform_properties = {}
@@ -308,12 +308,12 @@ def do_equil(keywords, logger):
     
     simulation = Simulation(syst.topology, syst.system, syst.integrator, platform, platform_properties)
     simulation.context.setPositions(syst.positions)
-    if syst.inpcrd.boxVectors is not None:
-        simulation.context.setPeriodicBoxVectors(*syst.inpcrd.boxVectors)
+    if syst.boxvectors is not None:
+        simulation.context.setPeriodicBoxVectors(syst.boxvectors[0], syst.boxvectors[1], syst.boxvectors[2])
 
     print ("Using platform %s" % simulation.context.getPlatform().getName())
     
-    syst.barostat.setFrequency(999999999)#disabled
+    syst.barostat.setFrequency(0)#disabled
 
     #target temperature
     temp = keywords.get("TEMPERATURES")
@@ -379,7 +379,7 @@ def do_equil(keywords, logger):
     simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_0.pdb', 'w') as output:
         PDBFile.writeFile(simulation.topology, positions, output)
-        
+
 def massage_keywords(keywords, restrain_solutes = True):
 
     #use 1 fs time step

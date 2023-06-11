@@ -16,4 +16,4 @@ displacement=("22.0" "22.0" "22.0")
 vsite_rcpt_residues=(26 36 37 42 46 48 54 55 56 82)
 
 #path to AToM-OpenMM
-AToM_dir=$HOME/Dropbox/devel/src/AToM-OpenMM
+AToM_dir=$HOME/AToM-OpenMM

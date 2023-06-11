@@ -11,39 +11,29 @@ It is highly recommended to go through the [TEMOA G1 ABFE tutorial](https://gith
 
 The starting point are the topology and coordinate files of a simulation box with the TEMOA host and the G1 and G4 guests in the Amber files `temoa-g1-g4.prmtop` and `temoa-g1-g4.inpcrd` provided in this folder. How to prepare systems in Amber format is beyond the scope of this tutorial. We used the `Antechamber` and `tleap` programs of the [`AmberTools` suite version 19](https://ambermd.org/) using the GAFF force field and the TIP3P water model. G1 was placed in the binding site of the host and G4 at some distance away in the bulk. See the [paper](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129) for more information.
 
-We assume in this tutorial that the examples directory of this repository has been copied under `$HOME/examples` and that the ASyncRE software is available under `$HOME/software/AToM-OpenMM`. Adjust the pathnames as needed. We are also assuming that OpenMM can be launched by running ``python`` in a conda environment. See [examples/README](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples).
+We assume in this tutorial that this repository has been cloned under `$HOME`. Adjust the pathnames as needed. We are also assuming that OpenMM can be launched by running ``python`` in a conda environment. See [examples/README](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples).
 
-Mininize, thermalize, relax, and equilibrate the complex:
+Prepare, minimize, thermalize, relax, and equilibrate the complex:
 ```
-cd $HOME/RBFE/temoa-g1-g4
-python mintherm.py && python  npt.py && python equil.py
+cd $HOME/AToM-OpenMM/RBFE/temoa-g1-g4
+python $HOME/AToM-OpenMM/make_atm_system_from_Amber.py --AmberPrmtopinFile temoa-g1-g4.prmtop --AmberInpcrdinFile temoa-g1-g4.inpcrd --systemXMLoutFile temoa-g1-g4_sys.xml --systemPDBoutFile temoa-g1-g4.pdb
+python $HOME/AToM-OpenMM/rbfe_structprep.py temoa-g1-g4_asyncre.cntl
 ```
-`mintherm` and `npt` equilibrate the solvent keeping the complex restrained. `equil` equilibrates the whole system keeping only the lower cup of the host loosely restrained as in the original work. Each step creates an OpenMM checkpoint file in XML format to start the subsequent step. Each step also generates a PDB file for visualization. All of these steps are performed at the alchemical intermediate state at λ=1/2.
+The lower cup of the host loosely restrained as in the original work. Each step creates an OpenMM checkpoint file in XML format to start the subsequent step. Each step also generates a PDB file for visualization. The result is an equilibrated system at the alchemical intermediate state at λ=1/2.
 
 ### Replica Exchange Production
 
-Copy the `nodefile` from the scripts directory
-```
-cp $HOME/examples/RBFE/scripts/nodefile .
-```
-See the [TEMOA-G1 ABFE tutorial](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/ABFE/temoa-g1) about the nodefile and how to customize it in different ways to match the hardware on your machine. 
+See the [TEMOA-G1 ABFE tutorial](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/ABFE/temoa-g1) about the nodefile and how to customize it in different ways to match the hardware on your machine.
 
-Now run replica exchange
 ```
-python $HOME/software/AToM-OpenMM/rbfe_explicit.py temoa-g1-g4_asyncre.cntl
+python $HOME/AToM-OpenMM/rbfe_explicit.py temoa-g1-g4_asyncre.cntl
 ```
 
 You should see the contents of the control file echo-ed back and messages indicating that replica are dispatched to the GPU and that replicas change alchemical states by exchanging them with other replicas. The job is set to run for 4 hours.
 
 #### Free Energy Analysis
 
-Start by copying the necessary scripts to the simulation folder:
-```
-cd $HOME/examples/RBFE/temoa-g1-g4
-cp ../scripts/{analyze.sh,uwham_analysis.R} .
-```
-
-Then run the analyze script:
+Run the analyze script:
 ```
 ./analyze.sh 20
 ```

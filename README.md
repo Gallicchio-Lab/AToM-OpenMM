@@ -34,20 +34,36 @@ Please [cite us](http://www.compmolbiophysbc.org/publications) if you use this s
 Installation & Usage
 --------------------
 
-It is recommended that the installation is performed in a personal python environment (`conda`, `miniconda`, or similar). AToM requires the `openmm`, `configobj` and `numpy` python modules. 
+It is recommended that the installation is performed in a personal python environment (`conda`, `miniconda`, or similar). AToM-OpenMM requires the `openmm`, `configobj` and `numpy` python modules. 
 
+This conda command installs the necessary requirements to run the examples:
 ```
-conda create -n atm -c conda-forge ambertools openmmforcefields openmm-atmmetaforce-plugin configobj setproctitle r-base
+conda create -n atm -c conda-forge ambertools openmmforcefields configobj setproctitle r-base
+```
+`setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. `openmmforcefields` is used for force field parameter assignments using OpenFF. `r-base` with the `UWHAM R package` (see below) is required for free energy estimation. See [examples](examples/) for examples and tutorials.
+
+This version of AToM-OpenMM requires the latest development version of OpenMM which, as of this writing, has not yet been released on conda-forge. Follow [OpenMM's installation instructions from sources](http://docs.openmm.org/latest/userguide/library/02_compiling.html). Note that the `conda create` command above has likely installed a released version of OpenMM, which would need to be overwritten or bypassed. One approach is to install OpenMM from sources in a chosen location and bypass the version installed in conda. If OpenMM is installed under `$HOME/devel/openmm` and OpenMM's python libraries are installed under `$HOME/devel/openmm/lib/python3.7/site-packages`, the following settings should get you going:
+```
+export OPENMM_DIR=$HOME/devel/openmm
+export OPENMM_PLUGIN_DIR=${OPENMM_DIR}/lib/plugins
+export LD_LIBRARY_PATH=${OPENMM_DIR}/lib:${OPENMM_DIR}/lib/plugins:$LD_LIBRARY_PATH
+export PYTHONPATH=${OPENMM_DIR}/lib/python3.7/site-packages:$PYTHONPATH
+```
+
+Finally, install AToM-OpenMM:
+```
 git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
 cd AToM-OpenMM
-git checkout v4.0.0rc
+git checkout v8.0.0rc
 python setup.py install
+```
+
+And this will install the UWHAM R package:
+```
 Rscript -e 'install.packages("UWHAM", repos = "http://cran.us.r-project.org")' 
 ```
 
-`setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. `openmmforcefields` is used for force field parameter assignments using OpenFF. `r-base`, and the `UWHAM R package` is required for free energy estimation. See [examples](examples/) for examples and tutorials.
-
-While we strive to develop and distribute high-quality and bug-free software, keep in mind that this is research software under heavy development. AToM is provided without any guarantees of correctness. Please report issues [here](https://github.com/Gallicchio-Lab/AToM-OpenMM/issues). We welcome contributions and pull requests.
+While we strive to develop and distribute high-quality and bug-free software, keep in mind that this is research software under heavy development. AToM-OpenMM is provided without any guarantees of correctness. Please report issues [here](https://github.com/Gallicchio-Lab/AToM-OpenMM/issues). We welcome contributions and pull requests.
 
 Documentation
 -------------

@@ -6,8 +6,7 @@ basename=fkbp
 receptor=fkbp
 
 #basenames of the ligands (.mol2 format expected)
-ligands=(thi prop dss dmso dapp dap but)
-
+ligands=(thi prp dss dmso dapp dap but)
 
 #displacement vector
 displacement=("22.0" "22.0" "22.0")

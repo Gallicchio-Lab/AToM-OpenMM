@@ -20,15 +20,15 @@ from datetime import datetime
 
 import logging
 from configobj import ConfigObj
-from atmmetaforce import *
-from ommsystem import *
 
+from ommsystem import *
+from utils.AtomUtils import AtomUtils
 
 class OMMSystemRBFEnoATM(OMMSystemRBFE):
     def create_system(self):
 
         self.load_system()
-        self.atm_utils = ATMMetaForceUtils(self.system)
+        self.atm_utils = AtomUtils(self.system)
         self.set_ligand_atoms()
         self.set_displacement()
         self.set_vsite_restraints()
@@ -51,9 +51,18 @@ class OMMSystemRBFEnoATM(OMMSystemRBFE):
 
         self.set_torsion_metaDbias(self.temperature)
 
-        #do not include ATM Force. 
+        #do not include ATM Force, instead place the nonbonded
+        #forces in what it would be the the ATMForce group
+        #for the integrator
         #self.set_atmforce()
-        self.atmforcegroup = self.nonbondedforcegroup #for integrator
+        self.atmforcegroup = self.free_force_group()
+        import re
+        nbpattern = re.compile(".*Nonbonded.*")
+        for i in range(self.system.getNumForces()):
+            if nbpattern.match(str(type(self.system.getForce(i)))):
+                nbforce = self.system.getForce(i)
+                nbforce.setForceGroup(self.atmforcegroup)
+                break
         
         #add barostat
         pressure=1*bar
@@ -213,7 +222,7 @@ def do_lambda_annealing(keywords, logger):
     lambda1 = lmbd
     lambda2 = lmbd
     alpha = 0.0 / kilocalorie_per_mole
-    u0 = 0.0 * kilocalorie_per_mole
+    uh = 0.0 * kilocalorie_per_mole
     w0coeff = 0.0 * kilocalorie_per_mole
     umsc =  1000.0 * kilocalorie_per_mole
     ubcore = 500.0 * kilocalorie_per_mole
@@ -227,19 +236,14 @@ def do_lambda_annealing(keywords, logger):
     simulation.context.setParameter(syst.atmforce.Lambda1(), lambda1)
     simulation.context.setParameter(syst.atmforce.Lambda2(), lambda2)
     simulation.context.setParameter(syst.atmforce.Alpha(), alpha *kilojoules_per_mole)
-    simulation.context.setParameter(syst.atmforce.U0(), u0 /kilojoules_per_mole)
+    simulation.context.setParameter(syst.atmforce.Uh(), uh /kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.W0(), w0coeff /kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.Umax(), umsc /kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.Ubcore(), ubcore /kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.Acore(), acore)
     simulation.context.setParameter(syst.atmforce.Direction(), direction)
     
-    if syst.doMetaD:
-        fgroups = {0,syst.metaDforcegroup,syst.atmforcegroup}
-    else:
-        fgroups = {0,syst.atmforcegroup}
-
-    state = simulation.context.getState(getEnergy = True, groups = fgroups)
+    state = simulation.context.getState(getEnergy = True)
     #print("Potential Energy =", state.getPotentialEnergy())
 
     print("Annealing to lambda = 1/2 ...")
@@ -252,7 +256,7 @@ def do_lambda_annealing(keywords, logger):
     simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True))
     simulation.reporters.append(DCDReporter(jobname + "_mdlambda.dcd", steps_per_cycle))
 
-    state = simulation.context.getState(getEnergy = True, groups = fgroups)
+    state = simulation.context.getState(getEnergy = True)
     print("Potential Energy =", state.getPotentialEnergy())
     
     binding_file = jobname + '_mdlambda.out'
@@ -260,15 +264,23 @@ def do_lambda_annealing(keywords, logger):
     
     for i in range(number_of_cycles):
         simulation.step(steps_per_cycle)
-        state = simulation.context.getState(getEnergy = True, groups = fgroups)
-        pot_energy = (state.getPotentialEnergy()).value_in_unit(kilocalorie_per_mole)
-        pert_energy = (syst.atmforce.getPerturbationEnergy(simulation.context)).value_in_unit(kilocalorie_per_mole)
+        state = simulation.context.getState(getEnergy = True)
+        pot_energy = state.getPotentialEnergy()
+        (u1, u0, ebias) = syst.atmforce.getPerturbationEnergy(simulation.context)
+        umcore = simulation.context.getParameter(syst.atmforce.Umax())* kilojoules_per_mole
+        ubcore = simulation.context.getParameter(syst.atmforce.Ubcore())* kilojoules_per_mole
+        acore = simulation.context.getParameter(syst.atmforce.Acore())
+        direction = simulation.context.getParameter(syst.atmforce.Direction())
+        if direction > 0:
+            pert_energy = syst.atm_utils.softCorePertE(u1 - u0, umcore, ubcore, acore)
+        else:
+            pert_energy = syst.atm_utils.softCorePertE(u0 - u1, umcore, ubcore, acore)
         l1 = simulation.context.getParameter(syst.atmforce.Lambda1())
         l2 = simulation.context.getParameter(syst.atmforce.Lambda2())
         a = simulation.context.getParameter(syst.atmforce.Alpha()) / kilojoules_per_mole
-        umid = simulation.context.getParameter(syst.atmforce.U0()) * kilojoules_per_mole
+        umid = simulation.context.getParameter(syst.atmforce.Uh()) * kilojoules_per_mole
         w0 = simulation.context.getParameter(syst.atmforce.W0()) * kilojoules_per_mole
-        print("%f %f %f %f %f %f %f %f %f" % (temperature/kelvin,lmbd, l1, l2, a*kilocalorie_per_mole, umid/kilocalorie_per_mole, w0/kilocalorie_per_mole, pot_energy, pert_energy), file=f )
+        print("%f %f %f %f %f %f %f %f %f" % (temperature/kelvin,lmbd, l1, l2, a*kilocalorie_per_mole, umid/kilocalorie_per_mole, w0/kilocalorie_per_mole, pot_energy/kilocalorie_per_mole, pert_energy/kilocalorie_per_mole), file=f )
         f.flush()
         lmbd += deltalambda
         lambda1 += deltalambda
@@ -328,7 +340,7 @@ def do_equil(keywords, logger):
     lambda1 = lmbd
     lambda2 = lmbd
     alpha = 0.0 / kilocalorie_per_mole
-    u0 = 0.0 * kilocalorie_per_mole
+    uh = 0.0 * kilocalorie_per_mole
     w0coeff = 0.0 * kilocalorie_per_mole
     umsc =  1000.0 * kilocalorie_per_mole
     ubcore = 500.0 * kilocalorie_per_mole
@@ -342,19 +354,14 @@ def do_equil(keywords, logger):
     simulation.context.setParameter(syst.atmforce.Lambda1(), lambda1)
     simulation.context.setParameter(syst.atmforce.Lambda2(), lambda2)
     simulation.context.setParameter(syst.atmforce.Alpha(), alpha *kilojoules_per_mole)
-    simulation.context.setParameter(syst.atmforce.U0(), u0 /kilojoules_per_mole)
+    simulation.context.setParameter(syst.atmforce.Uh(), uh /kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.W0(), w0coeff /kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.Umax(), umsc /kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.Ubcore(), ubcore /kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.Acore(), acore)
     simulation.context.setParameter(syst.atmforce.Direction(), direction)
     
-    if syst.doMetaD:
-        fgroups = {0,syst.metaDforcegroup,syst.atmforcegroup}
-    else:
-        fgroups = {0,syst.atmforcegroup}
-
-    state = simulation.context.getState(getEnergy = True, groups = fgroups)
+    state = simulation.context.getState(getEnergy = True)
     #print("Potential Energy =", state.getPotentialEnergy())
 
     print("Equilibration at lambda = 1/2 ...")
@@ -365,7 +372,7 @@ def do_equil(keywords, logger):
     simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True))
     simulation.reporters.append(DCDReporter(jobname + "_0.dcd", steps_per_cycle))
 
-    state = simulation.context.getState(getEnergy = True, groups = fgroups)
+    state = simulation.context.getState(getEnergy = True)
     print("Potential Energy =", state.getPotentialEnergy())
     
     simulation.step(totalSteps)

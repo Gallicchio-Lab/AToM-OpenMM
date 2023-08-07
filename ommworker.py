@@ -17,6 +17,8 @@ from datetime import datetime
 from ommreplica import *
 from ommsystem import *
 
+from utils.AtomUtils import AtomUtils
+
 from contextlib import contextmanager
 
 class OMMWorker(object):
@@ -240,7 +242,7 @@ class OMMWorker(object):
 
         #one preliminary energy evaluation seems to be required to init the energy routines
         if self.compute:
-            state = self.simulation.context.getState(getEnergy = True)#, groups = {1,3})
+            state = self.simulation.context.getState(getEnergy = True)
             pote = state.getPotentialEnergy()
 
         #load initial state/coordinates
@@ -359,18 +361,24 @@ class OMMWorkerATM(OMMWorker):
         self.simulation.context.setParameter(atmforce.Lambda1(), self.par['lambda1'])
         self.simulation.context.setParameter(atmforce.Lambda2(), self.par['lambda2'])
         self.simulation.context.setParameter(atmforce.Alpha(), self.par['alpha']*kilojoules_per_mole)
-        self.simulation.context.setParameter(atmforce.U0(), self.par['u0'] /kilojoules_per_mole)
+        self.simulation.context.setParameter(atmforce.Uh(), self.par['uh'] /kilojoules_per_mole)
         self.simulation.context.setParameter(atmforce.W0(), self.par['w0'] /kilojoules_per_mole)
         self.simulation.context.setParameter(atmforce.Direction(), self.par['atmdirection'] )
+        self.simulation.context.setParameter(atmforce.Umax(), self.par[atmforce.Umax()] /kilojoules_per_mole)
+        self.simulation.context.setParameter(atmforce.Ubcore(), self.par[atmforce.Ubcore()] /kilojoules_per_mole)
+        self.simulation.context.setParameter(atmforce.Acore(), self.par[atmforce.Acore()] )
 
     def _worker_getenergy(self):
-        if self.ommsystem.doMetaD:
-            fgroups = {0,self.ommsystem.metaDforcegroup,self.ommsystem.atmforcegroup}
-        else:
-            fgroups = {0,self.ommsystem.atmforcegroup}
-        state = self.simulation.context.getState(getEnergy = True, groups = fgroups)
+        state = self.simulation.context.getState(getEnergy = True)
         self.pot['potential_energy'] = state.getPotentialEnergy()
-        self.pot['perturbation_energy'] = self.ommsystem.atmforce.getPerturbationEnergy(self.simulation.context)
+        (u1, u0, alchemicalEBias) = self.ommsystem.atmforce.getPerturbationEnergy(self.simulation.context)
+        umcore = self.simulation.context.getParameter(self.ommsystem.atmforce.Umax())*kilojoules_per_mole
+        ubcore = self.simulation.context.getParameter(self.ommsystem.atmforce.Ubcore())*kilojoules_per_mole
+        acore = self.simulation.context.getParameter(self.ommsystem.atmforce.Acore())
+        if self.par['atmdirection'] > 0:
+            self.pot['perturbation_energy'] = self.ommsystem.atm_utils.softCorePertE(u1-u0, umcore, ubcore, acore)
+        else:
+            self.pot['perturbation_energy'] = self.ommsystem.atm_utils.softCorePertE(u0-u1, umcore, ubcore, acore)
         if self.ommsystem.doMetaD:
             state = self.simulation.context.getState(getEnergy = True, groups = {self.ommsystem.metaDforcegroup})
             self.pot['bias_energy'] = state.getPotentialEnergy()

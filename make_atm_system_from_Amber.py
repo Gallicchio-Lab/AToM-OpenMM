@@ -21,9 +21,6 @@ from datetime import datetime
 from time import time
 
 # OpenMM components
-# from simtk.openmm.app import Modeller, ForceField, Simulation
-# from simtk.openmm.app import PDBReporter, StateDataReporter, PDBFile
-# from simtk.openmm.app import PME, HBonds
 from openmm import XmlSerializer
 from openmm.app import AmberPrmtopFile, AmberInpcrdFile, PDBFile
 from openmm.app import PME, HBonds

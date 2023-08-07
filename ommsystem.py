@@ -3,7 +3,7 @@ from __future__ import division
 """
 Collects all of the ways that openmm systems are loaded
 """
-import os, re, sys, time, shutil, copy, random, signal
+import os, re, sys, time, shutil, copy, random, signal, copy
 import numpy as np
 import multiprocessing as mp
 #from multiprocessing import Process, Queue, Event
@@ -16,7 +16,7 @@ from openmm.unit import *
 from datetime import datetime
 from configobj import ConfigObj
 
-from atmmetaforce import *
+from utils.AtomUtils import AtomUtils
 
 # OpenMM's MTSLangevinIntegrator does not have a setTemperature method
 class ATMMTSLangevinIntegrator(MTSLangevinIntegrator):
@@ -49,12 +49,12 @@ class OMMSystem(object):
         #parameters from the cntl file
         self.cparams = {}
 
+        self.atmforcegroup = None
+        self.nonbondedforcegroup = None
+        self.metaDforcegroup = None
+
         self.frictionCoeff = float(self.keywords.get('FRICTION_COEFF')) / picosecond
         self.MDstepsize = float(self.keywords.get('TIME_STEP')) * picosecond
-
-        self.atmforcegroup = 2
-        self.nonbondedforcegroup = 1
-        self.metaDforcegroup = 3
 
         self.doMetaD = False
 
@@ -90,9 +90,17 @@ class OMMSystem(object):
         self.barostat.setFrequency(frequency)
         self.system.addForce(self.barostat)
 
+    def free_force_group(self):
+        freeGroups = set(range(32)) - set(force.getForceGroup() for force in self.system.getForces())
+        if len(freeGroups) == 0:
+            self._exit('Cannot find a free force group. '
+                       'The maximum number (32) of the force groups is already used.')
+        return max(freeGroups)
+        
     def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
-        #place non-bonded force in group 1, assume all other bonded forces are in group 0
+        #place non-bonded force in its own group, assume all other bonded forces are in group 0
         nonbonded = [f for f in self.system.getForces() if isinstance(f, NonbondedForce)][0]
+        self.nonbondedforcegroup = self.free_force_group()
         nonbonded.setForceGroup(self.nonbondedforcegroup)
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
@@ -157,7 +165,7 @@ class OMMSystem(object):
                 biasvar.append(BiasVariable(torForce[t], amin, amax, gw, per, ng))
 
             metaD = Metadynamics(self.system, biasvar, temperature, bias_factor, bias_height, bias_frequency, bias_savefrequency, mdir)
-            metaD._force.setForceGroup(self.metaDforcegroup)
+            self.metaDforcegroup = metaD._force.getForceGroup()
         self.doMetaD = True
 
 #Temperature RE
@@ -281,7 +289,7 @@ class OMMSystemABFE(OMMSystem):
         lambda1 = lmbd
         lambda2 = lmbd
         alpha = 0.0 / kilocalorie_per_mole
-        u0 = 0.0 * kilocalorie_per_mole
+        uh = 0.0 * kilocalorie_per_mole
         w0coeff = 0.0 * kilocalorie_per_mole
         direction = 1.0
 
@@ -301,26 +309,40 @@ class OMMSystemABFE(OMMSystem):
             self._exit(msg)
 
         #create ATM Force
-        self.atm_utils.setNonbondedForceGroup(self.nonbondedforcegroup)
-        atmvariableforcegroups = [self.nonbondedforcegroup]
-        self.atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, direction, atmvariableforcegroups )
+        self.atmforce = ATMForce(lambda1, lambda2,  alpha * kilojoules_per_mole, uh/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, direction )
 
+        #adds nonbonded Force from the system to the ATMForce
+        import re
+        nbpattern = re.compile(".*Nonbonded.*")
+        for i in range(self.system.getNumForces()):
+            if nbpattern.match(str(type(self.system.getForce(i)))):
+                self.atmforce.addForce(copy.copy(self.system.getForce(i)))
+                self.system.removeForce(i)
+                break
+
+        #adds atoms to ATMForce
         for i in range(self.topology.getNumAtoms()):
-            self.atmforce.addParticle(i, 0., 0., 0.)
+            self.atmforce.addParticle(Vec3(0., 0., 0.))
         for i in self.lig_atoms:
-            self.atmforce.setParticleParameters(i, i, self.displ[0], self.displ[1], self.displ[2] )
+            self.atmforce.setParticleParameters(i, Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer )
+
+        #assign a group to ATMForce for multiple time-steps
+        self.atmforcegroup = self.free_force_group()
         self.atmforce.setForceGroup(self.atmforcegroup)
+
+        #add ATMForce to the system
         self.system.addForce(self.atmforce)
+
         #these are the global parameters specified in the cntl files that need to be reset
         #by the worker after reading the first configuration
-        self.cparams["ATMUmax"] = umsc/kilojoules_per_mole
-        self.cparams["ATMUbcore"] = ubcore/kilojoules_per_mole
-        self.cparams["ATMAcore"] = acore
+        self.cparams[self.atmforce.Umax()] = umsc/kilojoules_per_mole
+        self.cparams[self.atmforce.Ubcore()] = ubcore/kilojoules_per_mole
+        self.cparams[self.atmforce.Acore()] = acore
 
     def create_system(self):
         self.load_system()
 
-        self.atm_utils = ATMMetaForceUtils(self.system)
+        self.atm_utils = AtomUtils(self.system)
 
         self.set_ligand_atoms()
 
@@ -337,7 +359,7 @@ class OMMSystemABFE(OMMSystem):
 
         #add barostat
         pressure=1*bar
-        self.set_barostat(temperature,pressure,900000000)
+        self.set_barostat(temperature,pressure,0)
 
         #hack to store ASyncRE quantities in the openmm State
         sforce = mm.CustomBondForce("1")
@@ -542,7 +564,7 @@ class OMMSystemRBFE(OMMSystem):
         lambda1 = lmbd
         lambda2 = lmbd
         alpha = 0.0 / kilocalorie_per_mole
-        u0 = 0.0 * kilocalorie_per_mole
+        uh = 0.0 * kilocalorie_per_mole
         w0coeff = 0.0 * kilocalorie_per_mole
         direction = 1.0
 
@@ -556,29 +578,42 @@ class OMMSystemRBFE(OMMSystem):
         acore = float(self.keywords.get('ACORE'))
 
         #create ATM Force
-        self.atm_utils.setNonbondedForceGroup(self.nonbondedforcegroup)
-        atmvariableforcegroups = [self.nonbondedforcegroup]
-        self.atmforce = ATMMetaForce(lambda1, lambda2,  alpha * kilojoules_per_mole, u0/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, direction, atmvariableforcegroups)
+        self.atmforce = ATMForce(lambda1, lambda2,  alpha * kilojoules_per_mole, uh/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, direction )
 
+        #adds nonbonded Force from the system to the ATMForce
+        import re
+        nbpattern = re.compile(".*Nonbonded.*")
+        for i in range(self.system.getNumForces()):
+            if nbpattern.match(str(type(self.system.getForce(i)))):
+                self.atmforce.addForce(copy.copy(self.system.getForce(i)))
+                self.system.removeForce(i)
+                break
+
+        #adds atoms to ATMForce
         for i in range(self.topology.getNumAtoms()):
-            self.atmforce.addParticle(i, 0., 0., 0.)
+            self.atmforce.addParticle( Vec3(0., 0., 0.))
         for i in self.lig1_atoms:
-            self.atmforce.setParticleParameters(i, i, self.displ[0], self.displ[1], self.displ[2] )
+            self.atmforce.setParticleParameters(i,  Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer )
         for i in self.lig2_atoms:
-            self.atmforce.setParticleParameters(i, i, -self.displ[0], -self.displ[1], -self.displ[2] )
+            self.atmforce.setParticleParameters(i, -Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer )
 
+        #assign a group to ATMForce for multiple time-steps
+        self.atmforcegroup = self.free_force_group()
         self.atmforce.setForceGroup(self.atmforcegroup)
+
+        #add ATMForce to the system
         self.system.addForce(self.atmforce)
 
-        #these are the global parameters specified in the cntl files that need to be reset after reading the first configuration
-        self.cparams["ATMUmax"] = umsc/kilojoules_per_mole
-        self.cparams["ATMUbcore"] = ubcore/kilojoules_per_mole
-        self.cparams["ATMAcore"] = acore
+        #these are the global parameters specified in the cntl files that need to be reset
+        #by the worker after reading the first configuration
+        self.cparams[self.atmforce.Umax()] = umsc/kilojoules_per_mole
+        self.cparams[self.atmforce.Ubcore()] = ubcore/kilojoules_per_mole
+        self.cparams[self.atmforce.Acore()] = acore
 
     def create_system(self):
 
         self.load_system()
-        self.atm_utils = ATMMetaForceUtils(self.system)
+        self.atm_utils = AtomUtils(self.system)
         self.set_ligand_atoms()
         self.set_displacement()
         self.set_vsite_restraints()
@@ -598,7 +633,7 @@ class OMMSystemRBFE(OMMSystem):
 
         #add barostat
         pressure=1*bar
-        self.set_barostat(temperature,pressure,900000000)
+        self.set_barostat(temperature,pressure,0)
         #hack to store ASyncRE quantities in the openmm State
         sforce = mm.CustomBondForce("1")
         for name in self.parameter:

@@ -9,8 +9,6 @@
 
 import os, sys
 import numpy as np
-import pint
-ureg = pint.UnitRegistry()
 from datetime import datetime
 from time import time
 
@@ -25,17 +23,11 @@ from openmm.app import ForceField, Modeller
 from openmm.app import PME, HBonds
 
 # OpenFF components from the toolkit
-from openff.toolkit import Molecule
-#from openff.toolkit import ForceField, Molecule, Topology
+from openff.toolkit.topology import Molecule
 
-# from simtk.unit import Quantity, bar, kelvin
-# from simtk.unit import angstrom, nanometer, nanometers, picoseconds
-# from simtk import unit
 from openmm.unit import Quantity
 from openmm.unit import angstrom, nanometer, nanometers, picoseconds, amu
 from openmm import unit
-
-
 
 from sys import stdout
 
@@ -276,7 +268,7 @@ resname = os.path.splitext(resfile)[0]
 for residue in lig1_ommtopology.residues():
     residue.name = resname.upper()
 
-pos = mollig1.conformers[0].to('angstrom').magnitude
+pos = mollig1.conformers[0]/angstrom
 lig1_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
 nlig1 = lig1_ommtopology.getNumAtoms()
 print('Number of atoms in ligand 1:', nlig1)
@@ -305,13 +297,12 @@ else:
     for residue in lig2_ommtopology.residues():
         residue.name = resname.upper()
 
-    pos = mollig2.conformers[0].to('angstrom').magnitude
+    pos = mollig2.conformers[0]/angstrom
     lig2_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
     nlig2 = lig2_ommtopology.getNumAtoms()
     print('Number of atoms in ligand 1:', nlig2)
     for i in range(nlig2):
         lig2_positions[i] += displacement
-    #translated_lig2_positions = [ lig2_positions[i] + vd for i in range(nlig2) ]
           
     print('Call Modeller: include ligand 2')
     modeller.add(lig2_ommtopology, lig2_positions)

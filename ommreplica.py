@@ -11,7 +11,6 @@ from openmm import *
 from openmm.unit import *
 from datetime import datetime
 
-from atmmetaforce import *
 from ommworker import *
 
 class OMMReplica(object):
@@ -156,11 +155,11 @@ class OMMReplicaATM(OMMReplica):
             lmbd1 = self.par['lambda1']
             lmbd2 = self.par['lambda2']
             alpha = self.par['alpha']
-            u0 = self.par['u0']
+            uh = self.par['uh']
             w0 = self.par['w0']
             direction = self.par['atmdirection']
             if self.outfile is not None:
-                self.outfile.write("%d %f %f %f %f %f %f %f %f %f %f\n" % (self.stateid, temperature/kelvin, direction, lmbd1, lmbd2, alpha*kilocalories_per_mole, u0/kilocalories_per_mole, w0/kilocalories_per_mole, pot_energy/kilocalories_per_mole, pert_energy/kilocalories_per_mole, bias_energy/kilocalories_per_mole))
+                self.outfile.write("%d %f %f %f %f %f %f %f %f %f %f\n" % (self.stateid, temperature/kelvin, direction, lmbd1, lmbd2, alpha*kilocalories_per_mole, uh/kilocalories_per_mole, w0/kilocalories_per_mole, pot_energy/kilocalories_per_mole, pert_energy/kilocalories_per_mole, bias_energy/kilocalories_per_mole))
                 self.outfile.flush()
             else:
                 self.logger.warning("unable to save output")
@@ -177,10 +176,13 @@ class OMMReplicaATM(OMMReplica):
         self.par['lambda1'] = self.context.getParameter(self.ommsystem.atmforce.Lambda1())
         self.par['lambda2'] = self.context.getParameter(self.ommsystem.atmforce.Lambda2())
         self.par['alpha'] = self.context.getParameter(self.ommsystem.atmforce.Alpha())/kilojoules_per_mole
-        self.par['u0'] = self.context.getParameter(self.ommsystem.atmforce.U0())*kilojoules_per_mole
+        self.par['uh'] = self.context.getParameter(self.ommsystem.atmforce.Uh())*kilojoules_per_mole
         self.par['w0'] = self.context.getParameter(self.ommsystem.atmforce.W0())*kilojoules_per_mole
         self.par['atmdirection'] = self.context.getParameter(self.ommsystem.atmforce.Direction())
         self.par['atmintermediate'] = self.context.getParameter(self.ommsystem.parameter['atmintermediate'])
+        self.par[self.ommsystem.atmforce.Umax()] = self.context.getParameter(self.ommsystem.atmforce.Umax())*kilojoules_per_mole
+        self.par[self.ommsystem.atmforce.Ubcore()] = self.context.getParameter(self.ommsystem.atmforce.Ubcore())*kilojoules_per_mole
+        self.par[self.ommsystem.atmforce.Acore()] = self.context.getParameter(self.ommsystem.atmforce.Acore())
         if self.pot is None:
             self.pot = {}
         self.pot['potential_energy'] = self.context.getParameter(self.ommsystem.parameter['potential_energy'])*kilojoules_per_mole
@@ -199,10 +201,13 @@ class OMMReplicaATM(OMMReplica):
             self.context.setParameter(self.ommsystem.atmforce.Lambda1(), self.par['lambda1'])
             self.context.setParameter(self.ommsystem.atmforce.Lambda2(), self.par['lambda2'])
             self.context.setParameter(self.ommsystem.atmforce.Alpha(), self.par['alpha']*kilojoules_per_mole)
-            self.context.setParameter(self.ommsystem.atmforce.U0(), self.par['u0']/kilojoules_per_mole)
+            self.context.setParameter(self.ommsystem.atmforce.Uh(), self.par['uh']/kilojoules_per_mole)
             self.context.setParameter(self.ommsystem.atmforce.W0(), self.par['w0']/kilojoules_per_mole)
             self.context.setParameter(self.ommsystem.atmforce.Direction(), self.par['atmdirection'])
             self.context.setParameter(self.ommsystem.parameter['atmintermediate'], self.par['atmintermediate'])
+            self.context.setParameter(self.ommsystem.atmforce.Umax(), self.par[self.ommsystem.atmforce.Umax()]/kilojoules_per_mole)
+            self.context.setParameter(self.ommsystem.atmforce.Ubcore(), self.par[self.ommsystem.atmforce.Umax()]/kilojoules_per_mole)
+            self.context.setParameter(self.ommsystem.atmforce.Acore(), self.par[self.ommsystem.atmforce.Umax()])
         if self.pot is not None:
             self.context.setParameter(self.ommsystem.parameter['potential_energy'], self.pot['potential_energy']/kilojoules_per_mole)
             self.context.setParameter(self.ommsystem.parameter['perturbation_energy'], self.pot['perturbation_energy']/kilojoules_per_mole)

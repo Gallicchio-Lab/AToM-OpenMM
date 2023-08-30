@@ -38,6 +38,7 @@ It is recommended that the installation is performed in a personal python enviro
 
 ```
 conda create -n atm -c conda-forge ambertools openmmforcefields openmm-atmmetaforce-plugin configobj setproctitle r-base
+conda activate atm
 git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
 cd AToM-OpenMM
 git checkout v4.0.0rc

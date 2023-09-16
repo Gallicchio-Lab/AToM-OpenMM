@@ -244,7 +244,6 @@ print('Number of atoms in receptor:', nrcpt)
 print('Call Modeller: include receptor')
 modeller = Modeller(rcpt_ommtopology, rcpt_positions)
 
-
 print("Calculating receptor bounding box:")
 bbox = boundingBoxSizes(rcpt_positions)
 bboxsizes = [ bbox[i][1]-bbox[i][0] for i in range(3) ]
@@ -263,6 +262,27 @@ print("Direction of smallest area dimention:", smallest_direction)
 #   READ AND CHARACTERIZE LIGANDS          #
 #                                          #
 ############################################
+
+if cofsdffile is not None:
+    print('Read cofactor:')
+    molcof = Molecule.from_file(cofsdffile, file_format='SDF',
+                             allow_undefined_stereo=True)
+    ligandmolecules.append(molcof)
+    molcof_ommtopology = molcof.to_topology().to_openmm(ensure_unique_atom_names=True)
+
+    #assign the residue name, assumes one residue
+    resfile = os.path.split(cofsdffile)[1]
+    resname = os.path.splitext(resfile)[0]
+    for residue in molcof_ommtopology.residues():
+        residue.name = resname.upper()
+
+    pos = molcof.conformers[0].to('angstrom').magnitude
+    molcof_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
+    ncof = molcof_ommtopology.getNumAtoms()
+    print('Number of atoms in cofactor:', ncof)
+    print('Call Modeller: include cofactor')
+    modeller.add(molcof_ommtopology, molcof_positions)
+
 
 print('Read ligand 1:')
 mollig1 = Molecule.from_file(lig1sdffile, file_format='SDF',

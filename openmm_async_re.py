@@ -25,6 +25,7 @@ class openmm_job(async_re):
         self.stateparams = None
         self.openmm_workers = None
         self.kb = 0.0019872041*kilocalories_per_mole/kelvin
+        self.safeckpt_file = "ckpt_is_valid"
         
     def _setLogger(self):
         self.logger = logging.getLogger("async_re.openmm_async_re")
@@ -32,11 +33,27 @@ class openmm_job(async_re):
     def checkpointJob(self):
         #disable ctrl-c
         s = signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+        #the safeckpt_file is deleted at the start of the checkpointing
+        #and created at the end. A missing checkpt_file when restarting
+        #implies that the checkpointing stopped in the middle and that the
+        #checkpoint files cannot be trusted
+        try:
+            os.remove(self.safeckpt_file)
+        except:
+            pass
+            
         # update replica objects of waiting replicas
         self.update_replica_states()
         for replica in self.openmm_replicas:
             replica.save_checkpoint()
+
+        #re-enable ctrl-c
         signal.signal(signal.SIGINT, s)
+
+        #restore safeckpt_file
+        with open(self.safeckpt_file, "w") as f:
+            f.write("Checkpoint files are valid")
 
     def _launchReplica(self,replica,cycle):
         nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
@@ -161,7 +178,10 @@ class openmm_job_TRE(openmm_job):
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
-            replica = OMMReplicaTRE(i, self.basename, self.service_worker, self.logger)
+            try:
+                replica = OMMReplicaTRE(i, self.basename, self.service_worker, self.logger, self.keywords)
+            except:
+                self._exit("Error creating replica.")
             if replica.stateid == None:
                 replica.set_state(i, self.stateparams[i])#initial setting
             self.openmm_replicas.append(replica)
@@ -368,7 +388,10 @@ class openmm_job_ABFE(openmm_job_ATM):
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
-            replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger)
+            try:
+                replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger, self.keywords)
+            except:
+                self._exit("Error creating replica.")
             if replica.stateid == None:
                 replica.set_state(i, self.stateparams[i])#initial setting
             self.openmm_replicas.append(replica)
@@ -395,7 +418,10 @@ class openmm_job_RBFE(openmm_job_ATM):
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
-            replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger)
+            try:
+                replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger, self.keywords)
+            except:
+                self._exit("Error when creating replica.")
             if replica.stateid == None:
                 replica.set_state(i, self.stateparams[i])#initial setting
             self.openmm_replicas.append(replica)

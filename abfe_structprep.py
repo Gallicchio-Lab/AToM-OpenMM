@@ -378,9 +378,27 @@ def massage_keywords(keywords, restrain_solutes = True):
     keywords['TIME_STEP'] = 0.001
 
     #restrain all solutes: receptor and ligands
-    nlig = len(keywords.get('LIGAND_ATOMS'))
-    last_lig_atom = int(keywords.get('LIGAND_ATOMS')[nlig-1])
-    keywords['POS_RESTRAINED_ATOMS'] = [i for i in range(last_lig_atom+1)]
+    lig_in_front = keywords.get('LIGAND_IN_BEGINNING')
+
+    lif=False
+    if lig_in_front==None:
+        print('INFO: LIGAND_IN_BEGINNING keyword not captured.')
+    else:
+        print('INFO: LIGAND_IN_BEGINNING keyword is now captured.')
+        if 'y' in lig_in_front or 'Y' in lig_in_front: # yes - ligand in the beginning
+           print('value is',lig_in_front)
+           lif=True
+    
+    if lif:
+        pass
+        natom_ca = len(keywords.get('POS_RESTRAINED_ATOMS'))
+        last_ca_atom = int(keywords.get('POS_RESTRAINED_ATOMS')[natom_ca-1])
+        #print('last CA atom is',last_ca_atom)
+        keywords['POS_RESTRAINED_ATOMS'] = [i for i in range(last_ca_atom+1)]
+    else:
+        nlig = len(keywords.get('LIGAND_ATOMS'))
+        last_lig_atom = int(keywords.get('LIGAND_ATOMS')[nlig-1])
+        keywords['POS_RESTRAINED_ATOMS'] = [i for i in range(last_lig_atom+1)]
 
 if __name__ == '__main__':
 

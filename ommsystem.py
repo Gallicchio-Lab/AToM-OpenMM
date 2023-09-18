@@ -111,6 +111,9 @@ class OMMSystem(object):
         self.posrestrForce = None
         if posrestr_atoms_list is not None:
             posrestr_atoms = [int(i) for i in posrestr_atoms_list]
+            print('INFO: general positional restraint...')
+            #print('posrestr_atoms',len(posrestr_atoms))
+            print('posrestr_atoms_list',len(posrestr_atoms_list))
             fc = float(self.keywords.get('POSRE_FORCE_CONSTANT')) * (kilocalorie_per_mole/angstrom**2)
             tol = float(self.keywords.get('POSRE_TOLERANCE')) * angstrom
             self.posrestrForce = self.atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
@@ -197,32 +200,51 @@ class OMMSystemABFE(OMMSystem):
             self._exit(msg)
 
     def set_vsite_restraints(self):
-        #CM-CM Vsite restraints
-        cm_lig_atoms = self.keywords.get('LIGAND_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
-        if cm_lig_atoms is not None:
-            lig_atom_restr = [int(i) for i in cm_lig_atoms]
-        else:
-            lig_atom_restr = None
-        cm_rcpt_atoms = self.keywords.get('RCPT_CM_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
-        if cm_rcpt_atoms is not None:
-            rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
-        else:
-            rcpt_atom_restr = None
-        cmrestraints_present = (cm_rcpt_atoms is not None) and (cm_lig_atoms is not None)
-        self.vsiterestraintForce = None
-        if cmrestraints_present:
-            cmkf = float(self.keywords.get('CM_KF'))
-            kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
-            cmtol = float(self.keywords.get('CM_TOL'))
-            r0 = cmtol * angstrom #radius of Vsite sphere
-            ligoffset = self.keywords.get('LIGOFFSET')
-            if ligoffset is not None:
-                ligoffset = [float(offset) for offset in ligoffset.split(',')]*angstrom
-            self.vsiterestraintForce = self.atm_utils.addVsiteRestraintForceCMCM(lig_cm_particles = lig_atom_restr,
-                                                                                 rcpt_cm_particles = rcpt_atom_restr,
-                                                                                 kfcm = kf,
-                                                                                 tolcm = r0,
-                                                                                 offset = ligoffset)
+        # if CM_KF > 0: use binding site-ligand restraint
+        # if CM_KF < 0: use positional restraint for ligand
+        # if CM_KF = 0: use nothing
+        
+        switch = float(self.keywords.get('CM_KF')) 
+        if switch > 0: 
+            #CM-CM Vsite restraints
+            cm_lig_atoms = self.keywords.get('LIGAND_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
+            if cm_lig_atoms is not None:
+                lig_atom_restr = [int(i) for i in cm_lig_atoms]
+            else:
+                lig_atom_restr = None
+            cm_rcpt_atoms = self.keywords.get('RCPT_CM_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
+            if cm_rcpt_atoms is not None:
+                rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
+            else:
+                rcpt_atom_restr = None
+            cmrestraints_present = (cm_rcpt_atoms is not None) and (cm_lig_atoms is not None)
+            self.vsiterestraintForce = None
+            if cmrestraints_present:
+                cmkf = switch #float(self.keywords.get('CM_KF'))
+                kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
+                cmtol = float(self.keywords.get('CM_TOL'))
+                r0 = cmtol * angstrom #radius of Vsite sphere
+                ligoffset = self.keywords.get('LIGOFFSET')
+                if ligoffset is not None:
+                    ligoffset = [float(offset) for offset in ligoffset.split(',')]*angstrom
+                self.vsiterestraintForce = self.atm_utils.addVsiteRestraintForceCMCM(lig_cm_particles = lig_atom_restr,
+                                                                                     rcpt_cm_particles = rcpt_atom_restr,
+                                                                                     kfcm = kf,
+                                                                                     tolcm = r0,
+                                                                                     offset = ligoffset)
+        if switch < 0:
+            print('INFO: using ligand positional restraint for ABFE...')
+            # positioning restraints
+            posrestr_atoms_list = self.keywords.get('LIGAND_CM_ATOMS') # reuse the ligand atoms 'LIGAND_CM_ATOMS'
+            self.posrestrForce_lig = None
+            posrestr_atoms = [int(i) for i in posrestr_atoms_list]
+            #print('posrestr_atoms_list',len(posrestr_atoms_list))
+            print('posrestr_atoms',len(posrestr_atoms))
+            fc = abs(switch) * (kilocalorie_per_mole/angstrom**2)
+            tol = float(self.keywords.get('CM_TOL')) * angstrom # reuse 'CM_TOL'
+            #print('fc,tol',fc,tol)
+            self.posrestrForce_lig = self.atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
+
 
     def set_orientation_restraints(self):
         #orientation VSite restraints
@@ -385,6 +407,10 @@ class OMMSystemRBFE(OMMSystem):
             self._exit(msg)
 
     def set_vsite_restraints(self):
+        # if CM_KF > 0: use binding site-ligand restraint
+        # if CM_KF < 0: use positional restraint for ligand
+        # if CM_KF = 0: use nothing		
+
         #ligand 1 Vsite restraint
         cm_lig1_atoms = self.keywords.get('LIGAND1_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
         if cm_lig1_atoms is not None:
@@ -408,27 +434,40 @@ class OMMSystemRBFE(OMMSystem):
         else:
             rcpt_atom_restr = None
 
-        cmrestraints_present = (rcpt_atom_restr is not None) and (lig1_atom_restr is not None) and (lig2_atom_restr is not None)
+        switch = float(self.keywords.get('CM_KF'))
 
-        self.vsiterestraintForce1 = None
-        self.vsiterestraintForce2 = None
-        if cmrestraints_present:
-            cmkf = float(self.keywords.get('CM_KF'))
-            kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
-            cmtol = float(self.keywords.get('CM_TOL'))
-            r0 = cmtol * angstrom #radius of Vsite sphere
+        if switch > 0: 
 
-            #Vsite restraints for ligands 1 and 2
-            self.vsiterestraintForce1 = self.atm_utils.addVsiteRestraintForceCMCM(lig_cm_particles = lig1_atom_restr,
-                                        rcpt_cm_particles = rcpt_atom_restr,
-                                        kfcm = kf,
-                                        tolcm = r0,
-                                        offset = self.lig1offset)
-            self.vsiterestraintForce2 = self.atm_utils.addVsiteRestraintForceCMCM(lig_cm_particles = lig2_atom_restr,
-                                        rcpt_cm_particles = rcpt_atom_restr,
-                                        kfcm = kf,
-                                        tolcm = r0,
-                                        offset = self.lig2offset)
+           cmrestraints_present = (rcpt_atom_restr is not None) and (lig1_atom_restr is not None) and (lig2_atom_restr is not None)
+   
+           self.vsiterestraintForce1 = None
+           self.vsiterestraintForce2 = None
+           if cmrestraints_present:
+               cmkf = switch
+               kf = cmkf * kilocalorie_per_mole/angstrom**2 #force constant for Vsite CM-CM restraint
+               cmtol = float(self.keywords.get('CM_TOL'))
+               r0 = cmtol * angstrom #radius of Vsite sphere
+   
+               #Vsite restraints for ligands 1 and 2
+               self.vsiterestraintForce1 = self.atm_utils.addVsiteRestraintForceCMCM(lig_cm_particles = lig1_atom_restr,
+                                           rcpt_cm_particles = rcpt_atom_restr,
+                                           kfcm = kf,
+                                           tolcm = r0,
+                                           offset = self.lig1offset)
+               self.vsiterestraintForce2 = self.atm_utils.addVsiteRestraintForceCMCM(lig_cm_particles = lig2_atom_restr,
+                                           rcpt_cm_particles = rcpt_atom_restr,
+                                           kfcm = kf,
+                                           tolcm = r0,
+                                           offset = self.lig2offset)
+        if switch < 0:
+            print('INFO: using ligand positional restraint for RBFE...')
+            self.posrestrForce_lig1 = None
+            self.posrestrForce_lig2 = None
+            fc = abs(switch) * (kilocalorie_per_mole/angstrom**2)
+            tol = float(self.keywords.get('CM_TOL')) * angstrom
+            self.posrestrForce_lig1 = self.atm_utils.addPosRestraints(lig1_atom_restr, self.positions, fc, tol)
+            self.posrestrForce_lig2 = self.atm_utils.addPosRestraints(lig2_atom_restr, self.positions, fc, tol)
+
 
     def set_orientation_restraints(self):
         #orientational VSite restraints

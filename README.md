@@ -46,6 +46,8 @@ conda activate atm8.1
 
 Finally, install AToM-OpenMM:
 ```
+conda create -n atm -c conda-forge ambertools openmm openmm-atmmetaforce-plugin configobj setproctitle r-base
+conda activate atm
 git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
 cd AToM-OpenMM
 git checkout v8.0.0rc

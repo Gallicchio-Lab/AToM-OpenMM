@@ -58,7 +58,7 @@ class OMMSystem(object):
 
         self.doMetaD = False
 
-    def _exit(message):
+    def _exit(self, message):
         """Print and flush a message to stdout and then exit."""
         self.logger.error(message)
         sys.stdout.flush()

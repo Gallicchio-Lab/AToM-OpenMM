@@ -17,19 +17,21 @@ class OMMReplica(object):
     #
     # Holds and manages OpenMM state for a replica
     #
-    def __init__(self, replica_id, basename, worker, logger):
+    def __init__(self, replica_id, basename, worker, logger, keywords):
         self._id = replica_id
         self.basename = basename
         self.worker = worker
         self.context = worker.context
         self.ommsystem = worker.ommsystem
         self.logger = logger
+        self.keywords = keywords
         self.pot = None
         self.par = None
         self.cycle = 1
         self.stateid = None
         self.mdsteps = 0
         self.outfile = None
+        self.safeckpt_file = "ckpt_is_valid"
 
         state = self.context.getState(getPositions=True, getVelocities=True)
         self.positions = state.getPositions()
@@ -69,17 +71,25 @@ class OMMReplica(object):
             self.logger.warning("unable to open outfile %s" % outfilename)
 
     def load_checkpoint(self):
+        override_safecheckpoint = self.keywords.get('OVERRIDE_SAFECHECKPOINT')
         ckptfile = 'r%d/%s_ckpt.xml' % (self._id,self.basename)
         if os.path.isfile(ckptfile):
-            self.logger.info("Loading checkpointfile %s" % ckptfile) 
-            self.worker.simulation.loadState(ckptfile)
-            self.update_state_from_context()
+            if os.path.isfile(self.safeckpt_file) or (override_safecheckpoint is not None):
+                self.logger.info("Loading checkpointfile %s" % ckptfile) 
+                self.worker.simulation.loadState(ckptfile)
+                self.update_state_from_context()
+            else:
+                self.logger.error("The simulation has been interrupted while writing the checkpoint files. The checkpoint files might be corrupted. Remove the replica directories and restart from scratch. Alternatively, force the loading of the checkpoint files by setting OVERRIDE_SAFECHECKPOINT in the control file.")
+                raise ValueError('Bad checkpoints')
 
     def save_checkpoint(self):
-        ckptfile = 'r%d/%s_ckpt.xml' % (self._id,self.basename)
-        self.update_context_from_state()
-        self.worker.simulation.saveState(ckptfile)
-        
+        if not os.path.isfile(self.safeckpt_file):#refuse to write checkpoint in unsafe mode
+            ckptfile = 'r%d/%s_ckpt.xml' % (self._id,self.basename)
+            self.update_context_from_state()
+            self.worker.simulation.saveState(ckptfile)
+        else:
+           self.logger.warning("Refused attempt to save checkpoint file %s in unsafe mode. Remove file %s prior to writing checkpoints and restore it when done." % (ckptfile, self.safeckpt_file) )
+
     def open_dcd(self):
         dcdfilename =  'r%d/%s.dcd' % (self._id,self.basename)
         append = os.path.isfile(dcdfilename)

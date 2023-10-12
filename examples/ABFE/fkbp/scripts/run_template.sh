@@ -9,5 +9,5 @@
 #SBATCH --no-requeue
 #SBATCH -t 02:15:00
 
-echo "localhost,0:0,1,OpenCL,,/tmp" > nodefile
+echo "localhost,0:0,1,CUDA,,/tmp" > nodefile
 python <ASYNCRE_DIR>/abfe_explicit.py <JOBNAME>_asyncre.cntl

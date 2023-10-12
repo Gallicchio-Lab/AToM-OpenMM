@@ -1,9 +1,9 @@
-AToM-OpenMM
-==============
+AToM-OpenMM v8.0.0rc
+====================
 
 The Alchemical Transfer Method for OpenMM (AToM-OpenMM) is an extensible Python package for the estimation of absolute and relative binding free energies of molecular complexes. It implements the [Alchemical Transfer Method (ATM)](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129) with  asynchronous parallel replica exchange molecular dynamics with the [OpenMM](https://github.com/openmm) library. The AToM software can be deployed on workstations or cluster nodes with one or more GPUs.
 
-AToM uses the [ATMetaForce plugin](https://github.com/Gallicchio-Lab/openmm-atmmetaforce-plugin) for OpenMM.
+This version of AToM uses the [ATMForce potential](https://github.com/openmm/openmm/pull/4110) in the latest [OpenMM sources](https://github.com/openmm/openmm). It requires the compilation of OpenMM from sources.
 
 Credits
 -------
@@ -34,20 +34,32 @@ Please [cite us](http://www.compmolbiophysbc.org/publications) if you use this s
 Installation & Usage
 --------------------
 
-It is recommended that the installation is performed in a personal python environment (`conda`, `miniconda`, or similar). AToM requires the `openmm`, `configobj` and `numpy` python modules. 
+It is recommended that the installation is performed in a personal python environment (`conda`, `miniconda`, or similar). AToM-OpenMM requires the `openmm`, `configobj` and `numpy` python modules. 
 
+
+This version of AToM-OpenMM requires the latest 8.1.0beta version of OpenMM. This conda command installs the necessary requirements:
+```
+conda create -n atm8.1 -c conda-forge/label/openmm_rc -c conda-forge openmm ambertools openmmforcefields configobj setproctitle r-base
+conda activate atm8.1
+```
+`setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. `openmmforcefields` is used for force field parameter assignments using OpenFF. `r-base` with the `UWHAM R package` (see below) is required for free energy estimation. See [examples](examples/) for examples and tutorials.
+
+Finally, install AToM-OpenMM:
 ```
 conda create -n atm -c conda-forge ambertools openmm openmm-atmmetaforce-plugin configobj setproctitle r-base
 conda activate atm
 git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
 cd AToM-OpenMM
+git checkout v8.0.0rc
 python setup.py install
+```
+
+And this will install the UWHAM R package:
+```
 Rscript -e 'install.packages("UWHAM", repos = "http://cran.us.r-project.org")' 
 ```
 
-`setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. `r-base`, and the `UWHAM R package` is required for free energy estimation. See [examples](examples/) for examples and tutorials.
-
-While we strive to develop and distribute high-quality and bug-free software, keep in mind that this is research software under heavy development. AToM is provided without any guarantees of correctness. Please report issues [here](https://github.com/Gallicchio-Lab/AToM-OpenMM/issues). We welcome contributions and pull requests.
+While we strive to develop and distribute high-quality and bug-free software, keep in mind that this is research software under heavy development. AToM-OpenMM is provided without any guarantees of correctness. Please report issues [here](https://github.com/Gallicchio-Lab/AToM-OpenMM/issues). We welcome contributions and pull requests.
 
 Documentation
 -------------

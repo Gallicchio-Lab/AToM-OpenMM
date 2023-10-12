@@ -7,10 +7,10 @@ import math
 import logging
 import signal
 
-from simtk import openmm as mm
-from simtk.openmm.app import *
-from simtk.openmm import *
-from simtk.unit import *
+import openmm as mm
+from openmm.app import *
+from openmm import *
+from openmm.unit import *
 
 from async_re import async_re
 from local_openmm_transport import *
@@ -25,6 +25,7 @@ class openmm_job(async_re):
         self.stateparams = None
         self.openmm_workers = None
         self.kb = 0.0019872041*kilocalories_per_mole/kelvin
+        self.safeckpt_file = "ckpt_is_valid"
         
     def _setLogger(self):
         self.logger = logging.getLogger("async_re.openmm_async_re")
@@ -32,11 +33,27 @@ class openmm_job(async_re):
     def checkpointJob(self):
         #disable ctrl-c
         s = signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+        #the safeckpt_file is deleted at the start of the checkpointing
+        #and created at the end. A missing checkpt_file when restarting
+        #implies that the checkpointing stopped in the middle and that the
+        #checkpoint files cannot be trusted
+        try:
+            os.remove(self.safeckpt_file)
+        except:
+            pass
+            
         # update replica objects of waiting replicas
         self.update_replica_states()
         for replica in self.openmm_replicas:
             replica.save_checkpoint()
+
+        #re-enable ctrl-c
         signal.signal(signal.SIGINT, s)
+
+        #restore safeckpt_file
+        with open(self.safeckpt_file, "w") as f:
+            f.write("Checkpoint files are valid")
 
     def _launchReplica(self,replica,cycle):
         nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
@@ -145,8 +162,42 @@ class openmm_job(async_re):
                 U[sid_j][repl_i] = self._reduced_energy(par[j],pot[i])
         return U
 
-
 class openmm_job_TRE(openmm_job):
+    def __init__(self, command_file, options):
+        super().__init__(command_file, options)
+
+        pdbtopfile = self.basename + ".pdb"
+        systemfile = self.basename + "_sys.xml"
+
+        if self.stateparams is None:
+            self._buildStates()
+
+        #builds service worker for replicas use
+        service_ommsys = OMMSystemTRE(self.basename, self.keywords, pdbtopfile,  systemfile, self.logger)
+        self.service_worker = OMMWorkerTRE(self.basename, ommsys, self.keywords, compute = False, logger = self.logger)
+        #creates openmm replica objects
+        self.openmm_replicas = []
+        for i in range(self.nreplicas):
+            try:
+                replica = OMMReplicaTRE(i, self.basename, self.service_worker, self.logger, self.keywords)
+            except:
+                self._exit("Error creating replica.")
+            if replica.stateid == None:
+                replica.set_state(i, self.stateparams[i])#initial setting
+            self.openmm_replicas.append(replica)
+
+        # creates openmm workers
+        self.openmm_workers = []
+        pattern = re.compile('(\d+):(\d+)')
+        for node in self.compute_nodes:
+            slot_id = node["slot_number"]
+            matches = pattern.search(slot_id)
+            platform_id = int(matches.group(1))
+            device_id = int(matches.group(2))
+            gpu_platform_name = node["arch"]
+            ommsys = OMMSystemTRE(self.basename, self.keywords,  pdbtopfile,  systemfile, self.logger)
+            self.openmm_workers.append(OMMWorkerTRE(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
+
     def _buildStates(self):
         self.stateparams = []
         for tempt in self.temperatures:
@@ -188,11 +239,12 @@ class openmm_job_TRE(openmm_job):
         potential_energy = pot['potential_energy']
         beta = 1./(self.kb*temperature)
         return beta*potential_energy
+
         
 class openmm_job_ATM(openmm_job):
     def _buildStates(self):
         self.stateparams = []
-        for (lambd,direction,intermediate,lambda1,lambda2,alpha,u0,w0) in zip(self.lambdas,self.directions,self.intermediates,self.lambda1s,self.lambda2s,self.alphas,self.u0s,self.w0coeffs):
+        for (lambd,direction,intermediate,lambda1,lambda2,alpha,uh,w0) in zip(self.lambdas,self.directions,self.intermediates,self.lambda1s,self.lambda2s,self.alphas,self.uhs,self.w0coeffs):
             for tempt in self.temperatures:
                 par = {}
                 par['lambda'] = float(lambd)
@@ -201,9 +253,12 @@ class openmm_job_ATM(openmm_job):
                 par['lambda1'] = float(lambda1)
                 par['lambda2'] = float(lambda2)
                 par['alpha'] = float(alpha)/kilocalories_per_mole
-                par['u0'] = float(u0)*kilocalories_per_mole
+                par['uh'] = float(uh)*kilocalories_per_mole
                 par['w0'] = float(w0)*kilocalories_per_mole
                 par['temperature'] = float(tempt)*kelvin
+                par['Umax'] = float(self.keywords.get('UMAX')) * kilocalorie_per_mole
+                par['Ubcore'] = float(self.keywords.get('UBCORE')) * kilocalorie_per_mole
+                par['Acore'] = float(self.keywords.get('ACORE'))
                 self.stateparams.append(par)
         return len(self.stateparams)
 
@@ -233,12 +288,12 @@ class openmm_job_ATM(openmm_job):
         self.lambda1s = None
         self.lambda2s = None
         self.alphas = None
-        self.u0s = None
+        self.uhs = None
         self.w0coeffs = None
         self.lambda1s = self.keywords.get('LAMBDA1').split(',')
         self.lambda2s = self.keywords.get('LAMBDA2').split(',')
         self.alphas = self.keywords.get('ALPHA').split(',')
-        self.u0s = self.keywords.get('U0').split(',')
+        self.uhs = self.keywords.get('U0').split(',')
         self.w0coeffs = self.keywords.get('W0COEFF').split(',')
 
         #build parameters for the lambda/temperatures combined states
@@ -254,10 +309,10 @@ class openmm_job_ATM(openmm_job):
         """
         logfile = "%s_stat.txt" % self.basename
         ofile = open(logfile,"w")
-        log = "Replica  State  Lambda Lambda1 Lambda2 Alpha U0 W0coeff Temperature Status  Cycle \n"
+        log = "Replica  State  Lambda Lambda1 Lambda2 Alpha Uh W0coeff Temperature Status  Cycle \n"
         for k in range(self.nreplicas):
             stateid = self.status[k]['stateid_current']
-            log += "%6d   %5d  %6.3f %6.3f %6.3f %6.3f %6.2f %6.2f %6.2f %5s  %5d\n" % (k, stateid, self.stateparams[stateid]['lambda'], self.stateparams[stateid]['lambda1'], self.stateparams[stateid]['lambda2'], self.stateparams[stateid]['alpha']*kilocalories_per_mole, self.stateparams[stateid]['u0']/kilocalories_per_mole, self.stateparams[stateid]['w0']/kilocalories_per_mole, self.stateparams[stateid]['temperature']/kelvin, self.status[k]['running_status'], self.status[k]['cycle_current'])
+            log += "%6d   %5d  %6.3f %6.3f %6.3f %6.3f %6.2f %6.2f %6.2f %5s  %5d\n" % (k, stateid, self.stateparams[stateid]['lambda'], self.stateparams[stateid]['lambda1'], self.stateparams[stateid]['lambda2'], self.stateparams[stateid]['alpha']*kilocalories_per_mole, self.stateparams[stateid]['uh']/kilocalories_per_mole, self.stateparams[stateid]['w0']/kilocalories_per_mole, self.stateparams[stateid]['temperature']/kelvin, self.status[k]['running_status'], self.status[k]['cycle_current'])
         log += "Running = %d\n" % self.running
         log += "Waiting = %d\n" % self.waiting
 
@@ -265,8 +320,8 @@ class openmm_job_ATM(openmm_job):
         ofile.close()
 
     #evaluates the softplus function
-    def _softplus(self, lambda1, lambda2, alpha, u0, w0, uf):
-        ee = 1.0 + math.exp(-alpha*(uf-u0))
+    def _softplus(self, lambda1, lambda2, alpha, uh, w0, uf):
+        ee = 1.0 + math.exp(-alpha*(uf-uh))
         softplusf = lambda2 * uf + w0
         if alpha._value > 0.:
             softplusf += ((lambda2 - lambda1)/alpha) * math.log(ee)
@@ -284,9 +339,9 @@ class openmm_job_ATM(openmm_job):
         lambda1 = par['lambda1']
         lambda2 = par['lambda2']
         alpha = par['alpha']
-        u0 = par['u0']
+        uh = par['uh']
         w0 = par['w0']
-        ebias = self._softplus(lambda1, lambda2, alpha, u0, w0, pertpot)
+        ebias = self._softplus(lambda1, lambda2, alpha, uh, w0, pertpot)
         pot['unbiased_potential_energy'] = epot - ebias
         pot['direction'] = par['atmdirection']
         pot['intermediate'] = par['atmintermediate']
@@ -299,7 +354,7 @@ class openmm_job_ATM(openmm_job):
         lambda1 = par['lambda1']
         lambda2 = par['lambda2']
         alpha = par['alpha']
-        u0 = par['u0']
+        uh = par['uh']
         w0 = par['w0']
         state_direction = par['atmdirection']
         state_intermediate = par['atmintermediate']
@@ -308,7 +363,7 @@ class openmm_job_ATM(openmm_job):
         replica_direction = pot['direction']
         replica_intermediate = pot['intermediate']
         if (replica_direction == state_direction) or (state_intermediate > 0 and replica_intermediate > 0):
-            ebias = self._softplus(lambda1, lambda2, alpha, u0, w0, pertpot)
+            ebias = self._softplus(lambda1, lambda2, alpha, uh, w0, pertpot)
             return beta*(epot0 + ebias)
         else:
             #prevent exchange
@@ -319,57 +374,27 @@ class openmm_job_ATM(openmm_job):
         #changes the format of the positions in case of an exchange between replicas with two different directions 
         #replica.convert_pos_into_direction_format()
         pass
-
-class openmm_job_AmberTRE(openmm_job_TRE):
+            
+class openmm_job_ABFE(openmm_job_ATM):
     def __init__(self, command_file, options):
         super().__init__(command_file, options)
 
-        prmtopfile = self.basename + ".prmtop"
-        crdfile = self.basename + ".inpcrd"
+        pdbtopfile = self.basename + ".pdb"
+        systemfile = self.basename + "_sys.xml"
 
         if self.stateparams is None:
             self._buildStates()
 
         #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberTRE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
-        self.service_worker = OMMWorkerTRE(self.basename, ommsys, self.keywords, compute = False, logger = self.logger)
-        #creates openmm replica objects
-        self.openmm_replicas = []
-        for i in range(self.nreplicas):
-            replica = OMMReplicaTRE(i, self.basename, self.service_worker, self.logger)
-            if replica.stateid == None:
-                replica.set_state(i, self.stateparams[i])#initial setting
-            self.openmm_replicas.append(replica)
-
-        # creates openmm workers
-        self.openmm_workers = []
-        pattern = re.compile('(\d+):(\d+)')
-        for node in self.compute_nodes:
-            slot_id = node["slot_number"]
-            matches = pattern.search(slot_id)
-            platform_id = int(matches.group(1))
-            device_id = int(matches.group(2))
-            gpu_platform_name = node["arch"]
-            ommsys = OMMSystemAmberTRE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
-            self.openmm_workers.append(OMMWorkerTRE(self.basename, ommsys, self.keywords, gpu_platform_name, platform_id, device_id, compute = True, logger = self.logger))
-
-class openmm_job_AmberABFE(openmm_job_ATM):
-    def __init__(self, command_file, options):
-        super().__init__(command_file, options)
-
-        prmtopfile = self.basename + ".prmtop"
-        crdfile = self.basename + ".inpcrd"
-
-        if self.stateparams is None:
-            self._buildStates()
-
-        #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberABFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
+        service_ommsys = OMMSystemABFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger)
         self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
-            replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger)
+            try:
+                replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger, self.keywords)
+            except:
+                self._exit("Error creating replica.")
             if replica.stateid == None:
                 replica.set_state(i, self.stateparams[i])#initial setting
             self.openmm_replicas.append(replica)
@@ -377,26 +402,29 @@ class openmm_job_AmberABFE(openmm_job_ATM):
         # creates openmm workers objects
         self.openmm_workers = []
         for node in self.compute_nodes:
-            ommsys = OMMSystemAmberABFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
+            ommsys = OMMSystemABFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger) 
             self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
 
-class openmm_job_AmberRBFE(openmm_job_ATM):
+class openmm_job_RBFE(openmm_job_ATM):
     def __init__(self, command_file, options):
         super().__init__(command_file, options)
-
-        prmtopfile = self.basename + ".prmtop"
-        crdfile = self.basename + ".inpcrd"
+        
+        pdbtopfile = self.basename + ".pdb"
+        systemfile = self.basename + "_sys.xml"
 
         if self.stateparams is None:
             self._buildStates()
 
         #builds service worker for replicas use
-        service_ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger)
+        service_ommsys = OMMSystemRBFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger)
         self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
-            replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger)
+            try:
+                replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger, self.keywords)
+            except:
+                self._exit("Error when creating replica.")
             if replica.stateid == None:
                 replica.set_state(i, self.stateparams[i])#initial setting
             self.openmm_replicas.append(replica)
@@ -404,6 +432,6 @@ class openmm_job_AmberRBFE(openmm_job_ATM):
         # creates openmm context objects
         self.openmm_workers = []
         for node in self.compute_nodes:
-            ommsys = OMMSystemAmberRBFE(self.basename, self.keywords, prmtopfile, crdfile, self.logger) 
+            ommsys = OMMSystemRBFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger) 
             self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
 

@@ -2,8 +2,8 @@
 #basename for jobs
 basename=eralpha
 
-#path to ASyncRE
-asyncre_dir=$HOME/software/async_re-openmm
+#path to AToM
+AToM_dir=$HOME/AToM-OpenMM
 
 #basename of the receptor pdb file (processed for amber using pdb4amber)
 receptor=eralpha

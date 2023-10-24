@@ -48,7 +48,6 @@ Finally, install AToM-OpenMM:
 ```
 git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
 cd AToM-OpenMM
-git checkout v8.0.0rc
 python setup.py install
 ```
 

@@ -282,20 +282,18 @@ mollig1 = Molecule.from_file(lig1sdffile, file_format='SDF',
 ligandmolecules.append(mollig1)
 lig1_ommtopology = mollig1.to_topology().to_openmm(ensure_unique_atom_names=True)
 
-#assign the residue name, assumes one residue
-resfile = os.path.split(lig1sdffile)[1]
-resname = os.path.splitext(resfile)[0]
+#assign the residue name to the ligand, assumes one residue
+resname_lig1 = "L1"
 for residue in lig1_ommtopology.residues():
-    residue.name = resname.upper()
-
+    residue.name = resname_lig1
 pos = mollig1.conformers[0]/angstrom
 lig1_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
 nlig1 = lig1_ommtopology.getNumAtoms()
 print('Number of atoms in ligand 1:', nlig1)
 print('Call Modeller: include ligand 1')
 modeller.add(lig1_ommtopology, lig1_positions)
-lig1atom_indexes = [ i for i in range(nrcpt,nrcpt+nlig1)]
-print("Indexes of ligand 1 (starting from 0):", lig1atom_indexes)
+
+
 
 if not rbfe:
     # if ABFE, translate the ligand 1 coordinates into the solvent to calculate the
@@ -312,10 +310,9 @@ else:
     lig2_ommtopology = mollig2.to_topology().to_openmm(ensure_unique_atom_names=True)
 
     #assign the residue name, assumes one residue
-    resfile = os.path.split(lig2sdffile)[1]
-    resname = os.path.splitext(resfile)[0]
+    resname_lig2 = "L2"
     for residue in lig2_ommtopology.residues():
-        residue.name = resname.upper()
+        residue.name = resname_lig2
 
     pos = mollig2.conformers[0]/angstrom
     lig2_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
@@ -388,9 +385,21 @@ if pdboutfile is not None:
     PDBFile.writeFile(modeller.topology, modeller.positions, 
                       open(pdboutfile,'w'))
 
+#find the first atom index of the ligand
+lig1_start = modeller.topology.getNumAtoms()
+for at in modeller.topology.atoms():
+    if at.residue.name == resname_lig1:
+        if at.index < lig1_start:
+            lig1_start = at.index
+if lig1_start == len(modeller.topology.atoms()):
+    raise Exception("Error: could not find ligand %s" % resname_lig1)
+    
+lig1atom_indexes = [ i for i in range(lig1_start,lig1_start+nlig1)]
+print("Indexes of ligand 1 (starting from 0):", lig1atom_indexes)
 
 if rbfe:
-    print("Indexes of ligand 2 (starting from 0):", [ i for i in range(nrcpt+nlig1,nrcpt+nlig1+nlig2)])
+    print("Indexes of ligand 2 (starting from 0):", [ i for i in range(lig1_start+nlig1,lig1_start+nlig1+nlig2)])
+    
 print("Box Vectors:", modeller.topology.getPeriodicBoxVectors())
     
 today = datetime.today()

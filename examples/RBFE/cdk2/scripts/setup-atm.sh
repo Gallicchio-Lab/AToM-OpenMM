@@ -50,10 +50,8 @@ for l in `seq 0 $n` ; do
     echo "Displacement vector: $displs"
     python $AToM_dir/make_atm_system_from_rcpt_lig.py --receptorinFile "${rcptpdb}" --LIG1SDFinFile "${lig1sdf}" --LIG2SDFinFile "${lig2sdf}" --displacement "${displs}" --systemXMLoutFile "${jobname}_sys.xml" --systemPDBoutFile "${jobname}.pdb" --hmass 1.5 --forcefieldJSONCachefile "${work_dir}/ligands/ffdb.json" || exit 1
     #residue ligand names
-    tlig=${lig1:0:3}
-    lig1resname=${tlig^^}
-    tlig=${lig2:0:3}
-    lig2resname=${tlig^^}
+    lig1resname=L1
+    lig2resname=L2
 
     #ligand alignment reference atoms
     refpair=${ref_atoms[$l]}

@@ -286,7 +286,7 @@ lig1_ommtopology = mollig1.to_topology().to_openmm(ensure_unique_atom_names=True
 resname_lig1 = "L1"
 for residue in lig1_ommtopology.residues():
     residue.name = resname_lig1
-pos = mollig1.conformers[0]/angstrom
+pos = mollig1.conformers[0].to('angstrom').magnitude
 lig1_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
 nlig1 = lig1_ommtopology.getNumAtoms()
 print('Number of atoms in ligand 1:', nlig1)
@@ -313,8 +313,7 @@ else:
     resname_lig2 = "L2"
     for residue in lig2_ommtopology.residues():
         residue.name = resname_lig2
-
-    pos = mollig2.conformers[0]/angstrom
+    pos = mollig2.conformers[0].to('angstrom').magnitude
     lig2_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
     nlig2 = lig2_ommtopology.getNumAtoms()
     print('Number of atoms in ligand 1:', nlig2)
@@ -391,7 +390,7 @@ for at in modeller.topology.atoms():
     if at.residue.name == resname_lig1:
         if at.index < lig1_start:
             lig1_start = at.index
-if lig1_start == len(modeller.topology.atoms()):
+if lig1_start == modeller.topology.getNumAtoms():
     raise Exception("Error: could not find ligand %s" % resname_lig1)
     
 lig1atom_indexes = [ i for i in range(lig1_start,lig1_start+nlig1)]

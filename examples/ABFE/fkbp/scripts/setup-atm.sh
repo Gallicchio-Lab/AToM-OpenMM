@@ -35,8 +35,7 @@ for l in `seq 0 ${nlig_m1}` ; do
     python $AToM_dir/make_atm_system_from_rcpt_lig.py --receptorinFile "${rcptpdb}" --LIG1SDFinFile "${ligsdf}" --displacement "${displs}" --systemXMLoutFile "${jobname}_sys.xml" --systemPDBoutFile "${jobname}.pdb" --forcefieldJSONCachefile "${work_dir}/ligands/ffdb.json" || exit 1
 
     #residue ligand name
-    tlig=${lig:0:3}
-    lig1resname=${tlig^^}
+    lig1resname=L1
 
     vres=${vsite_rcpt_residues[@]}
 

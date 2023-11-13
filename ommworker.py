@@ -124,7 +124,7 @@ class OMMWorker(object):
         return (self.positions, self.velocities)
 
     # sets the reporters of the worker
-    def set_reporters(self, current_steps, outfile, logfile, dcdfile):
+    def set_reporters(self, current_steps, outfile, logfile, xtcfile):
         self._startedSignal.wait()
         self._readySignal.wait()
         self._cmdq.put("SETREPORTERS")

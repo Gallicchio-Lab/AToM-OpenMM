@@ -43,7 +43,7 @@ class OMMReplica(object):
         self.open_out()
         #may override stateid, positions, etc.
         self.load_checkpoint()
-        self.open_dcd()
+        self.open_xtc()
 
     def set_state(self, stateid, par):
         self.stateid = int(stateid)
@@ -90,23 +90,24 @@ class OMMReplica(object):
         else:
            self.logger.warning("Refused attempt to save checkpoint file %s in unsafe mode. Remove file %s prior to writing checkpoints and restore it when done." % (ckptfile, self.safeckpt_file) )
 
-    def open_dcd(self):
-        dcdfilename =  'r%d/%s.dcd' % (self._id,self.basename)
-        append = os.path.isfile(dcdfilename)
+    def open_xtc(self):
+        xtcfilename =  'r%d/%s.xtc' % (self._id,self.basename)
+        interval = int(self.keywords.get('TRJ_FREQUENCY'))
+        append = os.path.isfile(xtcfilename)
         if append:
             mode = 'r+b'
         else:
             mode = 'wb'
-        self.dcdfile = open(dcdfilename, mode)
-        self.dcd = DCDFile(self.dcdfile, self.worker.topology, self.ommsystem.MDstepsize, append=append)
-        self.dcdfile.flush() # Force the writing of the DCD header
+        self.xtcfile = xtcfilename
+        self.xtc = XTCFile(self.xtcfile, self.worker.topology, self.ommsystem.MDstepsize, interval=interval, append=append)
 
-    def save_dcd(self):
+
+    def save_xtc(self):
         #TODO
         #boxsize options works only for NVT because the boxsize of the service worker
         #is not updated from the compute worker
         boxsize = self.worker.simulation.context.getState().getPeriodicBoxVectors()
-        self.dcd.writeModel(self.positions, periodicBoxVectors=boxsize)
+        self.xtc.writeModel(self.positions, periodicBoxVectors=boxsize)
 
     def set_mdsteps(self, mdsteps):
         self.mdsteps = mdsteps

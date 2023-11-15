@@ -393,9 +393,23 @@ def massage_keywords(keywords, restrain_solutes = True):
     keywords['TIME_STEP'] = 0.001
 
     #restrain all solutes: receptor and ligands
-    nlig2 = len(keywords.get('LIGAND2_ATOMS'))
-    last_lig2_atom = int(keywords.get('LIGAND2_ATOMS')[nlig2-1])
-    keywords['POS_RESTRAINED_ATOMS'] = [i for i in range(last_lig2_atom+1)]
+    # if the ligand are before protein, we need to set LIGAND_IN_BEGINNING keyword as 'yes'; 
+    # otherwise, we don't need to set this keyword or set it to 'no' 
+    lig_in_front = keywords.get('LIGAND_IN_BEGINNING')
+
+    lif=False
+    if lig_in_front != None:
+        if 'y' in lig_in_front or 'Y' in lig_in_front: # yes - ligand in the beginning
+            lif=True
+
+    if lif:
+        natom_ca = len(keywords.get('POS_RESTRAINED_ATOMS'))
+        last_ca_atom = int(keywords.get('POS_RESTRAINED_ATOMS')[natom_ca-1])
+        keywords['POS_RESTRAINED_ATOMS'] = [i for i in range(last_ca_atom+1)] 
+    else:
+        nlig2 = len(keywords.get('LIGAND2_ATOMS'))
+        last_lig2_atom = int(keywords.get('LIGAND2_ATOMS')[nlig2-1])
+        keywords['POS_RESTRAINED_ATOMS'] = [i for i in range(last_lig2_atom+1)]
 
 if __name__ == '__main__':
 

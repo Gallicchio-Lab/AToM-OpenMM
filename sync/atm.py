@@ -136,7 +136,7 @@ class openmm_job_RBFE:
                                 replica.save_checkpoint()
 
                     # Report progress on GPUGRID
-                    progress = float(isample)/float(num_samples - last_sample)
+                    progress = float(isample - last_sample + 1)/float(num_samples - last_sample + 1)
                     open("progress", "w").write(str(progress))
 
     def _updateReplicas(self):

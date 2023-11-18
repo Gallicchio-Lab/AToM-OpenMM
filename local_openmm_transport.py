@@ -223,7 +223,7 @@ class LocalOpenMMTransport(Transport):
         if mdsteps % job['nprnt'] == 0:
             ommreplica.save_out()
         if mdsteps % job['ntrj'] == 0:
-            ommreplica.save_dcd()
+            ommreplica.save_xtc()
         return 0
 
     def isDone(self,replica,cycle):

@@ -67,6 +67,17 @@ def do_mintherm(keywords, logger):
     pdbtopfile = basename + ".pdb"
     systemfile = basename + "_sys.xml"
 
+    #temporarily adjust position restraint for macromolecule and ligand atoms 
+    ion_resnames = ['POT','SOD','CLA','NA+','K+','CL-','CA','MG']
+    wat_resnames = ['HOH','TIP3','WAT','TIP4','OPC','TIP5'] # sometimes we have 'TIP3V'
+    pdb = PDBFile(pdbtopfile)
+    non_ion_wat_atoms = []
+    for res in pdb.topology.residues():
+        if (res.name.upper() not in ion_resnames) and not (any(s in res.name for s in wat_resnames)):
+            for atom in res.atoms():
+                non_ion_wat_atoms.append(atom.index)
+    keywords['POS_RESTRAINED_ATOMS'] = non_ion_wat_atoms
+
     #OpenMM system for minimization, thermalization, NPT, NVT
     #does not include ATM Force
     syst = OMMSystemABFEnoATM(basename, keywords, pdbtopfile, systemfile,  logger)
@@ -382,9 +393,9 @@ def massage_keywords(keywords, restrain_solutes = True):
     keywords['TIME_STEP'] = 0.001
 
     #restrain all solutes: receptor and ligands
-    nlig = len(keywords.get('LIGAND_ATOMS'))
-    last_lig_atom = int(keywords.get('LIGAND_ATOMS')[nlig-1])
-    keywords['POS_RESTRAINED_ATOMS'] = [i for i in range(last_lig_atom+1)]
+    #nlig = len(keywords.get('LIGAND_ATOMS'))
+    #last_lig_atom = int(keywords.get('LIGAND_ATOMS')[nlig-1])
+    #keywords['POS_RESTRAINED_ATOMS'] = [i for i in range(last_lig_atom+1)]
 
 if __name__ == '__main__':
 

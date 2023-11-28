@@ -779,3 +779,12 @@ class AtomUtils(object):
             zetap = np.power( zeta , a)
             usc = (umax-ub)*(zetap - 1.)/(zetap + 1.) + ub
         return usc
+
+
+def residue_is_solvent(res): # called in abfe/rbfe_structprep.py
+    ion_resnames = ['POT','SOD','CLA','NA+','K+','CL-','F-','CA','MG','CL','NA','K','F']
+    wat_resnames = ['HOH','TIP3','WAT','TIP4','OPC','TIP5'] # sometimes we have 'TIP3V'      
+    if (res.name.upper() not in ion_resnames) and not (any(s in res.name for s in wat_resnames)):
+        return True
+    return False
+

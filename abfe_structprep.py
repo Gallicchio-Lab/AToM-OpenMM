@@ -19,7 +19,7 @@ from datetime import datetime
 import logging
 from configobj import ConfigObj
 from ommsystem import *
-from utils.AtomUtils import AtomUtils
+from utils.AtomUtils import AtomUtils, residue_is_solvent
 
 class OMMSystemABFEnoATM(OMMSystemABFE):
     def create_system(self):
@@ -60,12 +60,22 @@ class OMMSystemABFEnoATM(OMMSystemABFE):
 
         self.set_integrator(self.temperature, self.frictionCoeff, self.MDstepsize)
 
-def do_mintherm(keywords, logger):
+def do_mintherm(keywords, restrain_solutes, logger):
     basename = keywords.get('BASENAME')
     jobname = basename
     
     pdbtopfile = basename + ".pdb"
     systemfile = basename + "_sys.xml"
+
+    #temporarily adjust position restraint for macromolecule and ligand atoms
+    if restrain_solutes:
+        pdb = PDBFile(pdbtopfile)
+        non_ion_wat_atoms = []
+        for res in pdb.topology.residues():
+            if residue_is_solvent(res):
+                for atom in res.atoms():
+                    non_ion_wat_atoms.append(atom.index)
+        keywords['POS_RESTRAINED_ATOMS'] = non_ion_wat_atoms
 
     #OpenMM system for minimization, thermalization, NPT, NVT
     #does not include ATM Force
@@ -381,11 +391,6 @@ def massage_keywords(keywords, restrain_solutes = True):
     #use 1 fs time step
     keywords['TIME_STEP'] = 0.001
 
-    #restrain all solutes: receptor and ligands
-    nlig = len(keywords.get('LIGAND_ATOMS'))
-    last_lig_atom = int(keywords.get('LIGAND_ATOMS')[nlig-1])
-    keywords['POS_RESTRAINED_ATOMS'] = [i for i in range(last_lig_atom+1)]
-
 if __name__ == '__main__':
 
     # Parse arguments:
@@ -412,9 +417,9 @@ if __name__ == '__main__':
 
     restrain_solutes = True
     old_keywords = keywords.copy()
-    massage_keywords(keywords, restrain_solutes)
+    massage_keywords(keywords)
     
-    do_mintherm(keywords, logger)
+    do_mintherm(keywords, restrain_solutes, logger)
     do_lambda_annealing(keywords, logger)
 
     #reestablish the restrained atoms

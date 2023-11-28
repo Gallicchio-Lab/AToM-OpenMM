@@ -22,7 +22,7 @@ import logging
 from configobj import ConfigObj
 
 from ommsystem import *
-from utils.AtomUtils import AtomUtils
+from utils.AtomUtils import AtomUtils, residue_is_solvent
 
 class OMMSystemRBFEnoATM(OMMSystemRBFE):
     def create_system(self):
@@ -71,12 +71,22 @@ class OMMSystemRBFEnoATM(OMMSystemRBFE):
         self.set_integrator(self.temperature, self.frictionCoeff, self.MDstepsize)
 
 
-def do_mintherm(keywords, logger):
+def do_mintherm(keywords, restrain_solutes, logger):
     basename = keywords.get('BASENAME')
     jobname = basename
 
     pdbtopfile = basename + ".pdb"
     systemfile = basename + "_sys.xml"
+
+    #temporarily adjust position restraint for macromolecule and ligand atoms
+    if restrain_solutes:
+        pdb = PDBFile(pdbtopfile)
+        non_ion_wat_atoms = []
+        for res in pdb.topology.residues():
+            if residue_is_solvent(res):
+                for atom in res.atoms():
+                    non_ion_wat_atoms.append(atom.index)
+        keywords['POS_RESTRAINED_ATOMS'] = non_ion_wat_atoms
 
     #OpenMM system for minimization, thermalization, NPT, NVT
     #does not include ATM Force
@@ -387,15 +397,10 @@ def do_equil(keywords, logger):
     with open(jobname + '_0.pdb', 'w') as output:
         PDBFile.writeFile(simulation.topology, positions, output)
 
-def massage_keywords(keywords, restrain_solutes = True):
+def massage_keywords(keywords):
 
     #use 1 fs time step
     keywords['TIME_STEP'] = 0.001
-
-    #restrain all solutes: receptor and ligands
-    nlig2 = len(keywords.get('LIGAND2_ATOMS'))
-    last_lig2_atom = int(keywords.get('LIGAND2_ATOMS')[nlig2-1])
-    keywords['POS_RESTRAINED_ATOMS'] = [i for i in range(last_lig2_atom+1)]
 
 if __name__ == '__main__':
 
@@ -423,9 +428,9 @@ if __name__ == '__main__':
 
     restrain_solutes = True
     old_keywords = keywords.copy()
-    massage_keywords(keywords, restrain_solutes)
+    massage_keywords(keywords)
     
-    do_mintherm(keywords, logger)
+    do_mintherm(keywords, restrain_solutes, logger)
     do_lambda_annealing(keywords, logger)
 
     #reestablish the restrained atoms

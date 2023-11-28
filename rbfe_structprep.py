@@ -22,7 +22,7 @@ import logging
 from configobj import ConfigObj
 
 from ommsystem import *
-from utils.AtomUtils import AtomUtils
+from utils.AtomUtils import AtomUtils, residue_is_solvent
 
 class OMMSystemRBFEnoATM(OMMSystemRBFE):
     def create_system(self):
@@ -80,12 +80,10 @@ def do_mintherm(keywords, restrain_solutes, logger):
 
     #temporarily adjust position restraint for macromolecule and ligand atoms
     if restrain_solutes:
-        ion_resnames = ['POT','SOD','CLA','NA+','K+','CL-','CA','MG']
-        wat_resnames = ['HOH','TIP3','WAT','TIP4','OPC','TIP5'] # sometimes we have 'TIP3V'
         pdb = PDBFile(pdbtopfile)
         non_ion_wat_atoms = []
         for res in pdb.topology.residues():
-            if (res.name.upper() not in ion_resnames) and not (any(s in res.name for s in wat_resnames)):
+            if residue_is_solvent(res):
                 for atom in res.atoms():
                     non_ion_wat_atoms.append(atom.index)
         keywords['POS_RESTRAINED_ATOMS'] = non_ion_wat_atoms

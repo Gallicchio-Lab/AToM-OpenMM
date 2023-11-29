@@ -8,10 +8,10 @@ import multiprocessing as mp
 #from multiprocessing import Process, Queue, Event
 import logging
 
-from simtk import openmm as mm
-from simtk.openmm.app import *
-from simtk.openmm import *
-from simtk.unit import *
+import openmm as mm
+from openmm.app import *
+from openmm import *
+from openmm.unit import *
 from datetime import datetime
 
 from ommreplica import *
@@ -223,7 +223,7 @@ class LocalOpenMMTransport(Transport):
         if mdsteps % job['nprnt'] == 0:
             ommreplica.save_out()
         if mdsteps % job['ntrj'] == 0:
-            ommreplica.save_dcd()
+            ommreplica.save_xtc()
         return 0
 
     def isDone(self,replica,cycle):

@@ -12,7 +12,7 @@
 
 jobname=<JOBNAME>
 
-. ~/miniconda3/bin/activate atm
+. ~/miniconda3/bin/activate atm8.1
 echo "Running on $(hostname)"
 
 if [ ! -f ${jobname}_0.xml ]; then

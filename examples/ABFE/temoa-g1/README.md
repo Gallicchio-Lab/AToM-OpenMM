@@ -7,30 +7,22 @@ See [Azimi, Wu, Khuttan, Kurtzman, Deng and Gallicchio.Application of the Alchem
 
 ### System preparation
 
-The starting point are the topology and coordinate files of the TEMOA-G1 complex in a water solvent box in the Amber files `temoa-g1.prmtop` and `temoa-g1.inpcrd` provided in this folder. How to prepare systems in Amber format is beyond the scope of this tutorial. We used the `Antechamber` and `tleap` programs of the [`AmberTools` suite version 19](https://ambermd.org/) using the GAFF force field and the TIP3P water model.
+The starting point are the topology and coordinate files of the TEMOA-G1 complex in a water solvent box in the Amber files `temoa-g1.prmtop` and `temoa-g1.inpcrd` provided in this folder. How to prepare systems in Amber format is beyond the scope of this tutorial. We used the `Antechamber` and `tleap` programs of the [`AmberTools` suite version 19](https://ambermd.org/) using the GAFF force field and the TIP3P water model. The Amber topology and coordinate files are converted to OpenMM System XML file and a Topology PDB file.
 
-We assume in this tutorial that the examples directory of this repository has been copied under `$HOME/examples` and that the AToM-OpenMM software is available under `$HOME/software/AToM-OpenMM`. Adjust the pathnames as needed. We are also assuming that OpenMM is launched by running ``python`` in a conda environment. A `runopenmm` script is available to support other use cases if needed. See [examples/README](../../README.md).
+We assume in this tutorial that the AToM-OpenMM repository has been cloned under `$HOME/AToM-OpenMM`. Adjust the pathnames as needed. We are also assuming that OpenMM with the ATM plugin is launched by running ``python`` in a conda environment. See [examples/README](../../README.md).
 
-Minimize, thermalize, relax, and equilibrate the complex:
+Prepare, minimize, thermalize, relax, and equilibrate the complex:
 ```
-cd $HOME/examples/ABFE/temoa-g1
-python mintherm.py && python npt.py && python equil.py
+cd $HOME/AToM-OpenMM/examples/ABFE/temoa-g1
+python make_atm_system_from_Amber.py --AmberPrmtopinFile temoa-g1.prmtop --AmberInpcrdinFile temoa-g1.inpcrd --systemXMLoutFile temoa-g1_sys.xml --systemPDBoutFile temoa-g1.pdb
+python abfe_structprep.py temoa-g1_asyncre.cntl
 ```
-`mintherm` and `npt` equilibrate the solvent keeping the complex restrained. `equil` equilibrates the whole system keeping only the lower cup of the host loosely restrained as in the original work. Each step creates an OpenMM checkpoint file in XML format to start the subsequent step. Each step also generates a PDB file for visualization.
 
-The next step is specific to the ATM method. ATM internally computes the free energy in two thermodynamic legs that connect the bound and unbound state to the so-called alchemical intermediate that corresponds to an nonphysical state which is half bound and half unbound. Check out the [paper](https://pubs.acs.org/doi/10.1021/acs.jctc.1c00266) for more information. The following step slowly ramps up the λ alchemical parameter from zero (corresponding to the bound state) to 1/2 (corresponding to the alchemical intermediate). 
-```
-python mdlambda.py
-```
 The resulting structure, stored in the `temoa-g1_0.xml` file is the input of the replica exchange production calculation. The PDB version of each structure is also available.
 
 ### Replica Exchange
 
-Copy the `nodefile` from the scripts directory
-```
-cp $HOME/examples/ABFE/scripts/nodefile .
-```
-This `nodefile` assumes one GPU on the system. It looks like:
+Replica exchange runs on devices listed in a `nodefile`. The provided `nodefile` assumes one GPU on the system. It looks like:
 ```
 localhost,0:0,1,CUDA,,/tmp
 ```
@@ -51,7 +43,7 @@ would use a GPU together with 4 CPU cores on the same system. In most cases, the
 
 Now run replica exchange
 ```
-python $HOME/software/AToM-OpenMM/abfe_explicit.py temoa-g1_asyncre.cntl
+python abfe_explicit.py temoa-g1_asyncre.cntl
 ```
 
 You should see the contents of the control file echo-ed back and messages indicating that replicas are dispatched for execution to the GPUs/CPUs and that replicas change alchemical states by exchanging them with other replicas. 
@@ -76,19 +68,15 @@ The output files and the trajectory files can be viewed while replica exchange i
 
 Hit `ctrl-C` in the window that runs replica exchange to kill the calculation prematurely. It might take a few seconds for the job to clean up and terminate. The replica exchange job can be restarted by re-issuing the same command as above
 ```
-python $HOME/software/async_re-openmm/abfe_explicit.py temoa-g1_asyncre.cntl
+python abfe_explicit.py temoa-g1_asyncre.cntl
 ```
 it will restart from the last saved checkpoint. In this example checkpoint files are saved every 10 minutes.
 
 #### Free Energy Analysis
 
-Free energy analysis is performed with [UWHAM](https://cran.r-project.org/web/packages/UWHAM/index.html) in the R statistical environment. Start by copying the necessary scripts to the simulation folder:
-```
-cd $HOME/examples/ABFE/temoa-g1
-cp ../scripts/{analyze.sh,uwham_analysis.R} .
-```
+Free energy analysis is performed with [UWHAM](https://cran.r-project.org/web/packages/UWHAM/index.html) in the R statistical environment.
 
-Then run the analyze script:
+Run the analyze script:
 ```
 ./analyze.sh 20
 ```

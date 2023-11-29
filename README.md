@@ -1,22 +1,24 @@
-AToM-OpenMM
-==============
+AToM-OpenMM v8.1.0 beta
+====================
 
 The Alchemical Transfer Method for OpenMM (AToM-OpenMM) is an extensible Python package for the estimation of absolute and relative binding free energies of molecular complexes. It implements the [Alchemical Transfer Method (ATM)](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129) with  asynchronous parallel replica exchange molecular dynamics with the [OpenMM](https://github.com/openmm) library. The AToM software can be deployed on workstations or cluster nodes with one or more GPUs.
 
-AToM uses the [ATMetaForce plugin](https://github.com/Gallicchio-Lab/openmm-atmmetaforce-plugin) for OpenMM.
+This version of AToM uses the [ATMForce potential](https://github.com/openmm/openmm/pull/4110) in the 8.1.0beta version of [OpenMM sources](https://github.com/openmm/openmm). 
 
 Credits
 -------
 
-This software is developed and maintained by the [Emilio Gallicchio's lab](http://www.compmolbiophysbc.org) with support from current and past grants from the National Science Foundation (ACI 1440665 and CHE 1750511).
+This software is developed and maintained by the [Emilio Gallicchio's lab](http://www.compmolbiophysbc.org) with support from current and past grants from the National Science Foundation (ACI 1440665 and CHE 1750511) and the National Institutes of Health (R15 GM151708).
+
+Maintainers:
+
+- Emilio Gallicchio <egallicchio@brooklyn.cuny.edu>
 
 Authors:
 
-Emilio Gallicchio <egallicchio@brooklyn.cuny.edu>
-
-Baofeng Zhang BZhang@brooklyn.cuny.edu
-
-Rajat Pal <rajatfor2014@gmail.com>
+- Emilio Gallicchio <egallicchio@brooklyn.cuny.edu>
+- Baofeng Zhang <BZhang@brooklyn.cuny.edu>
+- Rajat Pal <rajatfor2014@gmail.com>
 
 The asynchronous replica exchange method was first implemented in the [AsyncRE](https://github.com/ComputationalBiophysicsCollaborative/AsyncRE) package for the IMPACT program.
 
@@ -34,14 +36,21 @@ Please [cite us](http://www.compmolbiophysbc.org/publications) if you use this s
 Installation & Usage
 --------------------
 
-It is recommended that the installation is performed in a personal python environment (`conda`, `miniconda`, or similar). AToM requires the `openmm`, `configobj` and `numpy` python modules. 
+It is recommended that the installation is performed in a personal python environment (`conda`, `miniconda`, or similar). AToM-OpenMM requires the `openmm`, `configobj` and `numpy` python modules. 
 
+
+This version of AToM-OpenMM requires the latest 8.1.0beta version of OpenMM. This conda command installs the necessary requirements:
 ```
-conda create -n atm -c conda-forge ambertools openmm openmm-atmmetaforce-plugin configobj setproctitle r-base
+conda create -n atm8.1 -c conda-forge/label/openmm_rc -c conda-forge openmm ambertools openmmforcefields configobj setproctitle r-base
+conda activate atm8.1
+```
+`setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. `openmmforcefields` is used for force field parameter assignments using OpenFF. `r-base` with the `UWHAM R package` (see below) is required for free energy estimation. See [examples](examples/) for examples and tutorials.
+
+Finally, install AToM-OpenMM:
+```
 git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
 cd AToM-OpenMM
 python setup.py install
-Rscript -e 'install.packages("UWHAM", repos = "http://cran.us.r-project.org")' 
 ```
 
 For NNP, install `openmm-ml` and `nnpops`:
@@ -49,9 +58,12 @@ For NNP, install `openmm-ml` and `nnpops`:
 conda install -c conda-forge openmm-ml nnpops
 ```
 
-`setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. `r-base`, and the `UWHAM R package` is required for free energy estimation. See [examples](examples/) for examples and tutorials.
+And this will install the UWHAM R package:
+```
+Rscript -e 'install.packages("UWHAM", repos = "http://cran.us.r-project.org")' 
+```
 
-While we strive to develop and distribute high-quality and bug-free software, keep in mind that this is research software under heavy development. AToM is provided without any guarantees of correctness. Please report issues [here](https://github.com/Gallicchio-Lab/AToM-OpenMM/issues). We welcome contributions and pull requests.
+While we strive to develop and distribute high-quality and bug-free software, keep in mind that this is research software under heavy development. AToM-OpenMM is provided without any guarantees of correctness. Please report issues [here](https://github.com/Gallicchio-Lab/AToM-OpenMM/issues). We welcome contributions and pull requests.
 
 Documentation
 -------------

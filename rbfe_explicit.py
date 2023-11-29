@@ -11,13 +11,13 @@ import signal
 import shutil
 import random
 
-from simtk import openmm as mm
-from simtk.openmm.app import *
-from simtk.openmm import *
-from simtk.unit import *
+import openmm as mm
+from openmm.app import *
+from openmm import *
+from openmm.unit import *
 from datetime import datetime
 
-from openmm_async_re import openmm_job_AmberRBFE
+from openmm_async_re import openmm_job_RBFE
 
 if __name__ == '__main__':
 
@@ -40,7 +40,7 @@ if __name__ == '__main__':
     print("")
     sys.stdout.flush()
 
-    rx = openmm_job_AmberRBFE(commandFile, options=None)
+    rx = openmm_job_RBFE(commandFile, options=None)
 
     rx.setupJob()
 

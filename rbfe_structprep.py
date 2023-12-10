@@ -254,7 +254,7 @@ def do_lambda_annealing(keywords, logger):
     number_of_cycles = int(totalSteps/steps_per_cycle)
     deltalambda = (0.5 - 0.0)/float(number_of_cycles)
     simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True))
-    simulation.reporters.append(DCDReporter(jobname + "_mdlambda.dcd", steps_per_cycle))
+    simulation.reporters.append(XTCReporter(jobname + "_mdlambda.xtc", steps_per_cycle))
 
     state = simulation.context.getState(getEnergy = True)
     print("Potential Energy =", state.getPotentialEnergy())
@@ -370,7 +370,7 @@ def do_equil(keywords, logger):
     totalSteps = 150000
     steps_per_cycle = 5000
     simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True))
-    simulation.reporters.append(DCDReporter(jobname + "_0.dcd", steps_per_cycle))
+    simulation.reporters.append(XTCReporter(jobname + "_0.xtc", steps_per_cycle))
 
     state = simulation.context.getState(getEnergy = True)
     print("Potential Energy =", state.getPotentialEnergy())

@@ -78,16 +78,6 @@ def do_mintherm(keywords, restrain_solutes, logger):
     pdbtopfile = basename + ".pdb"
     systemfile = basename + "_sys.xml"
 
-    #temporarily adjust position restraint for macromolecule and ligand atoms
-    if restrain_solutes:
-        pdb = PDBFile(pdbtopfile)
-        non_ion_wat_atoms = []
-        for res in pdb.topology.residues():
-            if residue_is_solvent(res):
-                for atom in res.atoms():
-                    non_ion_wat_atoms.append(atom.index)
-        keywords['POS_RESTRAINED_ATOMS'] = non_ion_wat_atoms
-
     #OpenMM system for minimization, thermalization, NPT, NVT
     #does not include ATM Force
     syst = OMMSystemRBFEnoATM(basename, keywords, pdbtopfile, systemfile, logger)
@@ -397,10 +387,22 @@ def do_equil(keywords, logger):
     with open(jobname + '_0.pdb', 'w') as output:
         PDBFile.writeFile(simulation.topology, positions, output)
 
-def massage_keywords(keywords):
+def massage_keywords(keywords, restrain_solutes = True):
 
     #use 1 fs time step
     keywords['TIME_STEP'] = 0.001
+
+    #temporarily restrain all non-solvent atoms
+    if restrain_solutes:
+        basename = old_keywords.get('BASENAME')
+        pdbtopfile = basename + ".pdb"
+        pdb = PDBFile(pdbtopfile)
+        non_ion_wat_atoms = []
+        for res in pdb.topology.residues():
+            if not residue_is_solvent(res):
+                for atom in res.atoms():
+                    non_ion_wat_atoms.append(atom.index)
+        keywords['POS_RESTRAINED_ATOMS'] = non_ion_wat_atoms
 
 if __name__ == '__main__':
 
@@ -427,8 +429,9 @@ if __name__ == '__main__':
     logger = logging.getLogger("rbfe_structprep")
 
     restrain_solutes = True
+
     old_keywords = keywords.copy()
-    massage_keywords(keywords)
+    massage_keywords(keywords, restrain_solutes)
     
     do_mintherm(keywords, restrain_solutes, logger)
     do_lambda_annealing(keywords, logger)
@@ -438,5 +441,3 @@ if __name__ == '__main__':
         keywords['POS_RESTRAINED_ATOMS'] = old_keywords.get('POS_RESTRAINED_ATOMS') 
 
     do_equil(keywords, logger)
-    
-    

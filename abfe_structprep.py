@@ -391,6 +391,18 @@ def massage_keywords(keywords, restrain_solutes = True):
     #use 1 fs time step
     keywords['TIME_STEP'] = 0.001
 
+    #temporarily restrain all non-solvent atoms
+    if restrain_solutes:
+        basename = old_keywords.get('BASENAME')
+        pdbtopfile = basename + ".pdb"
+        pdb = PDBFile(pdbtopfile)
+        non_ion_wat_atoms = []
+        for res in pdb.topology.residues():
+            if not residue_is_solvent(res):
+                for atom in res.atoms():
+                    non_ion_wat_atoms.append(atom.index)
+        keywords['POS_RESTRAINED_ATOMS'] = non_ion_wat_atoms
+
 if __name__ == '__main__':
 
     # Parse arguments:
@@ -411,13 +423,13 @@ if __name__ == '__main__':
     print("Input file:", commandFile)
     print("")
     sys.stdout.flush()
-    
+
     keywords = ConfigObj(commandFile)
     logger = logging.getLogger("abfe_structprep")
 
     restrain_solutes = True
     old_keywords = keywords.copy()
-    massage_keywords(keywords)
+    massage_keywords(keywords, restrain_solutes)
     
     do_mintherm(keywords, restrain_solutes, logger)
     do_lambda_annealing(keywords, logger)

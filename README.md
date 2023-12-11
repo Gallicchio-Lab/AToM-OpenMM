@@ -48,8 +48,9 @@ conda activate atm8.1
 
 Finally, install AToM-OpenMM:
 ```
-git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
-cd AToM-OpenMM
+wget https://github.com/Gallicchio-Lab/AToM-OpenMM/archive/refs/tags/v8.1.0.tar.gz
+tar zxvf v8.1.0.tar.gz
+cd AToM-OpenMM-8.1.0
 python setup.py install
 ```
 

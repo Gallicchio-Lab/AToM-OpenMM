@@ -1,4 +1,4 @@
-AToM-OpenMM v8.1.0 beta
+AToM-OpenMM v8.1.0
 ====================
 
 The Alchemical Transfer Method for OpenMM (AToM-OpenMM) is an extensible Python package for the estimation of absolute and relative binding free energies of molecular complexes. It implements the [Alchemical Transfer Method (ATM)](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129) with  asynchronous parallel replica exchange molecular dynamics with the [OpenMM](https://github.com/openmm) library. The AToM software can be deployed on workstations or cluster nodes with one or more GPUs.
@@ -39,9 +39,9 @@ Installation & Usage
 It is recommended that the installation is performed in a personal python environment (`conda`, `miniconda`, or similar). AToM-OpenMM requires the `openmm`, `configobj` and `numpy` python modules. 
 
 
-This version of AToM-OpenMM requires the latest 8.1.0beta version of OpenMM. This conda command installs the necessary requirements:
+This version of AToM-OpenMM requires the latest 8.1.0 version of OpenMM. This conda command installs the necessary requirements:
 ```
-conda create -n atm8.1 -c conda-forge/label/openmm_rc -c conda-forge openmm ambertools openmmforcefields configobj setproctitle r-base
+conda create -n atm8.1 -c conda-forge openmm=8.1.0 ambertools openmmforcefields configobj setproctitle r-base
 conda activate atm8.1
 ```
 `setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. `openmmforcefields` is used for force field parameter assignments using OpenFF. `r-base` with the `UWHAM R package` (see below) is required for free energy estimation. See [examples](examples/) for examples and tutorials.
@@ -63,7 +63,7 @@ While we strive to develop and distribute high-quality and bug-free software, ke
 Documentation
 -------------
 
-[Under construction](https://www.compmolbiophysbc.org/atom-openmm)
+[AToM-OpenMM User Guide](https://www.compmolbiophysbc.org/atom-openmm)
 
 Licensing
 ---------

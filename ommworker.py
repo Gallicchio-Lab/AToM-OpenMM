@@ -259,7 +259,7 @@ class OMMWorker(object):
                 os.mkdir(self.wdir)
             self.logfile = "%s/%s.log" % (self.wdir, self.basename)
             self.logfile_p = open(self.logfile, 'a+')
-            self.simulation.reporters.append(StateDataReporter(self.logfile_p, self.nprnt, step=True, temperature=True))
+            self.simulation.reporters.append(StateDataReporter(self.logfile_p, self.nprnt, step=True, temperature=True, speed=True))
 
     def openmm_worker(self, startedSignal, readySignal, runningSignal, errorSignal, isDone, cmdq, inq, outq):
         try:

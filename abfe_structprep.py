@@ -117,7 +117,7 @@ def do_mintherm(keywords, restrain_solutes, logger):
     totalSteps = 150000
     steps_per_cycle = 5000
     number_of_cycles = int(totalSteps/steps_per_cycle)
-    simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True, volume=True))    
+    simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True, volume=True, speed=True))    
     
     # initial temperature
     initial_temp = keywords.get("INITIAL_TEMPERATURE")
@@ -252,7 +252,7 @@ def do_lambda_annealing(keywords, logger):
     steps_per_cycle = 5000
     number_of_cycles = int(totalSteps/steps_per_cycle)
     deltalambda = (0.5 - 0.0)/float(number_of_cycles)
-    simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True))
+    simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True, speed=True))
     simulation.reporters.append(XTCReporter(jobname + "_mdlambda.xtc", steps_per_cycle))
 
     state = simulation.context.getState(getEnergy = True)
@@ -368,7 +368,7 @@ def do_equil(keywords, logger):
     #FIX ME: get from keywords
     totalSteps = 150000
     steps_per_cycle = 5000
-    simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True))
+    simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True, speed=True))
     simulation.reporters.append(XTCReporter(jobname + "_0.xtc", steps_per_cycle))
 
     state = simulation.context.getState(getEnergy = True)

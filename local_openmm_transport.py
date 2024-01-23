@@ -122,6 +122,8 @@ class LocalOpenMMTransport(Transport):
 
     def LaunchReplica(self, worker, replica, cycle, nsteps,
                       nheating = 0, ncooling = 0, hightemp = 0.0):
+        #if replica.contextchkpt != None:
+        #    worker.set_chkpt(replica.contextchkpt)
         (stateid, par) = replica.get_state()
         worker.set_posvel(replica.positions, replica.velocities)
         worker.set_state(par)
@@ -197,6 +199,7 @@ class LocalOpenMMTransport(Transport):
         if job['openmm_worker'].has_crashed(): #refuses to update replica from a crashed worker
             return None
         (pos,vel) = job['openmm_worker'].get_posvel()
+        #chkpt = job['openmm_worker'].get_chkpt()
         pot = job['openmm_worker'].get_energy()
         if pos is None or vel is None or pot is None:
             return None
@@ -215,7 +218,8 @@ class LocalOpenMMTransport(Transport):
         ommreplica.set_mdsteps(mdsteps)
         #update positions and velocities of openmm replica
         ommreplica.set_posvel(pos,vel)
-
+        #ommreplica.set_chkpt(chkpt)
+        
         #TODO: should also update boxsize
         #update energies of openmm replica
         ommreplica.set_energy(pot)

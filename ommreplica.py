@@ -36,7 +36,8 @@ class OMMReplica(object):
         state = self.context.getState(getPositions=True, getVelocities=True)
         self.positions = state.getPositions()
         self.velocities = state.getVelocities()
-
+        self.contextchkpt = None #holds a complete state of the Context
+        
         if not os.path.isdir('r%d' % self._id):
             os.mkdir('r%d' % self._id)
             
@@ -63,6 +64,9 @@ class OMMReplica(object):
     def set_posvel(self, positions, velocities):
         self.positions = copy.deepcopy(positions)
         self.velocities = copy.deepcopy(velocities)
+
+    def set_chkpt(self, chkpt):
+        self.contextchkpt = chkpt
 
     def open_out(self):
         outfilename =  'r%d/%s.out' % (self._id,self.basename)

@@ -114,6 +114,13 @@ class OMMWorker(object):
         self._inq.put(positions)
         self._inq.put(velocities)
 
+    # set positions and velocities of worker
+    def set_chkpt(self, chkpt):
+        self._startedSignal.wait()
+        self._readySignal.wait()
+        self._cmdq.put("SETCHKPT")
+        self._inq.put(chkpt)
+        
     # get positions and velocities from worker
     def get_posvel(self):
         self._startedSignal.wait()
@@ -123,6 +130,14 @@ class OMMWorker(object):
         self.velocities = self._outq.get()
         return (self.positions, self.velocities)
 
+    # set positions and velocities of worker
+    def get_chkpt(self):
+        self._startedSignal.wait()
+        self._readySignal.wait()
+        self._cmdq.put("GETCHKPT")
+        chkpt = self._outq.get()
+        return chkpt
+    
     # sets the reporters of the worker
     def set_reporters(self, current_steps, outfile, logfile, xtcfile):
         self._startedSignal.wait()
@@ -279,6 +294,7 @@ class OMMWorker(object):
         
         self.positions = None
         self.velocities = None
+        self.chkpt = None
 
         #start event loop
         startedSignal.set()
@@ -305,6 +321,8 @@ class OMMWorker(object):
                 self.ncooling = int(inq.get())
                 self.hightemp = float(inq.get())
 
+                #self.context.reinitialize(preserveState=True)
+                
                 res = self._openmm_worker_run()
 
                 if self.logfile_p is not None:
@@ -322,6 +340,12 @@ class OMMWorker(object):
                 self.velocities = state.getVelocities()
                 outq.put(self.positions)
                 outq.put(self.velocities)
+            elif command == "SETCHKPT":
+                self.chkpt = inq.get()
+                self.context.loadCheckpoint(self.chkpt)
+            elif command == "GETCHKPT":
+                self.chkpt = self.context.createCheckpoint()
+                outq.put(self.chkpt)
             elif command == "FINISH":
                 if self.outfile_p is not None:
                     self.outfile_p.close()
@@ -369,7 +393,13 @@ class OMMWorkerATM(OMMWorker):
         self.simulation.context.setParameter(atmforce.Acore(), self.par[atmforce.Acore()] )
 
     def _worker_getenergy(self):
-        state = self.simulation.context.getState(getEnergy = True)
+        if self.ommsystem.doMetaD:
+            fgroups = { 0, self.ommsystem.metaDforcegroup, self.ommsystem.atmforcegroup }
+        else:
+            fgroups = { 0, self.ommsystem.atmforcegroup }
+        state = self.simulation.context.getState(getEnergy = True, groups = fgroups )
+        #state = self.simulation.context.getState(getEnergy = True)
+        
         self.pot['potential_energy'] = state.getPotentialEnergy()
         (u1, u0, alchemicalEBias) = self.ommsystem.atmforce.getPerturbationEnergy(self.simulation.context)
         umcore = self.simulation.context.getParameter(self.ommsystem.atmforce.Umax())*kilojoules_per_mole

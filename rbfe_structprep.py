@@ -71,7 +71,7 @@ class OMMSystemRBFEnoATM(OMMSystemRBFE):
         self.set_integrator(self.temperature, self.frictionCoeff, self.MDstepsize)
 
 
-def do_mintherm(keywords, restrain_solutes, logger):
+def do_mintherm(keywords, logger):
     basename = keywords.get('BASENAME')
     jobname = basename
 
@@ -433,7 +433,7 @@ if __name__ == '__main__':
     old_keywords = keywords.copy()
     massage_keywords(keywords, restrain_solutes)
     
-    do_mintherm(keywords, restrain_solutes, logger)
+    do_mintherm(keywords, logger)
     do_lambda_annealing(keywords, logger)
 
     #reestablish the restrained atoms

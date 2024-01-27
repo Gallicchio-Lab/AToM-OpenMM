@@ -22,7 +22,7 @@
 from setuptools import setup
 from async_re import __version__ as VERSION
 
-NAME = 'async_re'
+NAME = 'atom-openmm'
 
 MODULES = 'async_re', 'ommreplica', 'ommsystem', 'ommworker', 'local_openmm_transport', 'transport', 'gibbs_sampling', 'openmm_async_re'
 

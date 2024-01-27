@@ -51,7 +51,7 @@ Finally, install AToM-OpenMM:
 wget https://github.com/Gallicchio-Lab/AToM-OpenMM/archive/refs/tags/v8.1.1.tar.gz
 tar zxvf v8.1.1.tar.gz
 cd AToM-OpenMM-8.1.1
-python setup.py install
+pip install .
 ```
 
 And this will install the UWHAM R package:

@@ -27,7 +27,7 @@ from local_openmm_transport import *
 
 import multiprocessing as mp
 
-__version__ = '8.1.0'
+__version__ = '8.1.1'
 
 class async_re(object):
     """

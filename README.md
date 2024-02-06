@@ -66,6 +66,8 @@ Documentation
 
 [AToM-OpenMM User Guide](https://www.compmolbiophysbc.org/atom-openmm)
 
+See [examples](examples/) for examples and tutorials.
+
 Licensing
 ---------
 

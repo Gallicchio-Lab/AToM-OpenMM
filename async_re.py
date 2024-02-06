@@ -299,6 +299,7 @@ class async_re(object):
                 self.doExchanges()
             self._write_status()
             self.print_status()
+            self.transport.fixnodes()
 
             if current_time - last_checkpoint_time > checkpoint_time:
                 self.logger.info("Checkpointing ...")

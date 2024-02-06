@@ -87,7 +87,7 @@ class LocalOpenMMTransport(Transport):
                      if self.node_status[node] is None or self.node_status[node] >= 0 ]
         return len(alive)
 
-    def _fixnodes(self):
+    def fixnodes(self):
         for nodeid in range(self.nprocs):
             if self.node_status[nodeid] is not None and self.node_status[nodeid] < 0 and not self.disabled[nodeid]:
                 if self.ncrashes[nodeid] <= self.maxcrashes:
@@ -181,7 +181,7 @@ class LocalOpenMMTransport(Transport):
                 self.isDone(repl,0)
 
             #restarts crashed nodes if any
-            self._fixnodes()
+            self.fixnodes()
 
         return njobs_launched
 

@@ -194,6 +194,7 @@ class OMMSystemABFE(OMMSystem):
         self.parameter['bias_energy'] = 'BiasEnergy'
         self.atmforce = None
         self.lig_atoms = None
+        self.lig_atoms0 = None
         self.displ = None
 
     def set_ligand_atoms(self):
@@ -202,6 +203,17 @@ class OMMSystemABFE(OMMSystem):
             self.lig_atoms = [int(i) for i in lig_atoms_in]
         else:
             msg = "Error: LIGAND_ATOMS is required"
+            self._exit(msg)
+
+        if not (self.keywords.get('LIGAND_ATOMS0') is None):
+            self.lig_atoms0 = [int(i) for i in self.keywords.get('LIGAND_ATOMS0')]
+
+    def set_displacement(self):
+        #set displacements
+        if not (self.keywords.get('DISPLACEMENT') is None):
+            self.displ = [float(displ) for displ in self.keywords.get('DISPLACEMENT').split(',')]*angstrom
+        else:
+            msg = "Error: DISPLACEMENT is required"
             self._exit(msg)
 
     def set_vsite_restraints(self):
@@ -302,12 +314,6 @@ class OMMSystemABFE(OMMSystem):
             ubcore = 0.0 * kilocalorie_per_mole
         acore = float(self.keywords.get('ACORE'))
 
-        if not (self.keywords.get('DISPLACEMENT') is None):
-            self.displ = [float(displ) for displ in self.keywords.get('DISPLACEMENT').split(',')]*angstrom
-        else:
-            msg = "Error: DISPLACEMENT is required"
-            self._exit(msg)
-
         #create ATM Force
         self.atmforce = ATMForce(lambda1, lambda2,  alpha * kilojoules_per_mole, uh/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, direction )
 
@@ -329,6 +335,10 @@ class OMMSystemABFE(OMMSystem):
             self.atmforce.addParticle(Vec3(0., 0., 0.))
         for i in self.lig_atoms:
             self.atmforce.setParticleParameters(i, Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer )
+        if not (self.keywords.get('LIGAND_ATOMS0') is None):
+            for i in self.lig_atoms0:
+                self.atmforce.setParticleParameters(i, Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer,
+                                                       Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer)
 
         #assign a group to ATMForce for multiple time-steps
         self.atmforcegroup = self.free_force_group()
@@ -349,6 +359,8 @@ class OMMSystemABFE(OMMSystem):
         self.atm_utils = AtomUtils(self.system)
 
         self.set_ligand_atoms()
+
+        self.set_displacement()
 
         self.set_vsite_restraints()
 

@@ -243,8 +243,12 @@ def do_lambda_annealing(keywords, logger):
     simulation.context.setParameter(syst.atmforce.Acore(), acore)
     simulation.context.setParameter(syst.atmforce.Direction(), direction)
     
-    state = simulation.context.getState(getEnergy = True)
-    #print("Potential Energy =", state.getPotentialEnergy())
+    if syst.doMetaD:
+        fgroups = { 0, syst.metaDforcegroup, syst.atmforcegroup }
+    else:
+        fgroups = { 0, syst.atmforcegroup }
+    state = simulation.context.getState(getEnergy = True, groups = fgroups )
+    print("Potential Energy =", state.getPotentialEnergy())
 
     print("Annealing to lambda = 1/2 ...")
 
@@ -253,18 +257,15 @@ def do_lambda_annealing(keywords, logger):
     steps_per_cycle = 5000
     number_of_cycles = int(totalSteps/steps_per_cycle)
     deltalambda = (0.5 - 0.0)/float(number_of_cycles)
-    simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True, speed=True))
+    simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, temperature=True, speed=True))
     simulation.reporters.append(XTCReporter(jobname + "_mdlambda.xtc", steps_per_cycle))
-
-    state = simulation.context.getState(getEnergy = True)
-    print("Potential Energy =", state.getPotentialEnergy())
     
     binding_file = jobname + '_mdlambda.out'
     f = open(binding_file, 'w')
     
     for i in range(number_of_cycles):
         simulation.step(steps_per_cycle)
-        state = simulation.context.getState(getEnergy = True)
+        state = simulation.context.getState(getEnergy = True, groups = fgroups )
         pot_energy = state.getPotentialEnergy()
         (u1, u0, ebias) = syst.atmforce.getPerturbationEnergy(simulation.context)
         umcore = simulation.context.getParameter(syst.atmforce.Umax())* kilojoules_per_mole
@@ -361,19 +362,20 @@ def do_equil(keywords, logger):
     simulation.context.setParameter(syst.atmforce.Acore(), acore)
     simulation.context.setParameter(syst.atmforce.Direction(), direction)
     
-    state = simulation.context.getState(getEnergy = True)
-    #print("Potential Energy =", state.getPotentialEnergy())
+    if syst.doMetaD:
+        fgroups = { 0, syst.metaDforcegroup, syst.atmforcegroup }
+    else:
+        fgroups = { 0, syst.atmforcegroup }
+    state = simulation.context.getState(getEnergy = True, groups = fgroups )
+    print("Potential Energy =", state.getPotentialEnergy())
 
     print("Equilibration at lambda = 1/2 ...")
 
     #FIX ME: get from keywords
     totalSteps = 150000
     steps_per_cycle = 5000
-    simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True, speed=True))
+    simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, temperature=True, speed=True))
     simulation.reporters.append(XTCReporter(jobname + "_0.xtc", steps_per_cycle))
-
-    state = simulation.context.getState(getEnergy = True)
-    print("Potential Energy =", state.getPotentialEnergy())
     
     simulation.step(totalSteps)
         

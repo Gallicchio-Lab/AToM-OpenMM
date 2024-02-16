@@ -5,7 +5,7 @@ basename=fkbp
 #basename of the receptor pdb file (processed for amber using pdb4amber)
 receptor=fkbp
 
-#basenames of the ligands (.mol2 format expected)
+#basenames of the ligands (.sdf format expected)
 ligands=(thi prp dss dmso dapp dap but)
 
 #displacement vector

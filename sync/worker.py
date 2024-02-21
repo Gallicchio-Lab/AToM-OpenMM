@@ -64,7 +64,7 @@ class OMMWorkerATM:
         self.context.setParameter(atmforce.Lambda1(), par['lambda1'])
         self.context.setParameter(atmforce.Lambda2(), par['lambda2'])
         self.context.setParameter(atmforce.Alpha(), par['alpha']*kilojoules_per_mole)
-        self.context.setParameter(atmforce.U0(), par['u0'] /kilojoules_per_mole)
+        self.context.setParameter(atmforce.Uh(), par['uh'] /kilojoules_per_mole)
         self.context.setParameter(atmforce.W0(), par['w0'] /kilojoules_per_mole)
         self.context.setParameter(atmforce.Direction(), par['atmdirection'])
 

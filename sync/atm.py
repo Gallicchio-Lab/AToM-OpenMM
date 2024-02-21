@@ -61,9 +61,12 @@ class openmm_job_RBFE:
             par['lambda1'] = float(lambda1)
             par['lambda2'] = float(lambda2)
             par['alpha'] = float(alpha)/kilocalories_per_mole
-            par['u0'] = float(u0)*kilocalories_per_mole
+            par['uh'] = float(u0)*kilocalories_per_mole
             par['w0'] = float(w0)*kilocalories_per_mole
             par['temperature'] = float(temperatures[0])*kelvin
+            par['Umax'] = float(self.config.get('UMAX')) * kilocalories_per_mole
+            par['Ubcore'] = float(self.config.get('UBCORE')) * kilocalories_per_mole
+            par['Acore'] = float(self.config.get('ACORE'))
             state_params.append(par)
             self.logger.info(f"    State: {par}")
 
@@ -84,7 +87,7 @@ class openmm_job_RBFE:
             with Timer(self.logger.info, "create replicas"):
                 self.replicas = []
                 for i in range(self.nreplicas):
-                    replica = OMMReplicaATM(i, self.basename, self.worker, self.logger)
+                    replica = OMMReplicaATM(i, self.basename, self.worker, self.logger,self.config)
                     if not replica.get_stateid():
                         replica.set_state(i, self.state_params[i])
                     self.replicas.append(replica)
@@ -214,7 +217,7 @@ class openmm_job_RBFE:
         lambda1 = par['lambda1']
         lambda2 = par['lambda2']
         alpha = par['alpha']
-        u0 = par['u0']
+        u0 = par['uh']
         w0 = par['w0']
         state_direction = par['atmdirection']
         state_intermediate = par['atmintermediate']

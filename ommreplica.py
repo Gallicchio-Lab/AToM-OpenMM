@@ -221,8 +221,8 @@ class OMMReplicaATM(OMMReplica):
             self.context.setParameter(self.ommsystem.atmforce.Direction(), self.par['atmdirection'])
             self.context.setParameter(self.ommsystem.parameter['atmintermediate'], self.par['atmintermediate'])
             self.context.setParameter(self.ommsystem.atmforce.Umax(), self.par[self.ommsystem.atmforce.Umax()]/kilojoules_per_mole)
-            self.context.setParameter(self.ommsystem.atmforce.Ubcore(), self.par[self.ommsystem.atmforce.Umax()]/kilojoules_per_mole)
-            self.context.setParameter(self.ommsystem.atmforce.Acore(), self.par[self.ommsystem.atmforce.Umax()])
+            self.context.setParameter(self.ommsystem.atmforce.Ubcore(), self.par[self.ommsystem.atmforce.Ubcore()]/kilojoules_per_mole)
+            self.context.setParameter(self.ommsystem.atmforce.Acore(), self.par[self.ommsystem.atmforce.Acore()])
         if self.pot is not None:
             self.context.setParameter(self.ommsystem.parameter['potential_energy'], self.pot['potential_energy']/kilojoules_per_mole)
             self.context.setParameter(self.ommsystem.parameter['perturbation_energy'], self.pot['perturbation_energy']/kilojoules_per_mole)

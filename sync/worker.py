@@ -73,14 +73,23 @@ class OMMWorkerATM:
         self.context.setPositions(positions)
         self.context.setVelocities(velocities)
 
-    def get_energy(self):
-        self.logger.debug("ommworker.get_energy")
-        fgroups = {0, self.ommsystem.atmforcegroup}
-        state = self.context.getState(getEnergy = True, groups = fgroups)
+    def get_energy(self, par, replica):
         pot = {}
+        state = replica.context.getState(getEnergy = True)
         pot['potential_energy'] = state.getPotentialEnergy()
-        pot['perturbation_energy'] = self.ommsystem.atmforce.getPerturbationEnergy(self.context)
-        pot['bias_energy'] = 0.0 * kilojoules_per_mole
+        (u1, u0, alchemicalEBias) = replica.ommsystem.atmforce.getPerturbationEnergy(replica.context)
+        umcore = replica.context.getParameter(replica.ommsystem.atmforce.Umax())*kilojoules_per_mole
+        ubcore = replica.context.getParameter(replica.ommsystem.atmforce.Ubcore())*kilojoules_per_mole
+        acore = replica.context.getParameter(replica.ommsystem.atmforce.Acore())
+        if par['atmdirection'] > 0:
+            pot['perturbation_energy'] = replica.ommsystem.atm_utils.softCorePertE(u1-u0, umcore, ubcore, acore)
+        else:
+            pot['perturbation_energy'] = replica.ommsystem.atm_utils.softCorePertE(u0-u1, umcore, ubcore, acore)
+        if replica.ommsystem.doMetaD:
+            state = self.simulation.context.getState(getEnergy = True, groups = {replica.ommsystem.metaDforcegroup})
+            pot['bias_energy'] = state.getPotentialEnergy()
+        else:
+            pot['bias_energy'] = 0.0 * kilojoules_per_mole
         return pot
 
     def get_posvel(self):
@@ -111,7 +120,8 @@ class OMMWorkerATM:
 
         with Timer(self.logger.debug, "get replica state"):
             pos, vel = self.get_posvel()
-            pot = self.get_energy()
+            _, par = replica.get_state()
+            pot = self.get_energy(par, replica)
 
             replica.set_posvel(pos, vel)
             replica.set_energy(pot)

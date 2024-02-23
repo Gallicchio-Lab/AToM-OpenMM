@@ -204,7 +204,7 @@ class openmm_job_ABFE:
         lambda1 = par['lambda1']
         lambda2 = par['lambda2']
         alpha = par['alpha']
-        u0 = par['u0']
+        u0 = par['uh']
         w0 = par['w0']
         ebias = self._softplus(lambda1, lambda2, alpha, u0, w0, pertpot)
         pot['unbiased_potential_energy'] = epot - ebias
@@ -437,7 +437,7 @@ class openmm_job_RBFE:
         lambda1 = par['lambda1']
         lambda2 = par['lambda2']
         alpha = par['alpha']
-        u0 = par['u0']
+        u0 = par['uh']
         w0 = par['w0']
         ebias = self._softplus(lambda1, lambda2, alpha, u0, w0, pertpot)
         pot['unbiased_potential_energy'] = epot - ebias

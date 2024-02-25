@@ -780,6 +780,20 @@ class AtomUtils(object):
             usc = (umax-ub)*(zetap - 1.)/(zetap + 1.) + ub
         return usc
 
+def separate14(nbforce):
+    ONE_4PI_EPS0 = 138.93545764438198
+    expr = "4*epsilon*((sigma/r)^12 - (sigma/r)^6) + ONE_4PI_EPS0*chargeprod/r;" + \
+        "ONE_4PI_EPS0 = {:f};".format(ONE_4PI_EPS0)
+    force14 = mm.CustomBondForce(expr)
+    force14.addPerBondParameter('chargeprod')
+    force14.addPerBondParameter('sigma')
+    force14.addPerBondParameter('epsilon')
+    for i in range(nbforce.getNumExceptions()):
+        p1, p2, chargeprod, sigma, epsilon = nbforce.getExceptionParameters(i)
+        if(math.fabs(chargeprod._value) > 1.e-8 or math.fabs(epsilon._value) > 1.e-8):
+            force14.addBond(p1, p2, [chargeprod, sigma, epsilon])
+            nbforce.setExceptionParameters(i, p1, p2, 0.0, 0.1, 0.0)#turn off 1-4 term
+    return force14
 
 def residue_is_solvent(res): # called in abfe/rbfe_structprep.py
     ion_resnames = ['POT','SOD','CLA','NA+','K+','CL-','F-','CA','MG','CL','NA','K','F']

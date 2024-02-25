@@ -16,7 +16,7 @@ from openmm.unit import *
 from datetime import datetime
 from configobj import ConfigObj
 
-from utils.AtomUtils import AtomUtils
+from utils.AtomUtils import AtomUtils, separate14
 
 # OpenMM's MTSLangevinIntegrator does not have a setTemperature method
 class ATMMTSLangevinIntegrator(MTSLangevinIntegrator):
@@ -343,6 +343,10 @@ class OMMSystemABFE(OMMSystem):
         nbpattern = re.compile(".*Nonbonded.*")
         for i in range(self.system.getNumForces()):
             if nbpattern.match(str(type(self.system.getForce(i)))):
+                #separate 1-4 interactions from non-bonded force so they get evaluated
+                #with the bonded terms
+                force14 = separate14(self.system.getForce(i))
+                self.system.addForce(force14)
                 self.atmforce.addForce(copy.copy(self.system.getForce(i)))
                 #rather then removing the nonbonded force, disable it by assigning a force
                 #group not included in the MTS integrator. This way it can do atom reordering.
@@ -623,6 +627,10 @@ class OMMSystemRBFE(OMMSystem):
         nbpattern = re.compile(".*Nonbonded.*")
         for i in range(self.system.getNumForces()):
             if nbpattern.match(str(type(self.system.getForce(i)))):
+                #separate 1-4 interactions from non-bonded force so they get evaluated
+                #with the bonded terms
+                force14 = separate14(self.system.getForce(i))
+                self.system.addForce(force14)
                 self.atmforce.addForce(copy.copy(self.system.getForce(i)))
                 #rather then removing the nonbonded force from the main System, disable it
                 #by assigning a force group not included in the MTS integrator.

@@ -391,6 +391,7 @@ class OMMWorkerATM(OMMWorker):
         self.simulation.context.setParameter(atmforce.Umax(), self.par[atmforce.Umax()] /kilojoules_per_mole)
         self.simulation.context.setParameter(atmforce.Ubcore(), self.par[atmforce.Ubcore()] /kilojoules_per_mole)
         self.simulation.context.setParameter(atmforce.Acore(), self.par[atmforce.Acore()] )
+        self.simulation.context.setParameter('UOffset', self.par['uoffset'] /kilojoules_per_mole )
 
     def _worker_getenergy(self):
         if self.ommsystem.doMetaD:
@@ -405,10 +406,11 @@ class OMMWorkerATM(OMMWorker):
         umcore = self.simulation.context.getParameter(self.ommsystem.atmforce.Umax())*kilojoules_per_mole
         ubcore = self.simulation.context.getParameter(self.ommsystem.atmforce.Ubcore())*kilojoules_per_mole
         acore = self.simulation.context.getParameter(self.ommsystem.atmforce.Acore())
+        uoffset = self.simulation.context.getParameter('UOffset')*kilojoules_per_mole
         if self.par['atmdirection'] > 0:
-            self.pot['perturbation_energy'] = self.ommsystem.atm_utils.softCorePertE(u1-u0, umcore, ubcore, acore)
+            self.pot['perturbation_energy'] = self.ommsystem.atm_utils.softCorePertE(u1-(u0+uoffset), umcore, ubcore, acore)
         else:
-            self.pot['perturbation_energy'] = self.ommsystem.atm_utils.softCorePertE(u0-u1, umcore, ubcore, acore)
+            self.pot['perturbation_energy'] = self.ommsystem.atm_utils.softCorePertE((u0+uoffset)-u1, umcore, ubcore, acore)
         if self.ommsystem.doMetaD:
             state = self.simulation.context.getState(getEnergy = True, groups = {self.ommsystem.metaDforcegroup})
             self.pot['bias_energy'] = state.getPotentialEnergy()

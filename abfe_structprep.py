@@ -217,7 +217,8 @@ def do_lambda_annealing(keywords, logger):
     ubcore = 500.0 * kilocalorie_per_mole
     acore = 0.062500
     direction = 1
-
+    uoffset = 0.0 * kilocalorie_per_mole
+    
     print( "LoadState ...")
     simulation.loadState(jobname + '_equil.xml')
 
@@ -231,6 +232,8 @@ def do_lambda_annealing(keywords, logger):
     simulation.context.setParameter(syst.atmforce.Ubcore(), ubcore /kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.Acore(), acore)
     simulation.context.setParameter(syst.atmforce.Direction(), direction)
+    simulation.context.setParameter('UOffset',  uoffset /kilojoules_per_mole)
+    
 
     state = simulation.context.getState(getEnergy = True)
     #print("Potential Energy =", state.getPotentialEnergy())
@@ -261,9 +264,9 @@ def do_lambda_annealing(keywords, logger):
         acore = simulation.context.getParameter(syst.atmforce.Acore())
         direction = simulation.context.getParameter(syst.atmforce.Direction())
         if direction > 0:
-            pert_energy = syst.atm_utils.softCorePertE(u1 - u0, umcore, ubcore, acore)
+            pert_energy = syst.atm_utils.softCorePertE(u1 - (u0+uoffset), umcore, ubcore, acore)
         else:
-            pert_energy = syst.atm_utils.softCorePertE(u0 - u1, umcore, ubcore, acore)
+            pert_energy = syst.atm_utils.softCorePertE((u0+uoffset) - u1, umcore, ubcore, acore)
         l1 = simulation.context.getParameter(syst.atmforce.Lambda1())
         l2 = simulation.context.getParameter(syst.atmforce.Lambda2())
         a = simulation.context.getParameter(syst.atmforce.Alpha()) / kilojoules_per_mole
@@ -335,7 +338,8 @@ def do_equil(keywords, logger):
     ubcore = 500.0 * kilocalorie_per_mole
     acore = 0.062500
     direction = 1
-
+    uoffset = 0.0 * kilocalorie_per_mole
+    
     print( "LoadState ...")
     simulation.loadState(jobname + '_mdlambda.xml')
 
@@ -349,6 +353,7 @@ def do_equil(keywords, logger):
     simulation.context.setParameter(syst.atmforce.Ubcore(), ubcore /kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.Acore(), acore)
     simulation.context.setParameter(syst.atmforce.Direction(), direction)
+    simulation.context.setParameter('UOffset',  uoffset /kilojoules_per_mole)
     
     state = simulation.context.getState(getEnergy = True)
     #print("Potential Energy =", state.getPotentialEnergy())

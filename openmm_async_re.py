@@ -259,6 +259,10 @@ class openmm_job_ATM(openmm_job):
                 par['Umax'] = float(self.keywords.get('UMAX')) * kilocalorie_per_mole
                 par['Ubcore'] = float(self.keywords.get('UBCORE')) * kilocalorie_per_mole
                 par['Acore'] = float(self.keywords.get('ACORE'))
+                if self.keywords.get('PERTE_OFFSET') is not None:
+                    par['uoffset'] = float(self.keywords.get('PERTE_OFFSET')) * kilocalorie_per_mole
+                else:
+                    par['uoffset'] = 0.0 * kilocalorie_per_mole
                 self.stateparams.append(par)
         return len(self.stateparams)
 

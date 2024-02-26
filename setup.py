@@ -27,7 +27,7 @@ NAME = 'atom-openmm'
 MODULES = 'async_re', 'ommreplica', 'ommsystem', 'ommworker', 'local_openmm_transport', 'transport', 'gibbs_sampling', 'openmm_async_re'
 
 
-SCRIPTS = 'abfe_explicit.py', 'rbfe_explicit.py', 'abfe_structprep.py', 'rbfe_structprep.py', 'rbfe_explicit_sync.py', 'make_atm_system_from_pdb.py', 'make_atm_system_from_Amber.py', 'make_atm_system_from_rcpt_lig.py'
+SCRIPTS = 'abfe_explicit.py', 'rbfe_explicit.py', 'abfe_structprep.py', 'rbfe_structprep.py','abfe_explicit_sync.py', 'rbfe_explicit_sync.py', 'make_atm_system_from_pdb.py', 'make_atm_system_from_Amber.py', 'make_atm_system_from_rcpt_lig.py'
 
 REQUIRES = 'configobj', 'numpy' 
 

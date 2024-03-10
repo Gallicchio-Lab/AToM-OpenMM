@@ -619,8 +619,29 @@ class OMMSystemRBFE(OMMSystem):
             ubcore = 0.0 * kilocalorie_per_mole
         acore = float(self.keywords.get('ACORE'))
 
+        uoffset = 0.0 * kilocalorie_per_mole
+        if self.keywords.get('PERTE_OFFSET') is not None:
+            uoffset = float(self.keywords.get('PERTE_OFFSET')) * kilocalorie_per_mole
+
         #create ATM Force
-        self.atmforce = ATMForce(lambda1, lambda2,  alpha * kilojoules_per_mole, uh/kilojoules_per_mole, w0coeff/kilojoules_per_mole, umsc/kilojoules_per_mole, ubcore/kilojoules_per_mole, acore, direction )
+        referencePotExpression = "select(step(Direction), u0, u1) + "
+        alchemicalPotExpression = "select(Lambda2-Lambda1 , ((Lambda2-Lambda1)/Alpha)*log(1+exp(-Alpha*(usc-Uh))) + Lambda2*usc + W0, Lambda2*usc + W0);"
+        softCoreExpression = "usc = select(Acore, select(step(u-Ubcore), (Umax-Ubcore)*fsc+Ubcore, u), u);" + \
+            "fsc = (z^Acore-1)/(z^Acore+1);" + \
+            "z = 1 + 2*(y/Acore) + 2*(y/Acore)^2;" + \
+            "y = (u-Ubcore)/(Umax-Ubcore);" + \
+	    "u = select(step(Direction), 1, -1)*(u1-(u0 + UOffset))"
+        self.atmforce = ATMForce(referencePotExpression + alchemicalPotExpression + softCoreExpression)
+        self.atmforce.addGlobalParameter("Lambda1", lambda1);
+        self.atmforce.addGlobalParameter("Lambda2", lambda2);
+        self.atmforce.addGlobalParameter("Alpha", alpha * kilojoules_per_mole);
+        self.atmforce.addGlobalParameter("Uh", uh/kilojoules_per_mole);
+        self.atmforce.addGlobalParameter("W0", w0coeff/kilojoules_per_mole);
+        self.atmforce.addGlobalParameter("Umax", umsc/kilojoules_per_mole);
+        self.atmforce.addGlobalParameter("Ubcore", ubcore/kilojoules_per_mole);
+        self.atmforce.addGlobalParameter("Acore", acore);
+        self.atmforce.addGlobalParameter("Direction", direction);
+        self.atmforce.addGlobalParameter("UOffset", uoffset/kilojoules_per_mole);
 
         #adds nonbonded Force from the system to the ATMForce
         import re
@@ -660,6 +681,7 @@ class OMMSystemRBFE(OMMSystem):
         self.cparams[self.atmforce.Umax()] = umsc/kilojoules_per_mole
         self.cparams[self.atmforce.Ubcore()] = ubcore/kilojoules_per_mole
         self.cparams[self.atmforce.Acore()] = acore
+        self.cparams['UOffset'] = uoffset/kilojoules_per_mole
 
     def create_system(self):
 

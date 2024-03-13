@@ -448,6 +448,19 @@ class OMMSystemRBFE(OMMSystem):
             msg = "DISPLACEMENT is required"
             self._exit(msg)
 
+        self.displ0_lig1 = None
+        self.displ1_lig1 = None
+        self.displ0_lig2 = None
+        self.displ1_lig2 = None
+        if ((self.keywords.get('DISPL0_LIG1') is not None) and
+            (self.keywords.get('DISPL1_LIG1') is not None) and
+            (self.keywords.get('DISPL0_LIG2') is not None) and
+            (self.keywords.get('DISPL1_LIG2') is not None) ):
+            self.displ0_lig1 = [float(displ) for displ in self.keywords.get('DISPL0_LIG1').split(',')]*angstrom
+            self.displ1_lig1 = [float(displ) for displ in self.keywords.get('DISPL1_LIG1').split(',')]*angstrom
+            self.displ0_lig2 = [float(displ) for displ in self.keywords.get('DISPL0_LIG2').split(',')]*angstrom
+            self.displ1_lig2 = [float(displ) for displ in self.keywords.get('DISPL1_LIG2').split(',')]*angstrom
+
     def set_vsite_restraints(self):
         #ligand 1 Vsite restraint
         cm_lig1_atoms = self.keywords.get('LIGAND1_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
@@ -664,10 +677,20 @@ class OMMSystemRBFE(OMMSystem):
         #adds atoms to ATMForce
         for i in range(self.topology.getNumAtoms()):
             self.atmforce.addParticle( Vec3(0., 0., 0.))
+
         for i in self.lig1_atoms:
-            self.atmforce.setParticleParameters(i,  Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer )
+            if (self.displ0_lig1 is not None) and (self.displ1_lig1 is not None):
+                self.atmforce.setParticleParameters(i, Vec3(self.displ1_lig1[0], self.displ1_lig1[1], self.displ1_lig1[2])/nanometer,
+                                                       Vec3(self.displ0_lig1[0], self.displ0_lig1[1], self.displ0_lig1[2])/nanometer)
+            else:
+                self.atmforce.setParticleParameters(i,  Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer )
+
         for i in self.lig2_atoms:
-            self.atmforce.setParticleParameters(i, -Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer )
+            if (self.displ0_lig2 is not None) and (self.displ1_lig2 is not None):
+                self.atmforce.setParticleParameters(i, Vec3(self.displ1_lig2[0], self.displ1_lig2[1], self.displ1_lig2[2])/nanometer,
+                                                       Vec3(self.displ0_lig2[0], self.displ0_lig2[1], self.displ0_lig2[2])/nanometer)
+            else:
+                self.atmforce.setParticleParameters(i, -Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer )
 
         #assign a group to ATMForce for multiple time-steps
         self.atmforcegroup = self.free_force_group()

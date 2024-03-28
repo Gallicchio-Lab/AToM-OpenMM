@@ -21,15 +21,16 @@ class OMMWorkerATM:
         nodefile = self.config.get('NODEFILE')
         assert nodefile, "NODEFILE needs to be specified"
         device = open(nodefile, 'r').readline().split(',')[1].strip().split(':')[1].strip()
+        platform_name = open(nodefile, 'r').readline().split(',')[3].strip()
 
         if Platform.getNumPlatforms() == 1:
             if conda_prefix := os.environ.get("CONDA_PREFIX"):
                 plugin_dir = os.path.join(conda_prefix, "lib", "plugins")
                 Platform.loadPluginsFromDirectory(plugin_dir)
 
-        platform = Platform.getPlatformByName("CUDA")
+        platform = Platform.getPlatformByName(platform_name)
         properties = {"DeviceIndex": device, "Precision": "mixed"}
-        self.logger.info(f"Device: CUDA {device}")
+        self.logger.info(f"Device: {platform_name} {device}")
 
         self.simulation = Simulation(self.topology, self.ommsystem.system, self.integrator, platform, properties)
         self.context = self.simulation.context

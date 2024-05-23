@@ -350,9 +350,9 @@ class OMMSystemABFE(OMMSystem):
                 self.atmforce.addForce(copy.copy(self.system.getForce(i)))
                 #rather then removing the nonbonded force, disable it by assigning a force
                 #group not included in the MTS integrator. This way it can do atom reordering.
-                #self.system.removeForce(i)
-                self.nonbondedforcegroup = self.free_force_group()
-                self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
+                self.system.removeForce(i)
+                #self.nonbondedforcegroup = self.free_force_group()
+                #self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
                 break
 
         #adds atoms to ATMForce
@@ -669,9 +669,9 @@ class OMMSystemRBFE(OMMSystem):
                 #rather then removing the nonbonded force from the main System, disable it
                 #by assigning a force group not included in the MTS integrator.
                 #This way it can do atom reordering.
-                #self.system.removeForce(i)
-                self.nonbondedforcegroup = self.free_force_group()
-                self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
+                self.system.removeForce(i)
+                #self.nonbondedforcegroup = self.free_force_group()
+                #self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
                 break
 
         #adds atoms to ATMForce

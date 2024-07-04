@@ -262,7 +262,7 @@ def do_lambda_annealing(keywords, logger):
     simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, temperature=True, speed=True))
     if os.path.exists(jobname + "_mdlambda.xtc"):
         os.remove(jobname + "_mdlambda.xtc")
-    simulation.reporters.append(XTCReporter(jobname + "_mdlambda.xtc", steps_per_cycle))
+    simulation.reporters.append(XTCReporter(jobname + "_mdlambda.xtc", steps_per_cycle, enforcePeriodicBox=False))
     
     binding_file = jobname + '_mdlambda.out'
     f = open(binding_file, 'w')
@@ -383,7 +383,7 @@ def do_equil(keywords, logger):
     simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, temperature=True, speed=True))
     if os.path.exists(jobname + "_0.xtc"):
         os.remove(jobname + "_0.xtc")
-    simulation.reporters.append(XTCReporter(jobname + "_0.xtc", steps_per_cycle))
+    simulation.reporters.append(XTCReporter(jobname + "_0.xtc", steps_per_cycle, enforcePeriodicBox=False))
     
     simulation.step(totalSteps)
         

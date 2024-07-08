@@ -72,6 +72,14 @@ class OMMSystem(object):
         self.topology = self.pdb.topology
         self.positions = self.pdb.positions
         self.boxvectors = self.topology.getPeriodicBoxVectors()
+        
+        #hack to initialize AGBNP's deserializer if present
+        try:
+            from AGBNPplugin import AGBNPForce
+            gb = AGBNPForce()
+        except ImportError:
+            pass
+
         #HMASS is set in the system file
         with open(self.systemfile) as input:
             self.system = XmlSerializer.deserialize(input.read())
@@ -361,12 +369,11 @@ class OMMSystemABFE(OMMSystem):
                 break
         gbpattern = re.compile(".*GB.*")
         for i in range(self.system.getNumForces()):
-            if gbpattern.match(str(type(self.system.getForce(i)))):
-                self.logger.info("Adding GB implicit solvent Force to ATMForce")
+            if gbpattern.match(self.system.getForce(i).getName()):
+                self.logger.info("Adding GB implicit solvent Force %s to ATMForce" % self.system.getForce(i).getName())
                 self.atmforce.addForce(copy.copy(self.system.getForce(i)))
                 self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
                 break
-
         #adds atoms to ATMForce
         for i in range(self.topology.getNumAtoms()):
             self.atmforce.addParticle(Vec3(0., 0., 0.))
@@ -687,8 +694,8 @@ class OMMSystemRBFE(OMMSystem):
                 break
         gbpattern = re.compile(".*GB.*")
         for i in range(self.system.getNumForces()):
-            if gbpattern.match(str(type(self.system.getForce(i)))):
-                self.logger.info("Adding GB implicit solvent Force to ATMForce")
+            if gbpattern.match(self.system.getForce(i).getName()):
+                self.logger.info("Adding GB implicit solvent Force %s to ATMForce" % self.system.getForce(i).getName())
                 self.atmforce.addForce(copy.copy(self.system.getForce(i)))
                 self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
                 break

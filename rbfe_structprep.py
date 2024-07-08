@@ -63,7 +63,14 @@ class OMMSystemRBFEnoATM(OMMSystemRBFE):
                 nbforce = self.system.getForce(i)
                 nbforce.setForceGroup(self.atmforcegroup)
                 break
-        
+        gbpattern = re.compile(".*GB.*")
+        for i in range(self.system.getNumForces()):
+            if gbpattern.match(self.system.getForce(i).getName()):
+                print("Adding GB implicit solvent force %s to non-bonded force group" % self.system.getForce(i).getName())
+                gbforce = self.system.getForce(i)
+                gbforce.setForceGroup(self.atmforcegroup)
+                break
+
         #add barostat
         pressure=1*bar
         self.set_barostat(self.temperature,pressure,25)

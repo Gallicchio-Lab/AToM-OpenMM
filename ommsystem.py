@@ -72,6 +72,14 @@ class OMMSystem(object):
         self.topology = self.pdb.topology
         self.positions = self.pdb.positions
         self.boxvectors = self.topology.getPeriodicBoxVectors()
+        
+        #hack to initialize AGBNP's deserializer if present
+        try:
+            from AGBNPplugin import AGBNPForce
+            gb = AGBNPForce()
+        except ImportError:
+            pass
+
         #HMASS is set in the system file
         with open(self.systemfile) as input:
             self.system = XmlSerializer.deserialize(input.read())
@@ -102,6 +110,11 @@ class OMMSystem(object):
         nonbonded = [f for f in self.system.getForces() if isinstance(f, NonbondedForce)][0]
         self.nonbondedforcegroup = self.free_force_group()
         nonbonded.setForceGroup(self.nonbondedforcegroup)
+        gbpattern = re.compile(".*GB.*")
+        for i in range(self.system.getNumForces()):
+            if gbpattern.match(str(type(self.system.getForce(i)))):
+                self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
+                break
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
         bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
         self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
@@ -354,7 +367,13 @@ class OMMSystemABFE(OMMSystem):
                 #self.nonbondedforcegroup = self.free_force_group()
                 #self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
                 break
-
+        gbpattern = re.compile(".*GB.*")
+        for i in range(self.system.getNumForces()):
+            if gbpattern.match(self.system.getForce(i).getName()):
+                self.logger.info("Adding GB implicit solvent Force %s to ATMForce" % self.system.getForce(i).getName())
+                self.atmforce.addForce(copy.copy(self.system.getForce(i)))
+                self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
+                break
         #adds atoms to ATMForce
         for i in range(self.topology.getNumAtoms()):
             self.atmforce.addParticle(Vec3(0., 0., 0.))
@@ -672,6 +691,13 @@ class OMMSystemRBFE(OMMSystem):
                 self.system.removeForce(i)
                 #self.nonbondedforcegroup = self.free_force_group()
                 #self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
+                break
+        gbpattern = re.compile(".*GB.*")
+        for i in range(self.system.getNumForces()):
+            if gbpattern.match(self.system.getForce(i).getName()):
+                self.logger.info("Adding GB implicit solvent Force %s to ATMForce" % self.system.getForce(i).getName())
+                self.atmforce.addForce(copy.copy(self.system.getForce(i)))
+                self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
                 break
 
         #adds atoms to ATMForce

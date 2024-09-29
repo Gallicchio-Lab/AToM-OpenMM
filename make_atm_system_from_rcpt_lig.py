@@ -20,7 +20,7 @@ from openmm import XmlSerializer
 from openmm import Vec3
 from openmm.app import PDBReporter, StateDataReporter, PDBFile
 from openmm.app import ForceField, Modeller
-from openmm.app import PME, HBonds
+from openmm.app import PME, HBonds, NoCutoff, OBC2
 
 # OpenFF components from the toolkit
 from openff.toolkit.topology import Molecule
@@ -132,6 +132,9 @@ parser.add_argument('--solventForceField', required=False, type=str,
 parser.add_argument('--ligandForceField', required=False, type=str,
                     default='openff-2.0.0',
                     help='Force field for ligand:  openff-2.0.0')
+parser.add_argument('--implicitSolvent', required=False, type=str,
+                    default='None',
+                    help='Implicit solvent to use: HCT OBC2 GBn2. None for vacuum.')
 parser.add_argument('--forcefieldJSONCachefile', required=False, type=str,
                     default=None,
                     help='Force field ligand cache database')
@@ -171,6 +174,11 @@ solventforcefield = args['solventForceField']
 ligandforcefield = args['ligandForceField']
 ffcachefile = args['forcefieldJSONCachefile']
 
+#implicit solvent
+implsolv = args['implicitSolvent']
+if implsolv == 'None':
+    implsolv = None
+
 hmass = float(args['hmass'])
 
 # flag for printing (verbose) 
@@ -197,7 +205,16 @@ print('Force field cache file:             ', ffcachefile)
 
 print('Call ForceField for protein and water')
 forcefield = ForceField(proteinforcefield,solventforcefield)
-
+if implsolv is not None:
+    if implsolv == "OBC2":
+        forcefield.loadFile('implicit/obc2.xml')
+    elif implsolv == "GBN2":
+        forcefield.loadFile('implicit/gbn2.xml')
+    elif implsolv == "HCT":
+        forcefield.loadFile('implicit/hct.xml')
+    else:
+        print('Unknown implicit solvent %s' % implsolv)
+        sys.exit(1)
 
 # to store OpenFF molecule objects of non-protein units
 ligandmolecules = []
@@ -368,14 +385,17 @@ smirnoff = SMIRNOFFTemplateGenerator(molecules=ligandmolecules, forcefield=ligan
 # This step adds support for the ligand force field
 forcefield.registerTemplateGenerator(smirnoff.generator)
 
-print("Adding solvent")
-#modeller.addSolvent(forcefield, padding=1.0*nanometer, boxShape = 'octahedron')
-modeller.addSolvent(forcefield, boxVectors = (xBoxvec,yBoxvec,zBoxvec ))
-print("Number of atoms in solvated system:", modeller.topology.getNumAtoms())
-print(modeller.topology)
-
-system=forcefield.createSystem(modeller.topology, nonbondedMethod = PME, nonbondedCutoff = 0.9*nanometer,
-                               constraints=HBonds, rigidWater = True, removeCMMotion = False, hydrogenMass = hmass*amu)
+if implsolv is None:
+    print("Adding solvent")
+    modeller.addSolvent(forcefield, boxVectors = (xBoxvec,yBoxvec,zBoxvec ))
+    print("Number of atoms in solvated system:", modeller.topology.getNumAtoms())
+    system=forcefield.createSystem(modeller.topology, nonbondedMethod = PME, nonbondedCutoff = 0.9*nanometer,
+                                   constraints=HBonds, rigidWater = True, removeCMMotion = False, hydrogenMass = hmass*amu)
+else:
+    print("Solvent model: %s" % implsolv)
+    print("Number of atoms in implicit solvent system:", modeller.topology.getNumAtoms())
+    system=forcefield.createSystem(modeller.topology, nonbondedMethod = NoCutoff,
+                                   constraints=HBonds, rigidWater = True, removeCMMotion = False, hydrogenMass = hmass*amu)
 
 with open(xmloutfile, 'w') as output:
     output.write(XmlSerializer.serialize(system))

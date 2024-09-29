@@ -1,9 +1,9 @@
-AToM-OpenMM v8.1.1
+AToM-OpenMM v8.1.2
 ====================
 
 The Alchemical Transfer Method for OpenMM (AToM-OpenMM) is an extensible Python package for the estimation of absolute and relative binding free energies of molecular complexes. It implements the [Alchemical Transfer Method (ATM)](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129) with  asynchronous parallel replica exchange molecular dynamics with the [OpenMM](https://github.com/openmm) library. The AToM software can be deployed on workstations or cluster nodes with one or more GPUs.
 
-This version of AToM uses the [ATMForce potential](https://github.com/openmm/openmm/pull/4110) in the 8.1.0beta version of [OpenMM sources](https://github.com/openmm/openmm). 
+This version of AToM uses [ATMForce](https://github.com/openmm/openmm/pull/4110) in the 8.1.1 or later versions of [OpenMM](https://github.com/openmm/openmm). 
 
 Credits
 -------
@@ -39,18 +39,26 @@ Installation & Usage
 It is recommended that the installation is performed in a personal python environment (`miniforge`, 1miniconda`, conda`, or similar). AToM-OpenMM requires the `openmm`, `configobj` and `numpy` python modules. 
 
 
-This version of AToM-OpenMM requires the latest 8.1.1 version of OpenMM. This conda command installs the necessary requirements:
+This version of AToM-OpenMM requires OpenMM 8.1.1 or later. This conda command installs the necessary requirements:
 ```
-conda create -n atm8.1.1 -c conda-forge openmm=8.1.1 ambertools openmmforcefields configobj setproctitle r-base
-conda activate atm8.1.1
+conda create -n atm8.1.2 -c conda-forge openmm=8.1.2 ambertools openmmforcefields configobj setproctitle r-base
+conda activate atm8.1.2
 ```
 `setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. `openmmforcefields` is used for force field parameter assignments using OpenFF. `r-base` with the `UWHAM R package` (see below) is required for free energy estimation. See [examples](examples/) for examples and tutorials.
 
 Finally, install AToM-OpenMM:
+
+- From the latest sources:
 ```
-wget https://github.com/Gallicchio-Lab/AToM-OpenMM/archive/refs/tags/v8.1.1.tar.gz
-tar zxvf v8.1.1.tar.gz
-cd AToM-OpenMM-8.1.1
+git clone git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
+pip install .
+```
+
+- From the latest release:
+```
+wget https://github.com/Gallicchio-Lab/AToM-OpenMM/archive/refs/tags/v8.1.2.tar.gz
+tar zxvf v8.1.2.tar.gz
+cd AToM-OpenMM-8.1.2
 pip install .
 ```
 

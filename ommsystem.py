@@ -36,7 +36,7 @@ class OMMSystem(object):
         self.logger = logger
         self.pdbtopfile = pdbtopfile
         self.systemfile = systemfile
-
+        
         #parameters stored in the openmm state
         self.parameter = {}
         self.parameter['stateid'] = 'REStateId'
@@ -58,6 +58,19 @@ class OMMSystem(object):
 
         self.doMetaD = False
 
+        self.major_ommversion = None
+        self.minor_ommversion = None
+        self.patch_ommversion = None
+        version = mm.Platform.getOpenMMVersion().split('.')
+        self.logger.info("OpenMM version %s" %  mm.Platform.getOpenMMVersion())
+        self.major_ommversion = int(version[0])
+        self.minor_ommversion = int(version[1])
+        try:
+           self.patch_ommversion = int(version[2])
+        except:
+            pass
+
+        
     def _exit(self, message):
         """Print and flush a message to stdout and then exit."""
         self.logger.error(message)
@@ -361,18 +374,20 @@ class OMMSystemABFE(OMMSystem):
                 force14 = separate14(self.system.getForce(i))
                 self.system.addForce(force14)
                 self.atmforce.addForce(copy.copy(self.system.getForce(i)))
-                #rather then removing the nonbonded force, disable it by assigning a force
-                #group not included in the MTS integrator. This way it can do atom reordering.
-                self.system.removeForce(i)
-                #self.nonbondedforcegroup = self.free_force_group()
-                #self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
+                if (self.major_ommversion > 8) or ( (self.major_ommversion == 8) and (self.minor_ommversion > 1)):
+                    self.system.removeForce(i)
+                else:
+                    #rather then removing the nonbonded force, disable it by assigning a force
+                    #group not included in the MTS integrator. This way it can do atom reordering.
+                    self.nonbondedforcegroup = self.free_force_group()
+                    self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
                 break
         gbpattern = re.compile(".*GB.*")
         for i in range(self.system.getNumForces()):
             if gbpattern.match(self.system.getForce(i).getName()):
                 self.logger.info("Adding GB implicit solvent Force %s to ATMForce" % self.system.getForce(i).getName())
                 self.atmforce.addForce(copy.copy(self.system.getForce(i)))
-                self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
+                self.system.removeForce(i)
                 break
         #adds atoms to ATMForce
         for i in range(self.topology.getNumAtoms()):
@@ -685,19 +700,20 @@ class OMMSystemRBFE(OMMSystem):
                 force14 = separate14(self.system.getForce(i))
                 self.system.addForce(force14)
                 self.atmforce.addForce(copy.copy(self.system.getForce(i)))
-                #rather then removing the nonbonded force from the main System, disable it
-                #by assigning a force group not included in the MTS integrator.
-                #This way it can do atom reordering.
-                self.system.removeForce(i)
-                #self.nonbondedforcegroup = self.free_force_group()
-                #self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
+                if (self.major_ommversion > 8) or ( (self.major_ommversion == 8) and (self.minor_ommversion > 1)):
+                    self.system.removeForce(i)
+                else:
+                    #rather then removing the nonbonded force, disable it by assigning a force
+                    #group not included in the MTS integrator. This way it can do atom reordering.
+                    self.nonbondedforcegroup = self.free_force_group()
+                    self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
                 break
         gbpattern = re.compile(".*GB.*")
         for i in range(self.system.getNumForces()):
             if gbpattern.match(self.system.getForce(i).getName()):
                 self.logger.info("Adding GB implicit solvent Force %s to ATMForce" % self.system.getForce(i).getName())
                 self.atmforce.addForce(copy.copy(self.system.getForce(i)))
-                self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
+                self.system.removeForce(i)
                 break
 
         #adds atoms to ATMForce

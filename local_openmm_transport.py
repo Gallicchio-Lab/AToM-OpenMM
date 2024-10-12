@@ -56,6 +56,7 @@ class LocalOpenMMTransport(Transport):
         self.ncrashes = [ 0 for k in range(self.nprocs)]
         self.disabled = [ False for k in range(self.nprocs)]
         self.maxcrashes = 4
+        self.done_replicas = []
 
     def _clear_resource(self, replica):
         # frees up the node running a replica identified by replica id
@@ -173,6 +174,8 @@ class LocalOpenMMTransport(Transport):
 
                 node = self._availableNode()
 
+            self._finalize_replicas()
+
             # waits mintime second and rescans job queue
             time.sleep(mintime)
 
@@ -182,6 +185,8 @@ class LocalOpenMMTransport(Transport):
 
             #restarts crashed nodes if any
             self.fixnodes()
+
+        self._finalize_replicas()
 
         return njobs_launched
 
@@ -226,9 +231,19 @@ class LocalOpenMMTransport(Transport):
         #output data and trajectory file update 
         if mdsteps % job['nprnt'] == 0:
             ommreplica.save_out()
-        if mdsteps % job['ntrj'] == 0:
-            ommreplica.save_xtc()
+        #queue replica to perform time-consuming tasks such as trajectory writing to
+        #after new replicas are launched
+        self.done_replicas.append((ommreplica, mdsteps, job['ntrj']))
         return 0
+
+    def _finalize_replicas(self):
+        for donereplica in self.done_replicas:
+            ommreplica = donereplica[0]
+            mdsteps = donereplica[1]
+            ntrj = donereplica[2]
+            if mdsteps % ntrj == 0:
+                ommreplica.save_xtc()
+        self.done_replicas = []
 
     def isDone(self,replica,cycle):
         """

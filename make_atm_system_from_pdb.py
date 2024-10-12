@@ -265,7 +265,7 @@ with open(xmloutfile, 'w') as output:
 
 if pdboutfile is not None:
     PDBFile.writeFile(systempdb.topology, systempdb.positions, 
-                      open(pdboutfile,'w'))
+                      open(pdboutfile,'w'), keepIds=True)
 
 today = datetime.today()
 print('\n\nDate and time at end:   ', today)

@@ -401,8 +401,9 @@ with open(xmloutfile, 'w') as output:
     output.write(XmlSerializer.serialize(system))
 
 if pdboutfile is not None:
-    PDBFile.writeFile(modeller.topology, modeller.positions, 
-                      open(pdboutfile,'w'))
+    PDBFile.writeFile(modeller.topology, modeller.positions,
+                      open(pdboutfile,'w'), keepIds=True)
+
 
 #find the first atom index of the ligand
 lig1_start = modeller.topology.getNumAtoms()

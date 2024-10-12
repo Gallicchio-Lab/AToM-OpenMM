@@ -394,12 +394,14 @@ class OMMWorkerATM(OMMWorker):
         self.simulation.context.setParameter('UOffset', self.par['uoffset'] /kilojoules_per_mole )
 
     def _worker_getenergy(self):
-        #if self.ommsystem.doMetaD:
-        #    fgroups = { 0, self.ommsystem.metaDforcegroup, self.ommsystem.atmforcegroup }
-        #else:
-        #    fgroups = { 0, self.ommsystem.atmforcegroup }
-        #state = self.simulation.context.getState(getEnergy = True, groups = fgroups )
-        state = self.simulation.context.getState(getEnergy = True)
+        if self.ommsystem.v82plus:
+            state = self.simulation.context.getState(getEnergy = True)
+        else:
+            if self.ommsystem.doMetaD:
+                fgroups = { 0, self.ommsystem.metaDforcegroup, self.ommsystem.atmforcegroup }
+            else:
+                fgroups = { 0, self.ommsystem.atmforcegroup }
+            state = self.simulation.context.getState(getEnergy = True, groups = fgroups )
         
         self.pot['potential_energy'] = state.getPotentialEnergy()
         (u1, u0, alchemicalEBias) = self.ommsystem.atmforce.getPerturbationEnergy(self.simulation.context)

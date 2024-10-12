@@ -70,7 +70,10 @@ class OMMSystem(object):
         except:
             pass
 
-        
+        self.v82plus = False
+        if (self.major_ommversion > 8) or ( (self.major_ommversion == 8) and (self.minor_ommversion > 1)):
+            self.v82plus = True
+
     def _exit(self, message):
         """Print and flush a message to stdout and then exit."""
         self.logger.error(message)
@@ -374,12 +377,14 @@ class OMMSystemABFE(OMMSystem):
                 force14 = separate14(self.system.getForce(i))
                 self.system.addForce(force14)
                 self.atmforce.addForce(copy.copy(self.system.getForce(i)))
-                if (self.major_ommversion > 8) or ( (self.major_ommversion == 8) and (self.minor_ommversion > 1)):
+                self.nonbondedforcegroup = self.free_force_group()
+                if self.v82plus:
+                    print("Added %s and removed from system" % self.system.getForce(i).getName())
                     self.system.removeForce(i)
                 else:
                     #rather then removing the nonbonded force, disable it by assigning a force
                     #group not included in the MTS integrator. This way it can do atom reordering.
-                    self.nonbondedforcegroup = self.free_force_group()
+                    print("Added %s and disabled from system" % self.system.getForce(i).getName())
                     self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
                 break
         gbpattern = re.compile(".*GB.*")
@@ -700,12 +705,12 @@ class OMMSystemRBFE(OMMSystem):
                 force14 = separate14(self.system.getForce(i))
                 self.system.addForce(force14)
                 self.atmforce.addForce(copy.copy(self.system.getForce(i)))
-                if (self.major_ommversion > 8) or ( (self.major_ommversion == 8) and (self.minor_ommversion > 1)):
+                self.nonbondedforcegroup = self.free_force_group()
+                if self.v82plus:
                     self.system.removeForce(i)
                 else:
                     #rather then removing the nonbonded force, disable it by assigning a force
                     #group not included in the MTS integrator. This way it can do atom reordering.
-                    self.nonbondedforcegroup = self.free_force_group()
                     self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
                 break
         gbpattern = re.compile(".*GB.*")

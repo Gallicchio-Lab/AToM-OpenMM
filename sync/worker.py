@@ -21,15 +21,16 @@ class OMMWorkerATM:
         nodefile = self.config.get('NODEFILE')
         assert nodefile, "NODEFILE needs to be specified"
         device = open(nodefile, 'r').readline().split(',')[1].strip().split(':')[1].strip()
+        platform_name = open(nodefile, 'r').readline().split(',')[3].strip()
 
         if Platform.getNumPlatforms() == 1:
             if conda_prefix := os.environ.get("CONDA_PREFIX"):
                 plugin_dir = os.path.join(conda_prefix, "lib", "plugins")
                 Platform.loadPluginsFromDirectory(plugin_dir)
 
-        platform = Platform.getPlatformByName("CUDA")
+        platform = Platform.getPlatformByName(platform_name)
         properties = {"DeviceIndex": device, "Precision": "mixed"}
-        self.logger.info(f"Device: CUDA {device}")
+        self.logger.info(f"Device: {platform_name} {device}")
 
         self.simulation = Simulation(self.topology, self.ommsystem.system, self.integrator, platform, properties)
         self.context = self.simulation.context
@@ -64,7 +65,7 @@ class OMMWorkerATM:
         self.context.setParameter(atmforce.Lambda1(), par['lambda1'])
         self.context.setParameter(atmforce.Lambda2(), par['lambda2'])
         self.context.setParameter(atmforce.Alpha(), par['alpha']*kilojoules_per_mole)
-        self.context.setParameter(atmforce.U0(), par['u0'] /kilojoules_per_mole)
+        self.context.setParameter(atmforce.Uh(), par['uh'] /kilojoules_per_mole)
         self.context.setParameter(atmforce.W0(), par['w0'] /kilojoules_per_mole)
         self.context.setParameter(atmforce.Direction(), par['atmdirection'])
 
@@ -73,14 +74,29 @@ class OMMWorkerATM:
         self.context.setPositions(positions)
         self.context.setVelocities(velocities)
 
-    def get_energy(self):
-        self.logger.debug("ommworker.get_energy")
-        fgroups = {0, self.ommsystem.atmforcegroup}
-        state = self.context.getState(getEnergy = True, groups = fgroups)
+    def get_energy(self, par):
+        if self.ommsystem.doMetaD:
+            fgroups = { 0, self.ommsystem.metaDforcegroup, self.ommsystem.atmforcegroup }
+        else:
+            fgroups = { 0, self.ommsystem.atmforcegroup }
         pot = {}
+        state = self.context.getState(getEnergy = True, groups = fgroups)
         pot['potential_energy'] = state.getPotentialEnergy()
-        pot['perturbation_energy'] = self.ommsystem.atmforce.getPerturbationEnergy(self.context)
-        pot['bias_energy'] = 0.0 * kilojoules_per_mole
+        
+        (u1, u0, alchemicalEBias) = self.ommsystem.atmforce.getPerturbationEnergy(self.context)
+        umcore = self.context.getParameter(self.ommsystem.atmforce.Umax())*kilojoules_per_mole
+        ubcore = self.context.getParameter(self.ommsystem.atmforce.Ubcore())*kilojoules_per_mole
+        acore = self.context.getParameter(self.ommsystem.atmforce.Acore())
+        if par['atmdirection'] > 0:
+            pot['perturbation_energy'] = self.ommsystem.atm_utils.softCorePertE(u1-u0, umcore, ubcore, acore)
+        else:
+            pot['perturbation_energy'] = self.ommsystem.atm_utils.softCorePertE(u0-u1, umcore, ubcore, acore)
+        if self.ommsystem.doMetaD:
+            state = self.simulation.context.getState(getEnergy = True, groups = {self.ommsystem.metaDforcegroup})
+            pot['bias_energy'] = state.getPotentialEnergy()
+        else:
+            pot['bias_energy'] = 0.0 * kilojoules_per_mole
+        self.logger.info(f'jack============> {pot}')
         return pot
 
     def get_posvel(self):
@@ -111,7 +127,8 @@ class OMMWorkerATM:
 
         with Timer(self.logger.debug, "get replica state"):
             pos, vel = self.get_posvel()
-            pot = self.get_energy()
+            _, par = replica.get_state()
+            pot = self.get_energy(par)
 
             replica.set_posvel(pos, vel)
             replica.set_energy(pot)

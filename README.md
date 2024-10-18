@@ -36,7 +36,7 @@ Please [cite us](http://www.compmolbiophysbc.org/publications) if you use this s
 Installation & Usage
 --------------------
 
-It is recommended that the installation is performed in a personal python environment (`miniforge`, 1miniconda`, conda`, or similar). AToM-OpenMM requires the `openmm`, `configobj` and `numpy` python modules. 
+It is recommended that the installation is performed in a personal python environment (`miniforge`, `miniconda`, conda`, or similar). AToM-OpenMM requires the `openmm`, `configobj` and `numpy` python modules. 
 
 
 This version of AToM-OpenMM requires OpenMM 8.1.1 or later. This conda command installs the necessary requirements:

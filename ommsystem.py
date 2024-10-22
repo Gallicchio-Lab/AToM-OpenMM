@@ -481,8 +481,17 @@ class OMMSystemRBFE(OMMSystem):
         #set displacements and offsets for ligand 1 and ligand 2
         if self.keywords.get('DISPLACEMENT') is not None:
             self.displ = [float(displ) for displ in self.keywords.get('DISPLACEMENT').split(',')]*angstrom
-            self.lig1offset = [float(0.0*offset) for offset in self.displ/angstrom]*angstrom
-            self.lig2offset = [float(offset) for offset in self.displ/angstrom]*angstrom
+            #offset from VsiteCM
+            ligoffset = [0,0,0]*angstrom
+            ligoffset_keyword = self.keywords.get('LIGOFFSET')
+            if ligoffset_keyword is not None:
+                ligoffset = [float(offset) for offset in ligoffset_keyword.split(',')]*angstrom
+            #the offset for lig1 is the specified LIGOFFSET
+            self.lig1offset = ligoffset
+            #the offset for lig2 is the displacement + LIGOFFSET
+            d2 = [float(d) for d in self.displ/angstrom]
+            f2 = [float(f) for f in ligoffset/angstrom ]
+            self.lig2offset = [ d2[i]+f2[i] for i in range(3)]*angstrom
         else:
             msg = "DISPLACEMENT is required"
             self._exit(msg)
@@ -638,7 +647,7 @@ class OMMSystemRBFE(OMMSystem):
                                     kfdispl = float(self.keywords.get('ALIGN_KF_SEP'))*kilocalorie_per_mole/angstrom**2,
                                     ktheta = float(self.keywords.get('ALIGN_K_THETA'))*kilocalorie_per_mole,
                                     kpsi = float(self.keywords.get('ALIGN_K_PSI'))*kilocalorie_per_mole,
-                                    offset = self.lig2offset)
+                                    offset = self.displ)
 
     def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
         #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)

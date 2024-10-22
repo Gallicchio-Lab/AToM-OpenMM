@@ -10,13 +10,15 @@ Credits
 
 This software is developed and maintained by the [Emilio Gallicchio's lab](http://www.compmolbiophysbc.org) with support from current and past grants from the National Science Foundation (ACI 1440665 and CHE 1750511) and the National Institutes of Health (R15 GM151708).
 
-Maintainers:
+Maintainer/Author:
 
 - Emilio Gallicchio <egallicchio@brooklyn.cuny.edu>
 
-Authors:
+Contributors:
 
-- Emilio Gallicchio <egallicchio@brooklyn.cuny.edu>
+- Sheenam Khuttan <sheenam@sandboxquantum.com>
+- Joe Z Wu <jwu1@gradcenter.cuny.edu>
+- Solmaz Azimi <sazimi@gradcenter.cuny.edu>
 - Baofeng Zhang <BZhang@brooklyn.cuny.edu>
 - Rajat Pal <rajatfor2014@gmail.com>
 
@@ -36,7 +38,7 @@ Please [cite us](http://www.compmolbiophysbc.org/publications) if you use this s
 Installation & Usage
 --------------------
 
-It is recommended that the installation is performed in a personal python environment (`miniforge`, 1miniconda`, conda`, or similar). AToM-OpenMM requires the `openmm`, `configobj` and `numpy` python modules. 
+It is recommended that the installation is performed in a personal python environment (`miniforge`, `miniconda`, conda`, or similar). AToM-OpenMM requires the `openmm`, `configobj` and `numpy` python modules. 
 
 
 This version of AToM-OpenMM requires OpenMM 8.1.1 or later. This conda command installs the necessary requirements:

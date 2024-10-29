@@ -53,6 +53,7 @@ Finally, install AToM-OpenMM:
 - From the latest sources:
 ```
 git clone git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
+cd AToM-OpenMM
 pip install .
 ```
 

@@ -68,6 +68,22 @@ class OMMSystemABFEnoATM(OMMSystemABFE):
 
         self.set_integrator(self.temperature, self.frictionCoeff, self.MDstepsize)
 
+def set_platform(keywords):
+    platform_properties = {}
+    platform_name = keywords.get("OPENMM_PLATFORM")
+    if platform_name == None:
+        platform_name = "CUDA"
+    if platform_name == "CUDA" or platform_name == "OpenCL" or platform_name == "HIP":
+        platform_properties["Precision"] = "mixed"
+    if platform_name == "CPU":
+        try:
+            nthreads = os.environ['OMP_NUM_THREADS']
+        except:
+            nthreads = 1
+        platform_properties["Threads"] = str(nthreads)
+    platform = Platform.getPlatformByName(platform_name)
+    return (platform, platform_properties)
+
 def do_mintherm(keywords, logger):
     basename = keywords.get('BASENAME')
     jobname = basename
@@ -79,15 +95,8 @@ def do_mintherm(keywords, logger):
     #does not include ATM Force
     syst = OMMSystemABFEnoATM(basename, keywords, pdbtopfile, systemfile,  logger)
     syst.create_system()
-    
-    platform_properties = {}
-    platform_name = keywords.get("OPENMM_PLATFORM")
-    if platform_name == None:
-        platform_name = "CUDA"
-    if platform_name == "CUDA" or platform_name == "OpenCL" or platform_name == "HIP":
-        platform_properties["Precision"] = "mixed"
-    platform = Platform.getPlatformByName(platform_name)
-    
+
+    (platform, platform_properties) = set_platform(keywords)
     simulation = Simulation(syst.topology, syst.system, syst.integrator, platform, platform_properties)
     simulation.context.setPositions(syst.positions)
     if syst.boxvectors is not None:
@@ -188,15 +197,8 @@ def do_lambda_annealing(keywords, logger):
 
     syst = OMMSystemABFE(basename, keywords, pdbtopfile, systemfile, logger)
     syst.create_system()
-    
-    platform_properties = {}
-    platform_name = keywords.get("OPENMM_PLATFORM")
-    if platform_name == None:
-        platform_name = "CUDA"
-    if platform_name == "CUDA" or platform_name == "OpenCL" or platform_name == "HIP":
-        platform_properties["Precision"] = "mixed"
-    platform = Platform.getPlatformByName(platform_name)
-    
+
+    (platform, platform_properties) = set_platform(keywords)
     simulation = Simulation(syst.topology, syst.system, syst.integrator, platform, platform_properties)
     simulation.context.setPositions(syst.positions)
     if syst.boxvectors is not None:
@@ -307,15 +309,8 @@ def do_equil(keywords, logger):
 
     syst = OMMSystemABFE(basename, keywords, pdbtopfile, systemfile, logger)
     syst.create_system()
-    
-    platform_properties = {}
-    platform_name = keywords.get("OPENMM_PLATFORM")
-    if platform_name == None:
-        platform_name = "CUDA"
-    if platform_name == "CUDA" or platform_name == "OpenCL" or platform_name == "HIP":
-        platform_properties["Precision"] = "mixed"
-    platform = Platform.getPlatformByName(platform_name)
-    
+
+    (platform, platform_properties) = set_platform(keywords)
     simulation = Simulation(syst.topology, syst.system, syst.integrator, platform, platform_properties)
     simulation.context.setPositions(syst.positions)
     if syst.boxvectors is not None:

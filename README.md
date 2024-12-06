@@ -82,4 +82,4 @@ See [examples](examples/) for examples and tutorials.
 Licensing
 ---------
 
- This software is licensed under the terms of the [GNU General Public License](http://opensource.org/licenses/GPL-3.0). See [LICENSE](LICENSE)
+ This software is licensed under the terms of the [GNU Lesser General Public License](https://opensource.org/license/lgpl-3-0). See [LICENSE](LICENSE)

@@ -48,7 +48,7 @@ python abfe_explicit.py temoa-g1_asyncre.cntl
 
 You should see the contents of the control file echo-ed back and messages indicating that replicas are dispatched for execution to the GPUs/CPUs and that replicas change alchemical states by exchanging them with other replicas. 
 
-The job is set to run for 4 hours. The amount of samples collected during this time will depend on the speed of your hardware. To reproduce the equilibrated free energy values in the [paper](https://pubs.acs.org/doi/10.1021/acs.jctc.1c00266) a run of 12 to 24 hours on one GPU would be probably required. The trajectory data for each replica is stored in the `r0`, `r1`, etc. subfolders. These folders contain a `.out` file with one line per sample with perturbation energy and other information, a `.dcd` trajectory file and a checkpoint file to restart the replica exchange simulation. 
+The job is set to run for 4 hours. The amount of samples collected during this time will depend on the speed of your hardware. To reproduce the equilibrated free energy values in the [paper](https://pubs.acs.org/doi/10.1021/acs.jctc.1c00266) a run of 12 to 24 hours on one GPU would be probably required. The trajectory data for each replica is stored in the `r0`, `r1`, etc. subfolders. These folders contain a `.out` file with one line per sample with perturbation energy and other information, a `.xtc` trajectory file and a checkpoint file to restart the replica exchange simulation. 
 
 The `.out` file of each replica is in the following sample format
 ```
@@ -62,7 +62,7 @@ where each line is a sample (saved every 5ps in this case), the first column is 
 The trajectories can be viewed with VMD. For example this will load the trajectory for replica 3 in VMD:
 ```
 cd $HOME/examples/ABFE/temoa-g1
-vmd -f temoa-g1_0.pdb r3/temoa-g1.dcd
+vmd -f temoa-g1_0.pdb r3/temoa-g1.xtc
 ```
 The output files and the trajectory files can be viewed while replica exchange is running.
 

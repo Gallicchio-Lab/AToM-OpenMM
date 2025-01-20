@@ -343,6 +343,7 @@ class OMMSystemABFE(OMMSystem):
             ubcore = 0.0 * kilocalorie_per_mole
         acore = float(self.keywords.get('ACORE'))
 
+        #perturbation energy offset
         uoffset = 0.0 * kilocalorie_per_mole
         if self.keywords.get('PERTE_OFFSET') is not None:
             uoffset = float(self.keywords.get('PERTE_OFFSET')) * kilocalorie_per_mole
@@ -496,6 +497,7 @@ class OMMSystemRBFE(OMMSystem):
             msg = "DISPLACEMENT is required"
             self._exit(msg)
 
+        #displacements for initial state and final state, if set 
         self.displ0_lig1 = None
         self.displ1_lig1 = None
         self.displ0_lig2 = None
@@ -660,6 +662,125 @@ class OMMSystemRBFE(OMMSystem):
         self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, fgroups )
         self.integrator.setConstraintTolerance(0.00001)
 
+    def add_all_standard_forces_to_atmforce(self):
+        #adds all standard Forces from the system to the ATMForce
+        import re
+        nbpattern = re.compile(".*Nonbonded.*")
+        gbpattern = re.compile(".*GB.*")
+        harmpattern = re.compile(".*Harmonic.*")
+        torpattern  = re.compile(".*PeriodicTorsion.*")
+        force_removed = True
+        while force_removed:
+            force_removed = False
+            for i in range(self.system.getNumForces()):
+                if ( nbpattern.match(self.system.getForce(i).getName())   or
+                     gbpattern.match(self.system.getForce(i).getName())   or
+                     harmpattern.match(self.system.getForce(i).getName()) or
+                     torpattern.match(self.system.getForce(i).getName())    ):
+                    self.logger.info("Adding Force %s to ATMForce" % self.system.getForce(i).getName())
+                    self.atmforce.addForce(copy.copy(self.system.getForce(i)))
+                    force_removed = True
+                    if self.v82plus:
+                        self.system.removeForce(i)
+                    else:
+                        #rather then removing the nonbonded force, disable it by assigning a force
+                        #group not included in the MTS integrator. This way it can do atom reordering.
+                        self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
+                    break
+
+        self.logger.info("System's Forces:")
+        for i in range(self.system.getNumForces()):
+            self.logger.info("   %s" % self.system.getForce(i).getName())
+                
+    def add_nonbonded_forces_to_atmforce(self):
+        #adds standard non-bonded Forces to the ATMForce
+        import re
+        nbpattern = re.compile(".*Nonbonded.*")
+        gbpattern = re.compile(".*GB.*")
+        force_removed = True
+        while force_removed:
+            force_removed = False
+            for i in range(self.system.getNumForces()):
+                if nbpattern.match(self.system.getForce(i).getName()):
+                    #separate 1-4 interactions from non-bonded force so they get evaluated
+                    #with the bonded terms
+                    self.logger.info("Adding Force %s to ATMForce" % self.system.getForce(i).getName())
+                    force14 = separate14(self.system.getForce(i))
+                    self.system.addForce(force14)
+                    self.atmforce.addForce(copy.copy(self.system.getForce(i)))
+                    force_removed = True
+                    if self.v82plus:
+                        self.system.removeForce(i)
+                    else:
+                        self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
+                    break
+                elif gbpattern.match(self.system.getForce(i).getName()):
+                    self.logger.info("Adding Force %s to ATMForce" % self.system.getForce(i).getName())
+                    self.atmforce.addForce(copy.copy(self.system.getForce(i)))
+                    force_removed = True
+                    if self.v82plus:
+                        self.system.removeForce(i)
+                    else:
+                        self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
+                    break
+
+        self.logger.info("System's Forces:")
+        for i in range(self.system.getNumForces()):
+            self.logger.info("   %s" % self.system.getForce(i).getName())
+
+    def add_atoms_to_atmforce(self):
+        #adds atoms to atmforce using standard fixed molecular displacements
+        nodispl = Vec3(0., 0., 0.)
+        for i in range(self.topology.getNumAtoms()):
+            self.atmforce.addParticle( nodispl )
+
+        for i in self.lig1_atoms:
+            if (self.displ0_lig1 is not None) and (self.displ1_lig1 is not None):
+                self.atmforce.setParticleParameters(i, Vec3(self.displ1_lig1[0], self.displ1_lig1[1], self.displ1_lig1[2])/nanometer,
+                                                        Vec3(self.displ0_lig1[0], self.displ0_lig1[1], self.displ0_lig1[2])/nanometer)
+            else:
+                self.atmforce.setParticleParameters(i,  Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer, nodispl )
+
+        for i in self.lig2_atoms:
+            if (self.displ0_lig2 is not None) and (self.displ1_lig2 is not None):
+                self.atmforce.setParticleParameters(i, Vec3(self.displ1_lig2[0], self.displ1_lig2[1], self.displ1_lig2[2])/nanometer,
+                                                    Vec3(self.displ0_lig2[0], self.displ0_lig2[1], self.displ0_lig2[2])/nanometer)
+            else:
+                self.atmforce.setParticleParameters(i, -Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer, nodispl)
+
+    def add_common_var_atoms_to_atmforce(self):
+        #add atoms to atmforce using common/variable regions
+        for i in range(self.topology.getNumAtoms()):
+            self.atmforce.addParticle( -1 , -1 )
+
+        lig1_common_atoms = [int(i) for i in self.keywords.get('LIGAND1_COMMON_ATOMS')  ]
+        lig2_common_atoms = [int(i) for i in self.keywords.get('LIGAND2_COMMON_ATOMS')  ]
+
+        if not len(lig1_common_atoms) == len(lig2_common_atoms):
+            msg = "Error: the number of commong atoms of lig1 (%d) and lig2 (%d) differ" % (len(lig1_common_atoms),len(lig2_common_atoms))
+            self._exit(msg)
+
+        for i in range(len(lig1_common_atoms)):
+            try:
+                self.atmforce.setParticleParameters(lig1_common_atoms[i], lig2_common_atoms[i], lig1_common_atoms[i], -1, -1)
+            except:
+                self._exit("Variable displacements are not supported by the OpenMM backend")
+
+        for i in range(len(lig2_common_atoms)):
+            self.atmforce.setParticleParameters(lig2_common_atoms[i], lig1_common_atoms[i], lig2_common_atoms[i], -1, -1)
+
+        lig1_var_atoms = [int(i) for i in self.keywords.get('LIGAND1_VAR_ATOMS')  ]
+        lig2_var_atoms = [int(i) for i in self.keywords.get('LIGAND2_VAR_ATOMS')  ]
+
+        lig1_attach_atom = int(self.keywords.get('LIGAND1_ATTACH_ATOM'))
+        lig2_attach_atom = int(self.keywords.get('LIGAND2_ATTACH_ATOM'))
+
+        for i in range(len(lig1_var_atoms)):
+            self.atmforce.setParticleParameters(lig1_var_atoms[i], lig2_attach_atom, lig1_attach_atom, -1, -1)
+
+        for i in range(len(lig2_var_atoms)):
+            self.atmforce.setParticleParameters(lig2_var_atoms[i], lig1_attach_atom, lig2_attach_atom, -1, -1)
+
     def set_atmforce(self):
         #these define the state and will be overriden in set_state()
         temperature = 300 * kelvin
@@ -679,7 +800,8 @@ class OMMSystemRBFE(OMMSystem):
         else:
             ubcore = 0.0 * kilocalorie_per_mole
         acore = float(self.keywords.get('ACORE'))
-
+        
+        #perturbation energy offset
         uoffset = 0.0 * kilocalorie_per_mole
         if self.keywords.get('PERTE_OFFSET') is not None:
             uoffset = float(self.keywords.get('PERTE_OFFSET')) * kilocalorie_per_mole
@@ -703,57 +825,39 @@ class OMMSystemRBFE(OMMSystem):
         self.atmforce.addGlobalParameter("Acore", acore);
         self.atmforce.addGlobalParameter("Direction", direction);
         self.atmforce.addGlobalParameter("UOffset", uoffset/kilojoules_per_mole);
-
-        #adds nonbonded Force from the system to the ATMForce
-        import re
-        nbpattern = re.compile(".*Nonbonded.*")
-        for i in range(self.system.getNumForces()):
-            if nbpattern.match(str(type(self.system.getForce(i)))):
-                #separate 1-4 interactions from non-bonded force so they get evaluated
-                #with the bonded terms
-                force14 = separate14(self.system.getForce(i))
-                self.system.addForce(force14)
-                self.atmforce.addForce(copy.copy(self.system.getForce(i)))
-                self.nonbondedforcegroup = self.free_force_group()
-                if self.v82plus:
-                    self.system.removeForce(i)
-                else:
-                    #rather then removing the nonbonded force, disable it by assigning a force
-                    #group not included in the MTS integrator. This way it can do atom reordering.
-                    self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
-                break
-        gbpattern = re.compile(".*GB.*")
-        for i in range(self.system.getNumForces()):
-            if gbpattern.match(self.system.getForce(i).getName()):
-                self.logger.info("Adding GB implicit solvent Force %s to ATMForce" % self.system.getForce(i).getName())
-                self.atmforce.addForce(copy.copy(self.system.getForce(i)))
-                self.system.removeForce(i)
-                break
-
-        #adds atoms to ATMForce
-        for i in range(self.topology.getNumAtoms()):
-            self.atmforce.addParticle( Vec3(0., 0., 0.))
-
-        for i in self.lig1_atoms:
-            if (self.displ0_lig1 is not None) and (self.displ1_lig1 is not None):
-                self.atmforce.setParticleParameters(i, Vec3(self.displ1_lig1[0], self.displ1_lig1[1], self.displ1_lig1[2])/nanometer,
-                                                       Vec3(self.displ0_lig1[0], self.displ0_lig1[1], self.displ0_lig1[2])/nanometer)
-            else:
-                self.atmforce.setParticleParameters(i,  Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer )
-
-        for i in self.lig2_atoms:
-            if (self.displ0_lig2 is not None) and (self.displ1_lig2 is not None):
-                self.atmforce.setParticleParameters(i, Vec3(self.displ1_lig2[0], self.displ1_lig2[1], self.displ1_lig2[2])/nanometer,
-                                                       Vec3(self.displ0_lig2[0], self.displ0_lig2[1], self.displ0_lig2[2])/nanometer)
-            else:
-                self.atmforce.setParticleParameters(i, -Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer )
-
+        
         #assign a group to ATMForce for multiple time-steps
+        #self.nonbondedforcegroup = self.free_force_group()
         self.atmforcegroup = self.free_force_group()
         self.atmforce.setForceGroup(self.atmforcegroup)
-
-        #add ATMForce to the system
         self.system.addForce(self.atmforce)
+        self.nonbondedforcegroup = self.free_force_group()
+
+        #displacements based on position of attachment atoms
+        self.pos_displacement = False
+        if self.keywords.get('LIGAND1_ATTACH_ATOM') is not None:
+            self.pos_displacement = True
+
+        #common and variable regions protocol
+        self.var_regions = False
+        if self.keywords.get('LIGAND1_VAR_ATOMS') is not None:
+            self.var_regions = True
+
+        #adds Forces from the system to the ATMForce
+        if self.var_regions:
+            #when transferring only the variable region, the bonded forces are affected
+            self.add_all_standard_forces_to_atmforce()
+        else:
+            #standard molecular displacements affect only non-bonded forces
+            self.add_nonbonded_forces_to_atmforce()
+
+        #adds atoms to ATMForce
+        if self.pos_displacement:
+            #use common/variable regions
+            self.add_common_var_atoms_to_atmforce()
+        else:
+            #standard displacements
+            self.add_atoms_to_atmforce()
 
         #these are the global parameters specified in the cntl files that need to be reset
         #by the worker after reading the first configuration

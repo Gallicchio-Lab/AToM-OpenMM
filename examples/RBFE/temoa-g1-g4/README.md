@@ -26,7 +26,7 @@ The lower cup of the host loosely restrained as in the original work. Each step 
 See the [TEMOA-G1 ABFE tutorial](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/ABFE/temoa-g1) about the nodefile and how to customize it in different ways to match the hardware on your machine.
 
 ```
-python $HOME/AToM-OpenMM/rbfe_explicit.py temoa-g1-g4_asyncre.cntl
+python $HOME/AToM-OpenMM/rbfe_production.py temoa-g1-g4_asyncre.cntl
 ```
 
 You should see the contents of the control file echo-ed back and messages indicating that replica are dispatched to the GPU and that replicas change alchemical states by exchanging them with other replicas. The job is set to run for 4 hours.

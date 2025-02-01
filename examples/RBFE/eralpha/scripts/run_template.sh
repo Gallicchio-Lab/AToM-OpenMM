@@ -20,4 +20,4 @@ if [ ! -f ${jobname}_0.xml ]; then
 fi
 
 echo "localhost,0:0,1,CUDA,,/tmp" > nodefile
-python <ASYNCRE_DIR>/rbfe_explicit.py ${jobname}_asyncre.cntl
+python <ASYNCRE_DIR>/rbfe_production.py ${jobname}_asyncre.cntl

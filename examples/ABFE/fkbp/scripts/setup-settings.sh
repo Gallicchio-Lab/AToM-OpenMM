@@ -6,7 +6,8 @@ basename=fkbp
 receptor=fkbp
 
 #basenames of the ligands (.sdf format expected)
-ligands=(thi prp dss dmso dapp dap but)
+#ligands=(thi prp dss dmso dapp dap but)
+ligands=(thi)
 
 #displacement vector
 displacement=("22.0" "22.0" "22.0")
@@ -15,4 +16,4 @@ displacement=("22.0" "22.0" "22.0")
 vsite_rcpt_residues=(26 36 37 42 46 48 54 55 56 82)
 
 #path to AToM-OpenMM
-AToM_dir=$HOME/AToM-OpenMM
+AToM_dir=$HOME/Dropbox/src/AToM-OpenMM

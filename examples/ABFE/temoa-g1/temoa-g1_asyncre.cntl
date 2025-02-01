@@ -79,8 +79,8 @@ FRICTION_COEFF = 0.500000
 #MD time step in ps
 TIME_STEP = 0.002
 
-#GPU platform
-OPENMM_PLATFORM = CUDA
+#hardware platform
+OPENMM_PLATFORM = CPU
 
 #set to 'yes' to turn on verbose logging
 VERBOSE = 'no'

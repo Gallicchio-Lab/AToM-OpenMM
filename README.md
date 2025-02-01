@@ -1,9 +1,9 @@
-AToM-OpenMM v8.1.2
+AToM-OpenMM v8.2.0
 ====================
 
 The Alchemical Transfer Method for OpenMM (AToM-OpenMM) is an extensible Python package for the estimation of absolute and relative binding free energies of molecular complexes. It implements the [Alchemical Transfer Method (ATM)](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129) with  asynchronous parallel replica exchange molecular dynamics with the [OpenMM](https://github.com/openmm) library. The AToM software can be deployed on workstations or cluster nodes with one or more GPUs.
 
-This version of AToM uses [ATMForce](https://github.com/openmm/openmm/pull/4110) in the 8.1.1 or later versions of [OpenMM](https://github.com/openmm/openmm). 
+This version of AToM uses [ATMForce](https://github.com/openmm/openmm/pull/4110) in the 8.2.0 or later versions of [OpenMM](https://github.com/openmm/openmm). 
 
 Credits
 -------
@@ -31,6 +31,8 @@ Please [cite us](http://www.compmolbiophysbc.org/publications) if you use this s
 
 - [Relative Binding Free Energy Calculations for Ligands with Diverse Scaffolds with the Alchemical Transfer Method](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129)
 
+- [Relative Binding Free Energy Estimation of Congeneric Ligands and Macromolecular Mutants with the Alchemical Transfer with Coordinate Swapping Method](https://arxiv.org/abs/2412.19971)
+
 - [Alchemical Transfer Approach to Absolute Binding Free Energy Estimation](https://pubs.acs.org/doi/10.1021/acs.jctc.1c00266)
 
 - [Asynchronous Replica Exchange Software for Grid and Heterogeneous Computing](http://www.compmolbiophysbc.org/publications#asyncre_software_2015)
@@ -40,11 +42,10 @@ Installation & Usage
 
 It is recommended that the installation is performed in a personal python environment (`miniforge`, `miniconda`, conda`, or similar). AToM-OpenMM requires the `openmm`, `configobj` and `numpy` python modules. 
 
-
-This version of AToM-OpenMM requires OpenMM 8.1.1 or later. This conda command installs the necessary requirements:
+This version of AToM-OpenMM requires OpenMM 8.2.9 or later. This conda command installs the necessary requirements:
 ```
-conda create -n atm8.1.2 -c conda-forge openmm=8.1.2 ambertools openmmforcefields configobj setproctitle r-base
-conda activate atm8.1.2
+conda create -n atm8.2.0 -c conda-forge openmm=8.2.0 ambertools openmmforcefields configobj setproctitle r-base
+conda activate atm8.2.0
 ```
 `setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. `openmmforcefields` is used for force field parameter assignments using OpenFF. `r-base` with the `UWHAM R package` (see below) is required for free energy estimation. See [examples](examples/) for examples and tutorials.
 
@@ -59,9 +60,9 @@ pip install .
 
 - From the latest release:
 ```
-wget https://github.com/Gallicchio-Lab/AToM-OpenMM/archive/refs/tags/v8.1.2.tar.gz
-tar zxvf v8.1.2.tar.gz
-cd AToM-OpenMM-8.1.2
+wget https://github.com/Gallicchio-Lab/AToM-OpenMM/archive/refs/tags/v8.2.0.tar.gz
+tar zxvf v8.2.0.tar.gz
+cd AToM-OpenMM-8.2.0
 pip install .
 ```
 

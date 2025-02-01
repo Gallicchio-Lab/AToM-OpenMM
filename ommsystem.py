@@ -751,7 +751,7 @@ class OMMSystemRBFE(OMMSystem):
     def add_common_var_atoms_to_atmforce(self):
         #add atoms to atmforce using common/variable regions
         for i in range(self.topology.getNumAtoms()):
-            self.atmforce.addParticle( -1 , -1 )
+            self.atmforce.addParticle( )
 
         lig1_common_atoms = [int(i) for i in self.keywords.get('LIGAND1_COMMON_ATOMS')  ]
         lig2_common_atoms = [int(i) for i in self.keywords.get('LIGAND2_COMMON_ATOMS')  ]

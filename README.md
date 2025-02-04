@@ -44,7 +44,7 @@ It is recommended that the installation is performed in a personal python enviro
 
 This version of AToM-OpenMM requires OpenMM 8.2.0 or later. This conda command installs the necessary requirements:
 ```
-conda create -n atm8.2.0 -c conda-forge openmm=8.2.0 ambertools openmmforcefields configobj setproctitle r-base
+conda create -n atm8.2.0 -c conda-forge python=3.11 openmm=8.2.0 ambertools openmmforcefields configobj setproctitle r-base espaloma=0.3.2 
 conda activate atm8.2.0
 ```
 `setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools` package is not an actual dependency but it is needed to set up some of the systems in the examples. `openmmforcefields` is used for force field parameter assignments using OpenFF. `r-base` with the `UWHAM R package` (see below) is required for free energy estimation. See [examples](examples/) for examples and tutorials.

@@ -60,9 +60,9 @@ pip install .
 
 - From the latest release:
 ```
-wget https://github.com/Gallicchio-Lab/AToM-OpenMM/archive/refs/tags/v8.2.0.tar.gz
-tar zxvf v8.2.0.tar.gz
-cd AToM-OpenMM-8.2.0
+wget https://github.com/Gallicchio-Lab/AToM-OpenMM/archive/refs/tags/v8.2.1.tar.gz
+tar zxvf v8.2.1.tar.gz
+cd AToM-OpenMM-8.2.1
 pip install .
 ```
 

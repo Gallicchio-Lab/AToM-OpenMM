@@ -1,4 +1,4 @@
-AToM-OpenMM v8.2.0
+AToM-OpenMM v8.2
 ====================
 
 The Alchemical Transfer Method for OpenMM (AToM-OpenMM) is an extensible Python package for the estimation of absolute and relative binding free energies of molecular complexes. It implements the [Alchemical Transfer Method (ATM)](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129) with  asynchronous parallel replica exchange molecular dynamics with the [OpenMM](https://github.com/openmm) library. The AToM software can be deployed on workstations or cluster nodes with one or more GPUs.
@@ -60,9 +60,9 @@ pip install .
 
 - From the latest release:
 ```
-wget https://github.com/Gallicchio-Lab/AToM-OpenMM/archive/refs/tags/v8.2.0.tar.gz
-tar zxvf v8.2.0.tar.gz
-cd AToM-OpenMM-8.2.0
+wget https://github.com/Gallicchio-Lab/AToM-OpenMM/archive/refs/tags/v8.2.1.tar.gz
+tar zxvf v8.2.1.tar.gz
+cd AToM-OpenMM-8.2.1
 pip install .
 ```
 

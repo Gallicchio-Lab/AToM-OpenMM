@@ -7,7 +7,7 @@
 #                                          #
 ############################################
 
-import os, sys
+import os, sys, re
 import numpy as np
 from datetime import datetime
 from time import time
@@ -35,7 +35,6 @@ from sys import stdout
 import os, sys
 
 # OpenFF and OpenMM components for ligand force field parameters
-from openmmforcefields.generators import SMIRNOFFTemplateGenerator
 from openff.toolkit.topology import Molecule
 
 #from pdbfixer import PDBFixer
@@ -131,7 +130,7 @@ parser.add_argument('--solventForceField', required=False, type=str,
                     help='Force field for solvent/ions` amber14/tip3p.xml ')
 parser.add_argument('--ligandForceField', required=False, type=str,
                     default='openff-2.0.0',
-                    help='Force field for ligand:  openff-2.0.0')
+                    help='Force field for ligand:  openff-2.0.0, gaff, or espaloma-0.3.2')
 parser.add_argument('--implicitSolvent', required=False, type=str,
                     default='None',
                     help='Implicit solvent to use: HCT OBC2 GBn2. None for vacuum.')
@@ -265,7 +264,7 @@ smallest_area = bboxfaces[0]
 for i in range(3):
     if bboxfaces[i] < smallest_area:
         smallest_direction = i
-print("Direction of smallest area dimention:", smallest_direction)
+print("Direction of smallest area dimension:", smallest_direction)
 
     
 ############################################
@@ -371,15 +370,28 @@ print("boxVectors:", (xBoxvec,yBoxvec,zBoxvec ))
 ############################################
 
 print('\nSet up the combined protein + ligand + water system for simulation')
-# Create the SMIRNOFF template generator with up to date OpenFF force field
-print('Call SMIRNOFFTemplateGenerator function for ligand')
-smirnoff = SMIRNOFFTemplateGenerator(molecules=ligandmolecules, forcefield=ligandforcefield, cache=ffcachefile )
+template_gen = None
+if ligandforcefield[0:4] == "gaff":
+    from openmmforcefields.generators import GAFFTemplateGenerator
+    print('Using GAFFTemplateGenerator function for ligands')
+    template_gen = GAFFTemplateGenerator(molecules=ligandmolecules, cache=ffcachefile )
+elif ligandforcefield[0:6] == "openff":
+    from openmmforcefields.generators import SMIRNOFFTemplateGenerator
+    print('Call SMIRNOFFTemplateGenerator function for ligands')
+    template_gen = SMIRNOFFTemplateGenerator(molecules=ligandmolecules, forcefield=ligandforcefield, cache=ffcachefile )
+elif ligandforcefield[0:8] == "espaloma":
+    from openmmforcefields.generators import EspalomaTemplateGenerator
+    print('Call EspalomaTemplateGenerator function for ligands')
+    template_gen = EspalomaTemplateGenerator(molecules=ligandmolecules, forcefield=ligandforcefield, cache=ffcachefile )
+else:
+    print('Unknown ligand force field %s' % ligandforcefield)
+    sys.exit(1)
 
 # Register the SMIRNOFF template generator
 # NOTE: forcefield object was initialized (above)
 # for the protein + water (subsystem) force field 
 # This step adds support for the ligand force field
-forcefield.registerTemplateGenerator(smirnoff.generator)
+forcefield.registerTemplateGenerator(template_gen.generator)
 
 if implsolv is None:
     print("Adding solvent and processing system ...")

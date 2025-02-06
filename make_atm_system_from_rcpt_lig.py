@@ -372,7 +372,7 @@ else:
         lig2_positions[i] += displacement
     print('Call Modeller: include ligand 2')
     modeller.add(lig2_ommtopology, lig2_positions)
-    lig2atom_indexes = [ i for i in range(nrcpt+nlig1,nrcpt+nlig1+nlig2)]
+    lig2atom_indexes = [ i for i in range(nrcpt+nrcpt2+nlig1,nrcpt+nrcpt2+nlig1+nlig2)]
     print("Indexes of ligand 2 (starting from 0):", lig2atom_indexes)
 
 

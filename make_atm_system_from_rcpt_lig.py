@@ -1,5 +1,6 @@
 # Usage: python make_atm_rbfe_system_frompdb.py <options>
 # Emilio Gallicchio, 5/2023 adapted from code by Bill Swope, 11/2021
+# modified by Solmaz Azimi 6/2024
 
 ############################################
 #                                          #
@@ -76,22 +77,23 @@ def boundingBoxSizes(positions):
 #                                          #
 ############################################
 
-print('Generate ATM RBFE OpenMM System')
+print('Generate ATM OpenMM System')
 today = datetime.today()
 print('\nDate and time at start: ', today.strftime('%c'))
 
 
 whatItDoes = """
-Produces an .xml file with the OpenMM's system for ATM relative binding
-free energy calcuations.
+Produces an .xml file with the OpenMM's system for ATM binding
+free energy calcuations: absolute, relative, or swapping.
 
 The user supplies a pdb file that contains protein, cofactors, ligands, 
 water, ions, probably prepared by a different software package 
 (Maestro, OpenEye).  Cofactors and ligands have to be described in an
-sdf file.  Then force fields are assigned to all components
+sdf file.  Then force fields are assigned to all components.
 
 Emilio Gallicchio 5/2023
 adapted from simProteinLigandWater.py script by Bill Swope 11/2021
+modified by Solmaz Azimi 6/2024
 """
 
 #####################################################
@@ -117,6 +119,8 @@ parser.add_argument('--systemPDBoutFile', required=True, type=str, default=None,
                     help='Name of the PDB file where to output to system')
 
 # Optional input
+parser.add_argument('--receptor2inFile',  required=False,  type=str, default=None,
+                    help='PDB file of second receptor')
 parser.add_argument('--LIG2SDFinFile',  required=False,  type=str, default=None,
                     help='SDF file of second ligand')
 parser.add_argument('--cofactorsSDFFile',  required=False,  type=str, default=None,
@@ -147,11 +151,15 @@ parser.add_argument('--verbose', required=False, action='store_true',
 
 args = vars(parser.parse_args())
 
-#catch abfe or rbfe
+#catch abfe or rbfe or lsfe
 rbfe = False
 if args['LIG2SDFinFile']  is not None:
     rbfe = True
-    
+
+lsfe = False
+if args['receptor2inFile'] is not None:
+    lsfe = True
+
 # Pull data from command line into local variables
 receptorfile = args['receptorinFile']
 lig1sdffile = args['LIG1SDFinFile']
@@ -163,6 +171,9 @@ displacement = Vec3(displ[0], displ[1], displ[2]) * angstrom
 
 if rbfe:
     lig2sdffile  = args['LIG2SDFinFile']
+
+if lsfe:
+    receptor2file = args['receptor2inFile']
     
 #cofactors
 cofsdffile = args['cofactorsSDFFile']
@@ -190,6 +201,8 @@ flagverbose = args['verbose']
 
 print('\nUser-supplied input parameters')
 print('Receptor file name:                 ', receptorfile)
+if lsfe:
+    print('Receptor2 file name:            ', receptor2file)
 print('Protein force field:                ', proteinforcefield)
 print('Solvent/ion force field             ', solventforcefield )
 print('Ligand force field:                 ', ligandforcefield)
@@ -222,7 +235,7 @@ ligandmolecules = []
 
 ############################################
 #                                          #
-#   READ AND CHARACTERIZE RECEPTOR         #
+#   READ AND CHARACTERIZE RECEPTORS        #
 #                                          #
 ############################################
 
@@ -251,8 +264,31 @@ else:
 nrcpt = rcpt_ommtopology.getNumAtoms()
 print('Number of atoms in receptor:', nrcpt)
 
-print('Call Modeller: include receptor')
+print('Call Modeller: include receptor first')
 modeller = Modeller(rcpt_ommtopology, rcpt_positions)
+
+if lsfe:
+    rcpt2pext = os.path.splitext(receptor2file)[1]
+    rcpt2_ommtopology = None
+    rcpt2_positions = None
+    if rcpt2pext == '.pdb':
+        print('Read second receptor:')
+        pdbrcpt2 = PDBFile(receptor2file)
+        rcpt2_positions = pdbrcpt2.positions
+        rcpt2_ommtopology = pdbrcpt2.topology
+    else:
+        print("Error: Unrecognized receptor file name: %s" % receptor2file)
+
+    nrcpt2 = rcpt2_ommtopology.getNumAtoms()
+    print('Number of atoms in receptor2:', nrcpt2)
+
+    # displace receptor
+    for i in range(nrcpt2):
+        rcpt2_positions[i] += displacement
+
+    print('Call Modeller: include second receptor')
+    modeller.add(rcpt2_ommtopology, rcpt2_positions)
+
 
 print("Calculating receptor bounding box:")
 bbox = boundingBoxSizes(rcpt_positions)
@@ -337,6 +373,8 @@ else:
     print('Call Modeller: include ligand 2')
     modeller.add(lig2_ommtopology, lig2_positions)
     lig2atom_indexes = [ i for i in range(nrcpt+nlig1,nrcpt+nlig1+nlig2)]
+    print("Indexes of ligand 2 (starting from 0):", lig2atom_indexes)
+
 
 print("Calculating system bounding box:")
 if not rbfe:
@@ -344,7 +382,7 @@ if not rbfe:
 else:
     bbox = boundingBoxSizes(rcpt_positions + lig1_positions + lig2_positions)
 bboxsizes = [ bbox[i][1]-bbox[i][0] for i in range(3) ]
-padding = 2. * 1.0*nanometer
+padding = 5. * 1.0*nanometer
 xBoxvec = Vec3((bboxsizes[0]+padding)/nanometer, 0., 0.)*nanometer
 yBoxvec = Vec3(0.0, (bboxsizes[1]+padding)/nanometer, 0.)*nanometer
 zBoxvec = Vec3(0.0, 0.0, (bboxsizes[2]+padding)/nanometer)*nanometer

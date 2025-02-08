@@ -1,3 +1,5 @@
+#! python
+
 # Usage: python make_atm_rbfe_system_frompdb.py <options>
 # Emilio Gallicchio, 5/2023 adapted from code by Bill Swope, 11/2021
 

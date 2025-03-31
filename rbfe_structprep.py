@@ -110,7 +110,7 @@ def do_mintherm(keywords, logger):
     simulation.context.setPositions(syst.positions)
     if syst.boxvectors is not None:
         simulation.context.setPeriodicBoxVectors(syst.boxvectors[0], syst.boxvectors[1], syst.boxvectors[2] )
-
+    simulation.context.applyConstraints(0.00001)
     print ("Using platform %s" % simulation.context.getPlatform().getName())
         
     print("Potential energy before minimization =", simulation.context.getState(getEnergy = True).getPotentialEnergy())

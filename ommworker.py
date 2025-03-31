@@ -257,6 +257,7 @@ class OMMWorker(object):
 
         #one preliminary energy evaluation seems to be required to init the energy routines
         if self.compute:
+            self.simulation.context.applyConstraints(0.00001)
             state = self.simulation.context.getState(getEnergy = True)
             pote = state.getPotentialEnergy()
 

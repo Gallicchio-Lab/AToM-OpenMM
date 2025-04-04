@@ -347,14 +347,38 @@ print('Number of atoms in ligand 1:', nlig1)
 print('Call Modeller: include ligand 1')
 modeller.add(lig1_ommtopology, lig1_positions)
 
-if not rbfe:
-    # if ABFE, translate the ligand 1 coordinates into the solvent to calculate the
+if not rbfe and not lsfe:
+    # ABFE mode: translate the ligand 1 coordinates into the solvent to calculate the
     # bounding box below
+    print("ABFE mode:")
     for i in range(nlig1):
         lig1_positions[i] += displacement
-else:
+elif not lsfe:
     # RBFE mode:
     # read ligand 2 and place it in the solvent
+    print("RBFE mode:")
+    print('Read ligand 2:')
+    mollig2 = Molecule.from_file(lig2sdffile, file_format='SDF',
+                                 allow_undefined_stereo=True)
+    ligandmolecules.append(mollig2)
+    lig2_ommtopology = mollig2.to_topology().to_openmm(ensure_unique_atom_names=True)
+    #assign the residue name, assumes one residue
+    resname_lig2 = "L2"
+    for residue in lig2_ommtopology.residues():
+        residue.name = resname_lig2
+    pos = mollig2.conformers[0].to('angstrom').magnitude
+    lig2_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
+    nlig2 = lig2_ommtopology.getNumAtoms()
+    print('Number of atoms in ligand 2:', nlig2)
+    for i in range(nlig2):
+        lig2_positions[i] += displacement
+    print('Call Modeller: include ligand 2')
+    modeller.add(lig2_ommtopology, lig2_positions)
+    lig2atom_indexes = [ i for i in range(nrcpt+nlig1,nrcpt+nlig1+nlig2)]
+    print("Indexes of ligand 2 (starting from 0):", lig2atom_indexes)
+else:
+    # RSFE mode: two receptors, two ligands, second L displaced
+    print("RSFE mode:")
     print('Read ligand 2:')
     mollig2 = Molecule.from_file(lig2sdffile, file_format='SDF',
                                  allow_undefined_stereo=True)

@@ -110,7 +110,7 @@ def do_mintherm(keywords, logger):
     simulation.context.setPositions(syst.positions)
     if syst.boxvectors is not None:
         simulation.context.setPeriodicBoxVectors(syst.boxvectors[0], syst.boxvectors[1], syst.boxvectors[2] )
-
+    simulation.context.applyConstraints(0.00001)
     print ("Using platform %s" % simulation.context.getPlatform().getName())
         
     print("Potential energy before minimization =", simulation.context.getState(getEnergy = True).getPotentialEnergy())
@@ -125,7 +125,7 @@ def do_mintherm(keywords, logger):
     boxsize = simulation.context.getState().getPeriodicBoxVectors()
     simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_min.pdb', 'w') as output:
-        PDBFile.writeFile(simulation.topology, positions, output)
+        PDBFile.writeFile(simulation.topology, positions, output, keepIds=True)
 
     print("Thermalization ...")
  
@@ -163,7 +163,7 @@ def do_mintherm(keywords, logger):
     boxsize = simulation.context.getState().getPeriodicBoxVectors()
     simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_therm.pdb', 'w') as output:
-        PDBFile.writeFile(simulation.topology, positions, output)
+        PDBFile.writeFile(simulation.topology, positions, output, keepIds=True)
 
     print("NPT equilibration ...")
     
@@ -179,7 +179,7 @@ def do_mintherm(keywords, logger):
     boxsize = simulation.context.getState().getPeriodicBoxVectors()
     simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_npt.pdb', 'w') as output:
-        PDBFile.writeFile(simulation.topology, positions, output)
+        PDBFile.writeFile(simulation.topology, positions, output, keepIds=True)
 
     print("NVT equilibration ...")
     syst.barostat.setFrequency(0)#disabled
@@ -195,7 +195,7 @@ def do_mintherm(keywords, logger):
     boxsize = simulation.context.getState().getPeriodicBoxVectors()
     simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_equil.pdb', 'w') as output:
-        PDBFile.writeFile(simulation.topology, positions, output)
+        PDBFile.writeFile(simulation.topology, positions, output, keepIds=True)
 
 def do_lambda_annealing(keywords, logger):
     basename = keywords.get('BASENAME')
@@ -307,7 +307,7 @@ def do_lambda_annealing(keywords, logger):
     boxsize = simulation.context.getState().getPeriodicBoxVectors()
     simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_mdlambda.pdb', 'w') as output:
-        PDBFile.writeFile(simulation.topology, positions, output)
+        PDBFile.writeFile(simulation.topology, positions, output, keepIds=True)
 
 def do_equil(keywords, logger):
     basename = keywords.get('BASENAME')
@@ -388,7 +388,7 @@ def do_equil(keywords, logger):
     boxsize = simulation.context.getState().getPeriodicBoxVectors()
     simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_0.pdb', 'w') as output:
-        PDBFile.writeFile(simulation.topology, positions, output)
+        PDBFile.writeFile(simulation.topology, positions, output, keepIds=True)
 
 def massage_keywords(keywords, restrain_solutes = True):
 
@@ -430,6 +430,8 @@ if __name__ == '__main__':
     
     keywords = ConfigObj(commandFile)
     logger = logging.getLogger("rbfe_structprep")
+    logging.basicConfig()
+    logger.setLevel(logging.INFO)
 
     restrain_solutes = True
 

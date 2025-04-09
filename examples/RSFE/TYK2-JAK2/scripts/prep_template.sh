@@ -14,5 +14,5 @@
 for pair in <LIGPAIRS> ; do
     jobname=<RECEPTOR>-$pair
     echo "Prepping $jobname"
-    ( cd ${jobname} &&  python <ASYNCRE_DIR>/rbfe_structprep.py ${jobname}_asyncre.cntl )  || exit 1
+    ( cd ${jobname} &&  rbfe_structprep.py ${jobname}_asyncre.cntl )  || exit 1
 done

@@ -11,13 +11,13 @@
 
 jobname=<JOBNAME>
 
-. /nfs/sazimi-d/miniforge3/bin/activate atm8.2.0
+. $HOME/miniforge3/bin/activate atm8.2.1
 
 echo "Running on $(hostname)"
 
 if [ ! -f ${jobname}_0.xml ]; then
-   python <ASYNCRE_DIR>/rbfe_structprep.py ${jobname}_asyncre.cntl || exit 1
+   rbfe_structprep.py ${jobname}_asyncre.cntl || exit 1
 fi
 
 echo "localhost,0:0,1,CUDA,,/tmp" > nodefile
-python <ASYNCRE_DIR>/rbfe_explicit.py ${jobname}_asyncre.cntl
+rbfe_explicit.py ${jobname}_asyncre.cntl

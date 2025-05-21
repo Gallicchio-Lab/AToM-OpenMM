@@ -16,7 +16,7 @@ from openmm.unit import *
 from datetime import datetime
 from configobj import ConfigObj
 
-from utils.AtomUtils import AtomUtils, separate14
+from atom_openmm.utils.AtomUtils import AtomUtils, separate14
 
 # OpenMM's MTSLangevinIntegrator does not have a setTemperature method
 class ATMMTSLangevinIntegrator(MTSLangevinIntegrator):

@@ -20,7 +20,7 @@ from atom_openmm.ommworker import *
 
 from contextlib import contextmanager
 
-from transport import Transport
+from atom_openmm.transport import Transport
 
 class LocalOpenMMTransport(Transport):
     """

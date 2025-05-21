@@ -17,7 +17,7 @@ from openmm import *
 from openmm.unit import *
 from datetime import datetime
 
-from openmm_async_re import openmm_job_ABFE
+from atom_openmm.openmm_async_re import openmm_job_ABFE
 
 if __name__ == '__main__':
 

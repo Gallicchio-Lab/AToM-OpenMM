@@ -15,7 +15,7 @@ from simtk.openmm import *
 from simtk.unit import *
 from datetime import datetime
 
-from openmm_async_re import openmm_job_AmberTRE
+from atom_openmm.openmm_async_re import openmm_job_AmberTRE
 
 if __name__ == '__main__':
 

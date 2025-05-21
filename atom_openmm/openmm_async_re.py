@@ -12,8 +12,8 @@ from openmm.app import *
 from openmm import *
 from openmm.unit import *
 
-from async_re import async_re
-from local_openmm_transport import *
+from atom_openmm.async_re import async_re
+from atom_openmm.local_openmm_transport import *
 from atom_openmm.ommreplica import *
 from atom_openmm.ommsystem import *
 from atom_openmm.ommworker import *

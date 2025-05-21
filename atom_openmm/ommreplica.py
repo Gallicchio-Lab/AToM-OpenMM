@@ -11,7 +11,7 @@ from openmm import *
 from openmm.unit import *
 from datetime import datetime
 
-from ommworker import *
+from atom_openmm.ommworker import *
 
 class OMMReplica(object):
     #

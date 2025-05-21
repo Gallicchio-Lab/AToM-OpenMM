@@ -14,10 +14,10 @@ from openmm import *
 from openmm.unit import *
 from datetime import datetime
 
-from ommreplica import *
-from ommsystem import *
+from atom_openmm.ommreplica import *
+from atom_openmm.ommsystem import *
 
-from utils.AtomUtils import AtomUtils
+from atom_openmm.utils.AtomUtils import AtomUtils
 
 from contextlib import contextmanager
 

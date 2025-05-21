@@ -3,7 +3,6 @@
 from __future__ import print_function
 from __future__ import division
 import sys
-import os
 import time
 import math
 import random
@@ -13,25 +12,32 @@ import shutil
 import random
 from sys import stdout
 
-from simtk import openmm as mm
-from simtk.openmm.app import *
-from simtk.openmm import *
-from simtk.unit import *
+import openmm as mm
+from openmm.app import *
+from openmm import *
+from openmm.unit import *
 from datetime import datetime
 
 import logging
 from configobj import ConfigObj
-from ommsystem import *
-from utils.AtomUtils import AtomUtils, residue_is_solvent
 
-class OMMSystemABFEnoATM(OMMSystemABFE):
+from atom_openmm.ommsystem import *
+from atom_openmm.utils.AtomUtils import AtomUtils, residue_is_solvent
+
+class OMMSystemRBFEnoATM(OMMSystemRBFE):
     def create_system(self):
 
         self.load_system()
         self.atm_utils = AtomUtils(self.system)
         self.set_ligand_atoms()
+        self.set_displacement()
         self.set_vsite_restraints()
+        #set orientation restraints
         self.set_orientation_restraints()
+        #set reference atoms for alignment force
+        self.set_alignmentForce()
+        #indexes of the atoms whose position is restrained near the initial positions
+        #by a flat-bottom harmonic potential.
         self.set_positional_restraints()
         
         #target temperature
@@ -43,10 +49,11 @@ class OMMSystemABFEnoATM(OMMSystemABFE):
         else:
             self.temperature = float(temp) * kelvin
 
-        #self.set_torsion_metaDbias(self.temperature)
+        self.set_torsion_metaDbias(self.temperature)
 
-        #do not include ATM Force, instead place the nonbonded forces
-        #in what it would be the the ATMForce group to setup the integrator
+        #do not include ATM Force, instead place the nonbonded
+        #forces in what it would be the the ATMForce group
+        #for the integrator
         #self.set_atmforce()
         self.atmforcegroup = self.free_force_group()
         import re
@@ -89,15 +96,15 @@ def set_platform(keywords):
 def do_mintherm(keywords, logger):
     basename = keywords.get('BASENAME')
     jobname = basename
-    
+
     pdbtopfile = basename + ".pdb"
     systemfile = basename + "_sys.xml"
 
     #OpenMM system for minimization, thermalization, NPT, NVT
     #does not include ATM Force
-    syst = OMMSystemABFEnoATM(basename, keywords, pdbtopfile, systemfile,  logger)
+    syst = OMMSystemRBFEnoATM(basename, keywords, pdbtopfile, systemfile, logger)
     syst.create_system()
-
+    
     (platform, platform_properties) = set_platform(keywords)
     simulation = Simulation(syst.topology, syst.system, syst.integrator, platform, platform_properties)
     simulation.context.setPositions(syst.positions)
@@ -126,8 +133,8 @@ def do_mintherm(keywords, logger):
     totalSteps = 150000
     steps_per_cycle = 5000
     number_of_cycles = int(totalSteps/steps_per_cycle)
-    simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True, volume=True, speed=True))    
-    
+    simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True, volume=True, speed=True))
+
     # initial temperature
     initial_temp = keywords.get("INITIAL_TEMPERATURE")
     if initial_temp == None:
@@ -197,14 +204,14 @@ def do_lambda_annealing(keywords, logger):
     pdbtopfile = basename + ".pdb"
     systemfile = basename + "_sys.xml"
 
-    syst = OMMSystemABFE(basename, keywords, pdbtopfile, systemfile, logger)
+    syst = OMMSystemRBFE(basename, keywords, pdbtopfile, systemfile, logger)
     syst.create_system()
-
+    
     (platform, platform_properties) = set_platform(keywords)
     simulation = Simulation(syst.topology, syst.system, syst.integrator, platform, platform_properties)
     simulation.context.setPositions(syst.positions)
     if syst.boxvectors is not None:
-        simulation.context.setPeriodicBoxVectors(syst.boxvectors[0], syst.boxvectors[1], syst.boxvectors[2] )
+        simulation.context.setPeriodicBoxVectors(syst.boxvectors[0], syst.boxvectors[1], syst.boxvectors[2])
 
     print ("Using platform %s" % simulation.context.getPlatform().getName())
     
@@ -230,7 +237,7 @@ def do_lambda_annealing(keywords, logger):
     acore = 0.062500
     direction = 1
     uoffset = 0.0 * kilocalorie_per_mole
-    
+
     print( "LoadState ...")
     simulation.loadState(jobname + '_equil.xml')
 
@@ -246,8 +253,8 @@ def do_lambda_annealing(keywords, logger):
     simulation.context.setParameter(syst.atmforce.Direction(), direction)
     simulation.context.setParameter('UOffset',  uoffset /kilojoules_per_mole)
 
-    epot = simulation.context.getState(getEnergy = True ).getPotentialEnergy()
-    print("Potential Energy =", simulation.context.getState(getEnergy = True ).getPotentialEnergy())
+    epot = simulation.context.getState(getEnergy = True).getPotentialEnergy()
+    print("Potential Energy =", simulation.context.getState(getEnergy = True, ).getPotentialEnergy())
 
     print("Annealing to lambda = 1/2 ...")
 
@@ -260,17 +267,17 @@ def do_lambda_annealing(keywords, logger):
     if os.path.exists(jobname + "_mdlambda.xtc"):
         os.remove(jobname + "_mdlambda.xtc")
     simulation.reporters.append(XTCReporter(jobname + "_mdlambda.xtc", steps_per_cycle, enforcePeriodicBox=False))
-
+    
     binding_file = jobname + '_mdlambda.out'
     f = open(binding_file, 'w')
     
     for i in range(number_of_cycles):
         simulation.step(steps_per_cycle)
-        state = simulation.context.getState(getEnergy = True)
+        state = simulation.context.getState(getEnergy = True )
         pot_energy = state.getPotentialEnergy()
         (u1, u0, ebias) = syst.atmforce.getPerturbationEnergy(simulation.context)
-        umcore = simulation.context.getParameter(syst.atmforce.Umax())*kilojoules_per_mole
-        ubcore = simulation.context.getParameter(syst.atmforce.Ubcore())*kilojoules_per_mole
+        umcore = simulation.context.getParameter(syst.atmforce.Umax())* kilojoules_per_mole
+        ubcore = simulation.context.getParameter(syst.atmforce.Ubcore())* kilojoules_per_mole
         acore = simulation.context.getParameter(syst.atmforce.Acore())
         direction = simulation.context.getParameter(syst.atmforce.Direction())
         if direction > 0:
@@ -309,14 +316,14 @@ def do_equil(keywords, logger):
     pdbtopfile = basename + ".pdb"
     systemfile = basename + "_sys.xml"
 
-    syst = OMMSystemABFE(basename, keywords, pdbtopfile, systemfile, logger)
+    syst = OMMSystemRBFE(basename, keywords, pdbtopfile,  systemfile, logger)
     syst.create_system()
 
     (platform, platform_properties) = set_platform(keywords)
     simulation = Simulation(syst.topology, syst.system, syst.integrator, platform, platform_properties)
     simulation.context.setPositions(syst.positions)
     if syst.boxvectors is not None:
-        simulation.context.setPeriodicBoxVectors(syst.boxvectors[0], syst.boxvectors[1], syst.boxvectors[2] )
+        simulation.context.setPeriodicBoxVectors(syst.boxvectors[0], syst.boxvectors[1], syst.boxvectors[2])
 
     print ("Using platform %s" % simulation.context.getPlatform().getName())
     
@@ -342,7 +349,7 @@ def do_equil(keywords, logger):
     acore = 0.062500
     direction = 1
     uoffset = 0.0 * kilocalorie_per_mole
-    
+
     print( "LoadState ...")
     simulation.loadState(jobname + '_mdlambda.xml')
 
@@ -357,9 +364,9 @@ def do_equil(keywords, logger):
     simulation.context.setParameter(syst.atmforce.Acore(), acore)
     simulation.context.setParameter(syst.atmforce.Direction(), direction)
     simulation.context.setParameter('UOffset',  uoffset /kilojoules_per_mole)
-    
-    epot = simulation.context.getState(getEnergy = True ).getPotentialEnergy()
-    print("Potential Energy =", simulation.context.getState(getEnergy = True ).getPotentialEnergy())
+
+    epot = simulation.context.getState(getEnergy = True).getPotentialEnergy()
+    print("Potential Energy =", simulation.context.getState(getEnergy = True).getPotentialEnergy())
 
     print("Equilibration at lambda = 1/2 ...")
 
@@ -370,9 +377,9 @@ def do_equil(keywords, logger):
     if os.path.exists(jobname + "_0.xtc"):
         os.remove(jobname + "_0.xtc")
     simulation.reporters.append(XTCReporter(jobname + "_0.xtc", steps_per_cycle, enforcePeriodicBox=False))
-
-    simulation.step(totalSteps)
     
+    simulation.step(totalSteps)
+        
     print( "SaveState ...")
     simulation.saveState(jobname + "_0.xml")
 
@@ -382,7 +389,7 @@ def do_equil(keywords, logger):
     simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_0.pdb', 'w') as output:
         PDBFile.writeFile(simulation.topology, positions, output, keepIds=True)
-        
+
 def massage_keywords(keywords, restrain_solutes = True):
 
     #use 1 fs time step
@@ -390,7 +397,7 @@ def massage_keywords(keywords, restrain_solutes = True):
 
     #temporarily restrain all non-solvent atoms
     if restrain_solutes:
-        basename = keywords.get('BASENAME')
+        basename = old_keywords.get('BASENAME')
         pdbtopfile = basename + ".pdb"
         pdb = PDBFile(pdbtopfile)
         non_ion_wat_atoms = []
@@ -413,18 +420,21 @@ if __name__ == '__main__':
 
     print("")
     print("========================================")
-    print("AToM ABFE Structure Preparation         ")
+    print("AToM RBFE Structure Preparation         ")
     print("========================================")
     print("")
     print("Started at: " + str(time.asctime()))
     print("Input file:", commandFile)
     print("")
     sys.stdout.flush()
-
+    
     keywords = ConfigObj(commandFile)
-    logger = logging.getLogger("abfe_structprep")
+    logger = logging.getLogger("rbfe_structprep")
+    logging.basicConfig()
+    logger.setLevel(logging.INFO)
 
     restrain_solutes = True
+
     old_keywords = keywords.copy()
     massage_keywords(keywords, restrain_solutes)
     

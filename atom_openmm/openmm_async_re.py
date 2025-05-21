@@ -14,9 +14,9 @@ from openmm.unit import *
 
 from async_re import async_re
 from local_openmm_transport import *
-from ommreplica import *
-from ommsystem import *
-from ommworker import *
+from atom_openmm.ommreplica import *
+from atom_openmm.ommsystem import *
+from atom_openmm.ommworker import *
 
 class openmm_job(async_re):
     def __init__(self, command_file, options):

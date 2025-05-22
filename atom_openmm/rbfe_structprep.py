@@ -128,7 +128,6 @@ def do_mintherm(keywords, logger):
 
     print("Thermalization ...")
  
-    #FIX ME - get from control file
     totalSteps = int(keywords.get("THERMALIZATION_STEPS", 150000))
     steps_per_cycle = int(keywords.get("STEPS_PER_CYCLE", 5000))
     number_of_cycles = int(totalSteps/steps_per_cycle)
@@ -257,7 +256,6 @@ def do_lambda_annealing(keywords, logger):
 
     print("Annealing to lambda = 1/2 ...")
 
-    #FIX ME: get from keywords
     totalSteps = int(keywords.get("ANNEALING_STEPS", 150000))
     steps_per_cycle = int(keywords.get("STEPS_PER_CYCLE", 5000))
     number_of_cycles = int(totalSteps/steps_per_cycle)
@@ -369,7 +367,6 @@ def do_equil(keywords, logger):
 
     print("Equilibration at lambda = 1/2 ...")
 
-    #FIX ME: get from keywords
     totalSteps = int(keywords.get("EQUILIBRATION_STEPS", 150000))
     steps_per_cycle = int(keywords.get("STEPS_PER_CYCLE", 5000))
     simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True, speed=True))

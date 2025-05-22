@@ -456,30 +456,3 @@ def calculate_uwham(
     ddgb = np.sqrt(ddgbind2 * ddgbind2 + ddgbind1 * ddgbind1)
 
     return dgb[0], ddgb[0], dgbind1[0], dgbind2[0], samplesperreplica
-
-
-# if __name__ == "__main__":
-#     print(
-#         calculate_uwham(
-#             rundir="tests/TYK2_A02_A09/TYK2_A02_A09_r0_1",
-#             jobname="QB_A02_A09",
-#             mintimeid=70,
-#             maxtimeid=350,
-#         )
-#     )
-#     print(
-#         calculate_uwham(
-#             rundir="tests/TYK2_A02_A09/TYK2_A02_A09_r0_2",
-#             jobname="QB_A02_A09",
-#             mintimeid=70,
-#             maxtimeid=350,
-#         )
-#     )
-#     print(
-#         calculate_uwham(
-#             rundir="tests/TYK2_A02_A09/TYK2_A02_A09_r0_3",
-#             jobname="QB_A02_A09",
-#             mintimeid=None,
-#             maxtimeid=350,
-#         )
-#     )

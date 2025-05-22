@@ -3,7 +3,7 @@
 basename=eralpha
 
 #path to AToM
-AToM_dir=$HOME/Dropbox/src/AToM-OpenMM
+AToM_dir=$HOME/Dropbox/src/AToM-OpenMM/atom_openmm
 
 #basename of the receptor pdb file (processed for amber using pdb4amber)
 receptor=eralpha

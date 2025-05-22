@@ -3,7 +3,7 @@ import numpy as np
 from scipy.optimize import minimize
 
 
-def insert(x, d, x0=0):
+def _insert(x, d, x0=0):
     """Insert a value x0 at d-th position of x"""
     if d == 0:
         return np.concatenate(([x0], x))
@@ -11,7 +11,7 @@ def insert(x, d, x0=0):
         return np.concatenate((x[:d], [x0], x[d:]))
 
 
-def obj_fcn(ze, logQ, size, base):
+def _obj_fcn(ze, logQ, size, base):
     """
     Objective function for UWHAM optimization
 
@@ -24,7 +24,7 @@ def obj_fcn(ze, logQ, size, base):
     N = logQ.shape[1]
     rho = size / N
 
-    ze = insert(ze, base, 0)
+    ze = _insert(ze, base, 0)
 
     # Calculate normalized Q values
     Qnorm = np.exp(logQ - ze[:, np.newaxis]) * rho[:, np.newaxis]
@@ -42,7 +42,7 @@ def obj_fcn(ze, logQ, size, base):
     return val, grad, hess
 
 
-def uwham(logQ, size=None, label=None, base=None, init=None, fisher=True):
+def _uwham(logQ, size=None, label=None, base=None, init=None, fisher=True):
     """
     Unbinned Weighted Histogram Analysis Method
 
@@ -108,15 +108,15 @@ def uwham(logQ, size=None, label=None, base=None, init=None, fisher=True):
 
     # Optimize using scipy
     result = minimize(
-        lambda x: obj_fcn(x, logQ[sampled], size[sampled], base0)[0],
+        lambda x: _obj_fcn(x, logQ[sampled], size[sampled], base0)[0],
         init[sampled][np.arange(len(init[sampled])) != base0],
         method="trust-exact",
-        jac=lambda x: obj_fcn(x, logQ[sampled], size[sampled], base0)[1],
-        hess=lambda x: obj_fcn(x, logQ[sampled], size[sampled], base0)[2],
+        jac=lambda x: _obj_fcn(x, logQ[sampled], size[sampled], base0)[1],
+        hess=lambda x: _obj_fcn(x, logQ[sampled], size[sampled], base0)[2],
     )
 
     # Process optimization results
-    ze0 = insert(result.x, base0)
+    ze0 = _insert(result.x, base0)
     ze = np.zeros(M)
     ze[sampled] = ze0
 
@@ -174,7 +174,7 @@ def uwham(logQ, size=None, label=None, base=None, init=None, fisher=True):
         Ve = np.linalg.solve(H, G) @ np.linalg.solve(H.T, np.eye(H.shape[0])) / N
 
     # Variance vector
-    ve = insert(np.diag(Ve), base)
+    ve = _insert(np.diag(Ve), base)
 
     # Variance-covariance matrix
     Ve = np.insert(Ve, base, 0, axis=1)
@@ -193,7 +193,7 @@ def uwham(logQ, size=None, label=None, base=None, init=None, fisher=True):
     }
 
 
-def bias_fcn(epert, lam1, lam2, alpha, u0, w0):
+def _bias_fcn(epert, lam1, lam2, alpha, u0, w0):
     """
     Bias ilogistic potential:
     (lambda2-lambda1) ln[1+exp(-alpha (u-u0))]/alpha + lambda2 u + w0
@@ -205,7 +205,7 @@ def bias_fcn(epert, lam1, lam2, alpha, u0, w0):
     return ebias1 + lam2 * epert + w0
 
 
-def dbias_fcn(epert, lam1, lam2, alpha, u0, w0):
+def _dbias_fcn(epert, lam1, lam2, alpha, u0, w0):
     """
     Derivative of the bias ilogistic potential:
     (lambda2-lambda1)/(1+exp(-alpha (u-u0))) + lambda2
@@ -214,14 +214,14 @@ def dbias_fcn(epert, lam1, lam2, alpha, u0, w0):
     return (lam2 - lam1) / ee + lam1
 
 
-def npot_fcn(e0, epert, bet, lam1, lam2, alpha, u0, w0):
+def _npot_fcn(e0, epert, bet, lam1, lam2, alpha, u0, w0):
     """
     Negative reduced energy: -beta*(U0+bias)
     """
-    return -bet * (e0 + bias_fcn(epert, lam1, lam2, alpha, u0, w0))
+    return -bet * (e0 + _bias_fcn(epert, lam1, lam2, alpha, u0, w0))
 
 
-def uwham_r(label, logQ, ufactormax, ufactormin=1):
+def _uwham_r(label, logQ, ufactormax, ufactormin=1):
     """
     UWHAM implementation
     Note: This is a simplified version and would need a proper UWHAM implementation
@@ -233,7 +233,7 @@ def uwham_r(label, logQ, ufactormax, ufactormin=1):
 
     while uf >= ufactormin and uf >= 1:
         mask = slice(0, n, int(uf))
-        out = uwham(label=label[mask], logQ=logQ[mask], init=iniz)
+        out = _uwham(label=label[mask], logQ=logQ[mask], init=iniz)
         iniz = out["ze"]
         uf = uf / 2
 
@@ -359,7 +359,7 @@ def calculate_uwham(
     # Extract U0 values as U-bias
     e0 = data1["potE"].values.copy()
     for i in range(N):
-        e0[i] -= bias_fcn(
+        e0[i] -= _bias_fcn(
             data1["pertE"].iloc[i],
             data1["lambda1"].iloc[i],
             data1["lambda2"].iloc[i],
@@ -373,7 +373,7 @@ def calculate_uwham(
     sid = 0
     for be in leg1stateids:
         for te in range(mtempt):
-            neg_pot[:, sid] = npot_fcn(
+            neg_pot[:, sid] = _npot_fcn(
                 e0,
                 data1["pertE"].values,
                 bet[te],
@@ -389,7 +389,7 @@ def calculate_uwham(
     statelabels = data1["stateid"].values.astype(int) + 1
 
     # Run UWHAM (placeholder - needs implementation)
-    out = uwham_r(label=statelabels, logQ=neg_pot, ufactormax=1, ufactormin=1)
+    out = _uwham_r(label=statelabels, logQ=neg_pot, ufactormax=1, ufactormin=1)
 
     # Reshape results
     ze = np.array(out["ze"]).reshape(mtempt, mlam)
@@ -412,7 +412,7 @@ def calculate_uwham(
     # Extract U0 values as U-bias
     e0 = data1["potE"].copy()
     for i in range(N):
-        e0.iloc[i] -= bias_fcn(
+        e0.iloc[i] -= _bias_fcn(
             data1["pertE"].iloc[i],
             data1["lambda1"].iloc[i],
             data1["lambda2"].iloc[i],
@@ -426,7 +426,7 @@ def calculate_uwham(
     sid = 0
     for be in leg2stateids:
         for te in range(mtempt):
-            neg_pot[:, sid] = npot_fcn(
+            neg_pot[:, sid] = _npot_fcn(
                 e0=e0,
                 epert=data1["pertE"],
                 bet=bet[te],
@@ -442,7 +442,7 @@ def calculate_uwham(
     statelabels = nstates - data1["stateid"]
 
     # Run UWHAM
-    out = uwham_r(label=statelabels, logQ=neg_pot, ufactormax=1, ufactormin=1)
+    out = _uwham_r(label=statelabels, logQ=neg_pot, ufactormax=1, ufactormin=1)
 
     # Reshape results
     ze = out["ze"].reshape(mtempt, mlam)

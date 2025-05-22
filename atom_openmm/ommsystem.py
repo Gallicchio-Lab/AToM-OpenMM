@@ -250,7 +250,7 @@ class OMMSystemABFE(OMMSystem):
         lig_atom_restr = self.keywords.get('LIGAND_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
         rcpt_atom_restr = self.keywords.get('RCPT_CM_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
 
-        cmrestraints_present = (cm_rcpt_atoms is not None) and (cm_lig_atoms is not None)
+        cmrestraints_present = (rcpt_atom_restr is not None) and (lig_atom_restr is not None)
         self.vsiterestraintForce = None
         if cmrestraints_present:
             cmkf = float(self.keywords.get('CM_KF'))

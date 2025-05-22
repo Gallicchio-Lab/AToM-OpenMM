@@ -210,8 +210,8 @@ class async_re(object):
         self.nreplicas = None
 
         # verbose printing
-        verbose = self.keywords.get('VERBOSE', False)
-        if verbose and self.logger:
+        self.verbose = self.keywords.get('VERBOSE', False)
+        if self.verbose and self.logger:
             self.logger.setLevel(logging.DEBUG)
 
         self.implicitsolvent =  self.keywords.get('IMPLICITSOLVENT')

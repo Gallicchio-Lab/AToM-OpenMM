@@ -41,10 +41,11 @@ def parse_config(config_file):
             "ALIGN_LIGAND1_REF_ATOMS",
             "ALIGN_LIGAND2_REF_ATOMS",
         ):
-            keywords[key] = [int(x) for x in keywords[key]]
+            if keywords.get(key, None) is not None:
+                keywords[key] = [int(x) for x in keywords[key]]
 
         for key in ("VERBOSE",):
-            if isinstance(keywords[key], str):
+            if keywords.get(key, None) is not None and isinstance(keywords[key], str):
                 if keywords[key].lower() == "yes":
                     keywords[key] = True
                 elif keywords[key].lower() == "no":

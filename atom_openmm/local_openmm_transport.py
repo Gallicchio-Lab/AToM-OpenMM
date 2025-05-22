@@ -14,13 +14,13 @@ from openmm import *
 from openmm.unit import *
 from datetime import datetime
 
-from ommreplica import *
-from ommsystem import *
-from ommworker import *
+from atom_openmm.ommreplica import *
+from atom_openmm.ommsystem import *
+from atom_openmm.ommworker import *
 
 from contextlib import contextmanager
 
-from transport import Transport
+from atom_openmm.transport import Transport
 
 class LocalOpenMMTransport(Transport):
     """

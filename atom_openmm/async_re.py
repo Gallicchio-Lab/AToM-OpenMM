@@ -19,11 +19,11 @@ import signal
 
 from configobj import ConfigObj
 
-from gibbs_sampling import *
+from atom_openmm.gibbs_sampling import *
 
-from ommreplica import *
-from ommworker import *
-from local_openmm_transport import *
+from atom_openmm.ommreplica import *
+from atom_openmm.ommworker import *
+from atom_openmm.local_openmm_transport import *
 
 import multiprocessing as mp
 

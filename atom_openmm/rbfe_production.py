@@ -17,7 +17,7 @@ from openmm import *
 from openmm.unit import *
 from datetime import datetime
 
-from openmm_async_re import openmm_job_RBFE
+from atom_openmm.openmm_async_re import openmm_job_RBFE
 
 if __name__ == '__main__':
 
@@ -29,13 +29,6 @@ if __name__ == '__main__':
         sys.exit(1)
 
     commandFile = sys.argv[1]
-
-    print("")
-    print("DEPRECATION WARNING:")
-    print("The rbfe_explicit.py script is no longer supported")
-    print("and will be removed in future releases.")
-    print("Use rbfe_production.py instead.")
-    print("")
 
     print("")
     print("========================================")

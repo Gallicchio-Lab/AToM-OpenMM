@@ -1,5 +1,3 @@
-#! python
-
 from __future__ import print_function
 from __future__ import division
 import sys
@@ -11,13 +9,13 @@ import signal
 import shutil
 import random
 
-import openmm as mm
-from openmm.app import *
-from openmm import *
-from openmm.unit import *
+from simtk import openmm as mm
+from simtk.openmm.app import *
+from simtk.openmm import *
+from simtk.unit import *
 from datetime import datetime
 
-from openmm_async_re import openmm_job_ABFE
+from atom_openmm.openmm_async_re import openmm_job_AmberTRE
 
 if __name__ == '__main__':
 
@@ -31,16 +29,16 @@ if __name__ == '__main__':
     commandFile = sys.argv[1]
 
     print("")
-    print("=======================================")
-    print("AToM ABFE Asynchronous Replica Exchange")
-    print("=======================================")
+    print("====================================")
+    print("Aynchronous Temperature Replica Exchange ")
+    print("====================================")
     print("")
     print("Started at: " + str(time.asctime()))
     print("Input file:", commandFile)
     print("")
     sys.stdout.flush()
 
-    rx = openmm_job_ABFE(commandFile, options=None)
+    rx = openmm_job_AmberTRE(commandFile, options=None)
 
     rx.setupJob()
 

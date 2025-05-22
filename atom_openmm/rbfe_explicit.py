@@ -17,7 +17,7 @@ from openmm import *
 from openmm.unit import *
 from datetime import datetime
 
-from openmm_async_re import openmm_job_ABFE
+from atom_openmm.openmm_async_re import openmm_job_RBFE
 
 if __name__ == '__main__':
 
@@ -32,22 +32,22 @@ if __name__ == '__main__':
 
     print("")
     print("DEPRECATION WARNING:")
-    print("The abfe_explicit.py script is no longer supported")
+    print("The rbfe_explicit.py script is no longer supported")
     print("and will be removed in future releases.")
-    print("Use abfe_production.py instead.")
+    print("Use rbfe_production.py instead.")
     print("")
 
     print("")
-    print("=======================================")
-    print("AToM ABFE Asynchronous Replica Exchange")
-    print("=======================================")
+    print("========================================")
+    print("AToM RBFE Asynchronous Replica Exchange ")
+    print("========================================")
     print("")
     print("Started at: " + str(time.asctime()))
     print("Input file:", commandFile)
     print("")
     sys.stdout.flush()
 
-    rx = openmm_job_ABFE(commandFile, options=None)
+    rx = openmm_job_RBFE(commandFile, options=None)
 
     rx.setupJob()
 

@@ -129,8 +129,8 @@ def do_mintherm(keywords, logger):
     print("Thermalization ...")
  
     #FIX ME - get from control file
-    totalSteps = 150000
-    steps_per_cycle = 5000
+    totalSteps = int(keywords.get("THERMALIZATION_STEPS", 150000))
+    steps_per_cycle = int(keywords.get("STEPS_PER_CYCLE", 5000))
     number_of_cycles = int(totalSteps/steps_per_cycle)
     simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True, volume=True, speed=True))
 
@@ -258,8 +258,8 @@ def do_lambda_annealing(keywords, logger):
     print("Annealing to lambda = 1/2 ...")
 
     #FIX ME: get from keywords
-    totalSteps = 250000
-    steps_per_cycle = 5000
+    totalSteps = int(keywords.get("ANNEALING_STEPS", 150000))
+    steps_per_cycle = int(keywords.get("STEPS_PER_CYCLE", 5000))
     number_of_cycles = int(totalSteps/steps_per_cycle)
     deltalambda = (0.5 - 0.0)/float(number_of_cycles)
     simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True, speed=True))
@@ -370,8 +370,8 @@ def do_equil(keywords, logger):
     print("Equilibration at lambda = 1/2 ...")
 
     #FIX ME: get from keywords
-    totalSteps = 150000
-    steps_per_cycle = 5000
+    totalSteps = int(keywords.get("EQUILIBRATION_STEPS", 150000))
+    steps_per_cycle = int(keywords.get("STEPS_PER_CYCLE", 5000))
     simulation.reporters.append(StateDataReporter(stdout, steps_per_cycle, step=True, potentialEnergy = True, temperature=True, speed=True))
     if os.path.exists(jobname + "_0.xtc"):
         os.remove(jobname + "_0.xtc")
@@ -396,7 +396,7 @@ def massage_keywords(keywords, restrain_solutes = True):
 
     #temporarily restrain all non-solvent atoms
     if restrain_solutes:
-        basename = old_keywords.get('BASENAME')
+        basename = keywords.get('BASENAME')
         pdbtopfile = basename + ".pdb"
         pdb = PDBFile(pdbtopfile)
         non_ion_wat_atoms = []

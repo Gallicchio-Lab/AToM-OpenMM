@@ -129,7 +129,7 @@ class async_re(object):
         self.logger.info("command_file = %s", self.command_file)
         self.logger.info("jobname = %s", self.jobname)
         self.logger.info("Keywords:")
-        for k,v in self.keywords.iteritems():
+        for k,v in self.keywords.items():
             self.logger.info("%s: %s", k, v)
 
     def _checkInput(self):

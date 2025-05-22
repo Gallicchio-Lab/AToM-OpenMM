@@ -20,7 +20,6 @@ from simtk.unit import *
 from datetime import datetime
 
 import logging
-from configobj import ConfigObj
 from atom_openmm.ommsystem import *
 from atom_openmm.utils.AtomUtils import AtomUtils, residue_is_solvent
 
@@ -401,6 +400,7 @@ def massage_keywords(keywords, restrain_solutes = True):
         keywords['POS_RESTRAINED_ATOMS'] = non_ion_wat_atoms
 
 if __name__ == '__main__':
+    from atom_openmm.utils.config import parse_config
 
     # Parse arguments:
     usage = "%prog <ConfigFile>"
@@ -421,7 +421,7 @@ if __name__ == '__main__':
     print("")
     sys.stdout.flush()
 
-    keywords = ConfigObj(commandFile)
+    keywords = parse_config(commandFile)
     logger = logging.getLogger("abfe_structprep")
 
     restrain_solutes = True

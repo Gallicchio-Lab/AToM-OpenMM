@@ -211,7 +211,7 @@ class openmm_job_TRE(openmm_job):
 
         if self.keywords.get('TEMPERATURES') is None:
             self._exit("TEMPERATURES needs to be specified")
-        self.temperatures = self.keywords.get('TEMPERATURES').split(',')
+        self.temperatures = self.keywords.get('TEMPERATURES')
         self.nreplicas = self._buildStates()
 
     def print_status(self):
@@ -271,21 +271,20 @@ class openmm_job_ATM(openmm_job):
 
         if self.keywords.get('LAMBDAS') is None:
             self._exit("LAMBDAS needs to be specified")
-        self.lambdas = self.keywords.get('LAMBDAS').split(',')
+        self.lambdas = self.keywords.get('LAMBDAS')
         #list of temperatures
         if self.keywords.get('TEMPERATURES') is None:
             self._exit("TEMPERATURES needs to be specified")
-        self.temperatures = self.keywords.get('TEMPERATURES').split(',')
+        self.temperatures = self.keywords.get('TEMPERATURES')
 
         #flag to identify the intermediate states, typically the one at lambda=1/2
         self.intermediates = None
-        self.intermediates = self.keywords.get('INTERMEDIATE').split(',')
+        self.intermediates = self.keywords.get('INTERMEDIATE')
 
         #direction of transformation at each lambda
         #ABFE 1 from RA to R+A, -1 from R+A to A
         #RBFE 1 from RA+B to RB+A, -1 from RB+A to RA+B
-        self.directions = None
-        self.directions = self.keywords.get('DIRECTION').split(',')
+        self.directions = self.keywords.get('DIRECTION')
 
         #parameters of the softplus alchemical potential
         #lambda1 = lambda2 gives the linear potential
@@ -294,11 +293,11 @@ class openmm_job_ATM(openmm_job):
         self.alphas = None
         self.uhs = None
         self.w0coeffs = None
-        self.lambda1s = self.keywords.get('LAMBDA1').split(',')
-        self.lambda2s = self.keywords.get('LAMBDA2').split(',')
-        self.alphas = self.keywords.get('ALPHA').split(',')
-        self.uhs = self.keywords.get('U0').split(',')
-        self.w0coeffs = self.keywords.get('W0COEFF').split(',')
+        self.lambda1s = self.keywords.get('LAMBDA1')
+        self.lambda2s = self.keywords.get('LAMBDA2')
+        self.alphas = self.keywords.get('ALPHA')
+        self.uhs = self.keywords.get('U0')
+        self.w0coeffs = self.keywords.get('W0COEFF')
 
         #build parameters for the lambda/temperatures combined states
         self.nreplicas = self._buildStates()

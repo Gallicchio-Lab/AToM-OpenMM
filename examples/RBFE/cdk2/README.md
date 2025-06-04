@@ -29,7 +29,7 @@ After the setup script completes, go to the `complexes` directory to run minimiz
 
 For example:
 ```
-cd $HOME/examples/RBFE/cdk2/complexes
+cd $HOME/AToM-OpenMM/examples/RBFE/cdk2/complexes
 for i in cdk2-* ; do ( cd $i ; bash ./run.sh ) ; done
 ```
 The `run.sh` shell scripts are formatted for optionally running them on a slurm queuing system, such as the one on the Expanse supercomputer. Edit run_template.sh in `$HOME/AToM-OpenMM/examples/RBFE/cdk2/scripts` to adapt them to your cluster.

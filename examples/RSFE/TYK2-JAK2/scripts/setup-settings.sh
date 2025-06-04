@@ -3,7 +3,7 @@
 basename=TYK2-JAK2
 
 #path to AToM
-AToM_dir=/nfs/sazimi-d/Dropbox/AToM-OpenMM/AToM-OpenMM
+AToM_dir=$HOME/AToM-OpenMM/AToM-OpenMM
 
 #Maestro-prepared receptor pdb files
 receptor1=TYK2

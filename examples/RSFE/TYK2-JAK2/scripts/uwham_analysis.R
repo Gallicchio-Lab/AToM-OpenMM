@@ -75,6 +75,56 @@ function (x, w, xaxis, xmin, xmax, ymax, bar = TRUE, add = FALSE,
   list(y = y, breaks = xaxis)
 }
 
+
+gappenalty <- function ( pertE, threshold) { 
+  #detect gaps in perturbation energy distribution
+  #and returns an error penalty
+  badcount = 0  
+  lowcountfactor = 0.1 #10% of expected value if uniform distribution
+
+  penalty = 0  
+  badgap = FALSE
+  lowgap = FALSE
+  umax <- max(pertE)
+  umin <- min(pertE)
+  nbins <- ceiling((umax-umin)/threshold)
+  br <- umin + threshold*(0:nbins)
+  lowcount = lowcountfactor*length(pertE)/nbins
+  hs <- hist(data1$pertE,plot=FALSE,breaks=br);
+  cc <- hs$counts[2:(nbins-1)] #remove edges
+  bad <- (cc <= badcount)
+  #finds two or more consecutive bad occupancy bins 
+  it <- match(TRUE, bad)
+  if (! is.na(it) && it+1 <= length(cc)){
+      if ( bad[it+1] ) {
+         badgap = TRUE
+      }
+  }
+  #finds two or more consecutive low occupancy bins 
+  low <- (cc <= lowcount)
+  it <- match(TRUE, low)
+  if (! is.na(it) && it+1 <= length(cc)){
+     if ( low[it+1] ) {
+        lowgap = TRUE
+     }
+  }
+
+  if ( badgap ) {
+     penalty <- threshold
+  }else{
+     if(lowgap){
+        penalty <- 0.05*threshold
+     }
+  }
+  penalty
+}
+
+
+intpenalty <- function ( dg1, dg2, threshold, factor) {
+  max(0, factor*( max(dg1,dg2)-threshold ))
+}
+
+
 args <- commandArgs(trailingOnly = F)
 jobname <- sub("-","",args[length(args)-2])
 mintimeid <- strtoi(sub("-","",args[length(args)-1]))
@@ -149,15 +199,22 @@ statelabels <- data1$stateid + 1
 #runs UWHAM
 out <- uwham.r(label=statelabels, logQ=neg.pot,ufactormax=1,ufactormin=1)
 ze <- matrix(out$ze, nrow=mtempt, ncol=mlam)
--ze/bet
+dgprofile1 <- -ze/bet
+dgprofile1
 ve <- matrix(out$ve, nrow=mtempt, ncol=mlam)
-sqrt(ve)/bet
+ddgprofile1 <- sqrt(ve)/bet
+ddgprofile1
 
 dgbind1 <- (-ze[,mlam]/bet[]) - (-ze[,1]/bet[])
 ddgbind1 <- sqrt(ve[,mlam]+ve[,1])/bet
 
+#detect gap in perturbation energy distribution
+threshold <- nstates/bet #something like kT/DeltaLambda
+pnltygap1 <- gappenalty(data1$pertE, threshold)
+
 dgbind1
 ddgbind1
+pnltygap1
 
 
 #estimate p0(u) lambda0 for leg 1
@@ -178,12 +235,12 @@ p0 <- gm %*% (out$W[,1]/N)
 ggd <- function(x, y, norm, s2){ ((y-x)/s2)*norm*exp(-(x-y)**2/(2.*s2)) }
 gm <- outer(ux, data1$pertE, FUN = ggd, norm, sigma2)
 dp0 <- gm %*% (out$W[,1]/N)
-plot(ux, log(p0), type = "l")
-plot(ux, (dp0/p0)/bet, type="l") 
-dbf1 <- dbias.fcn(ux, 0., 0.4, 0.1, 105., 0.)
-dbf2 <- dbias.fcn(ux, 0., 0.5, 0.1, 100., 0.)
-lines(ux, dbf1)
-lines(ux, dbf2)
+plot(ux, log(p0), type = "l", xlab = "u [kcal/mol]", ylab="log(p0(u))")
+plot(ux, (dp0/p0)/bet, type="l",  xlab = "u [kcal/mol]", ylab="lmbf(u) = kT*dlog(p0)/du") 
+for ( i in leg1stateids ) {
+  dbf <- dbias.fcn(ux, lambda1[i], lambda2[i], alpha[i], u0[i], w0[i])
+  lines(ux, dbf)
+}
 
 
 
@@ -237,17 +294,24 @@ statelabels <- nstates - data1$stateid
 #runs UWHAM
 out <- uwham.r(label=statelabels, logQ=neg.pot,ufactormax=1,ufactormin=1)
 ze <- matrix(out$ze, nrow=mtempt, ncol=mlam)
--ze/bet
+dgprofile2 <- -ze/bet
+dgprofile2
 ve <- matrix(out$ve, nrow=mtempt, ncol=mlam)
-sqrt(ve)/bet
+ddgprofile2 <- sqrt(ve)/bet
+ddgprofile2
 
 
 dgbind2 <- (-ze[,mlam]/bet[]) - (-ze[,1]/bet[])
 ddgbind2 <- sqrt(ve[,mlam]+ve[,1])/bet
 
+#detect gap in perturbation energy distribution
+threshold <- nstates/bet #something like kT/DeltaLambda
+ddgbind2 <- ddgbind2
+pnltygap2 <- gappenalty(data1$pertE, threshold)
+
 dgbind2
 ddgbind2
-
+pnltygap2
 
 #estimate p0(u) lambda0 for leg 2
 ux <- seq(from = -20, to = 180, by = 5)
@@ -260,18 +324,24 @@ p0 <- gm %*% (out$W[,1]/N)
 ggd <- function(x, y, norm, s2){ ((y-x)/s2)*norm*exp(-(x-y)**2/(2.*s2)) }
 gm <- outer(ux, data1$pertE, FUN = ggd, norm, sigma2)
 dp0 <- gm %*% (out$W[,1]/N)
-plot(ux, log(p0), type = "l")
-plot(ux, (dp0/p0)/bet, type="l") 
-dbf1 <- dbias.fcn(ux, 0., 0.4, 0.1, 105., 0.)
-dbf2 <- dbias.fcn(ux, 0., 0.5, 0.1, 100., 0.)
-lines(ux, dbf1)
-lines(ux, dbf2)
+plot(ux, log(p0), type = "l", xlab = "u [kcal/mol]", ylab="log(p0(u))")
+plot(ux, (dp0/p0)/bet, type="l", xlab = "u [kcal/mol]", ylab="lmbf(u) = kT*dlog(p0)/du") 
+for ( i in leg2stateids ) {
+  dbf <- dbias.fcn(ux, lambda1[i], lambda2[i], alpha[i], u0[i], w0[i])
+  lines(ux, dbf)
+}
 
 #free energy difference
 dgb <- dgbind1 - dgbind2
+ddgbind1 <- ddgbind1 + pnltygap1
+ddgbind2 <- ddgbind2 + pnltygap2
 ddgb <- sqrt(ddgbind2*ddgbind2 + ddgbind1*ddgbind1)
+#apply penalty for large alchemical intermediate free energy. 0.1 kcal/mol
+#additional error estimate for each kcal/mol beyond 30 kcal/mol
+pnltyint <- intpenalty(dgbind1, dgbind2, 40.0, 0.05)
+ddgb <- ddgb + pnltyint
 maxsamples <- min(maxtimeid, samplesperreplica)
-result <- sprintf("DDGb = %f +- %f range %d %d", dgb, ddgb, mintimeid, maxsamples)
+result <- sprintf("DDGb = %f +- %f range %d %d maxDGint %f penaltyoverlap %f penaltyintermediate %f", dgb, min(5.0,ddgb), mintimeid, maxsamples, max(dgbind1, dgbind2), max(pnltygap1,pnltygap2), pnltyint)
 write(result, "")
 #noquote(result)
 
@@ -287,3 +357,26 @@ for ( i in nstates:leg2istate ){
     outp <- cbind(hs$mids,hs$density);
     write(t(outp),file=sprintf("p-%d.dat",i-1),ncol=2)
 }
+
+
+#plot free energy profile
+ns1 <- length(leg1stateids)
+ns2 <- length(leg2stateids)
+ns <- ns1 + ns2
+off <- dgb
+#wf1 and wf2 are Wlambda(0) values to remove the artificial non-monotonic
+#behavior that cancels out when the two legs are subtracted
+wf1 <- dgprofile1
+for ( i in leg1stateids ){
+    wf1[i] <- bias.fcn(0., lambda1[i], lambda2[i], alpha[i], u0[i], w0[i])
+}
+wf2 <- dgprofile2
+for ( i in 1:ns2 ){
+    j <- ns1 + i
+    wf2[i] <- bias.fcn(0., lambda1[j], lambda2[j], alpha[j], u0[j], w0[j])
+}
+g <- c( dgprofile1-wf1, dgprofile2[(ns2-1):1]-wf2[(ns2-1):1]+off)
+lmbd <- seq(from = 0., to = 1., length.out = ns1 + ns2 - 1)
+plot(lmbd, g, type="l", xlab="lambda", ylab="DDGb(lambda) [kcal/mol]")
+outp <- cbind(lmbd,g);
+write(t(outp),file="dglambda.dat",ncol=2)

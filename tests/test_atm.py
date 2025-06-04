@@ -38,7 +38,6 @@ def _test_rbfe_structprep(tmp_path):
         hydrogenMass=1.5 * unit.amu,
         rigidWater=True,
         switchDistance=7 * unit.angstrom,
-        flexibleConstraints=True,
     )
     with open("QB_A08_A07_sys.xml", "w") as f:
         f.write(XmlSerializer.serialize(system))

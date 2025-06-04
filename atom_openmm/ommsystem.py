@@ -14,7 +14,6 @@ from openmm.app import *
 from openmm import *
 from openmm.unit import *
 from datetime import datetime
-from configobj import ConfigObj
 
 from atom_openmm.utils.AtomUtils import AtomUtils, separate14
 
@@ -144,23 +143,29 @@ class OMMSystem(object):
     def set_positional_restraints(self):
         #indexes of the atoms whose position is restrained near the initial positions
         #by a flat-bottom harmonic potential. 
-        posrestr_atoms_list = self.keywords.get('POS_RESTRAINED_ATOMS')
+        posrestr_atoms = self.keywords.get('POS_RESTRAINED_ATOMS')
         self.posrestrForce = None
-        if posrestr_atoms_list is not None:
-            posrestr_atoms = [int(i) for i in posrestr_atoms_list]
+        if posrestr_atoms is not None:
             fc = float(self.keywords.get('POSRE_FORCE_CONSTANT')) * (kilocalorie_per_mole/angstrom**2)
             tol = float(self.keywords.get('POSRE_TOLERANCE')) * angstrom
             self.posrestrForce = self.atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
 
     def set_torsion_metaDbias(self,temperature):
+        from atom_openmm.utils.config import parse_config
+
         if self.keywords.get('METADBIAS_DIR') == None:
             return
         bias_dirs = self.keywords.get('METADBIAS_DIR')
         bias_offsets = self.keywords.get('METADBIAS_IDXOFFSET')
 
         for mdir,offset in zip(bias_dirs,bias_offsets) :
-            cntlfile = "%s/%s.cntl" % (mdir, mdir)
-            keywords  = ConfigObj(cntlfile, file_error = True)
+            for ext in ("cntl", "yaml", "json"):
+                cntlfile = "%s/%s.%s" % (mdir, mdir, ext)
+                if os.path.exists(cntlfile):
+                    break
+            else:
+                self._exit("Error: No cntl/yaml/json config file found in %s" % mdir)
+            keywords  = parse_config(cntlfile)
 
             #metadynamics settings
             bias_factor = float(keywords.get('METADBIAS_FACTOR')) # this is (T+DeltaT)/T
@@ -240,24 +245,17 @@ class OMMSystemABFE(OMMSystem):
     def set_displacement(self):
         #set displacements
         if not (self.keywords.get('DISPLACEMENT') is None):
-            self.displ = [float(displ) for displ in self.keywords.get('DISPLACEMENT').split(',')]*angstrom
+            self.displ = self.keywords.get('DISPLACEMENT')*angstrom
         else:
             msg = "Error: DISPLACEMENT is required"
             self._exit(msg)
 
     def set_vsite_restraints(self):
         #CM-CM Vsite restraints
-        cm_lig_atoms = self.keywords.get('LIGAND_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
-        if cm_lig_atoms is not None:
-            lig_atom_restr = [int(i) for i in cm_lig_atoms]
-        else:
-            lig_atom_restr = None
-        cm_rcpt_atoms = self.keywords.get('RCPT_CM_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
-        if cm_rcpt_atoms is not None:
-            rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
-        else:
-            rcpt_atom_restr = None
-        cmrestraints_present = (cm_rcpt_atoms is not None) and (cm_lig_atoms is not None)
+        lig_atom_restr = self.keywords.get('LIGAND_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
+        rcpt_atom_restr = self.keywords.get('RCPT_CM_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
+
+        cmrestraints_present = (rcpt_atom_restr is not None) and (lig_atom_restr is not None)
         self.vsiterestraintForce = None
         if cmrestraints_present:
             cmkf = float(self.keywords.get('CM_KF'))
@@ -266,7 +264,7 @@ class OMMSystemABFE(OMMSystem):
             r0 = cmtol * angstrom #radius of Vsite sphere
             ligoffset = self.keywords.get('LIGOFFSET')
             if ligoffset is not None:
-                ligoffset = [float(offset) for offset in ligoffset.split(',')]*angstrom
+                ligoffset *= angstrom
             self.vsiterestraintForce = self.atm_utils.addVsiteRestraintForceCMCM(lig_cm_particles = lig_atom_restr,
                                                                                  rcpt_cm_particles = rcpt_atom_restr,
                                                                                  kfcm = kf,
@@ -468,12 +466,12 @@ class OMMSystemRBFE(OMMSystem):
         lig1_atoms_in = self.keywords.get('LIGAND1_ATOMS')   #indexes of ligand1 atoms
         lig2_atoms_in = self.keywords.get('LIGAND2_ATOMS')   #indexes of ligand2 atoms
         if lig1_atoms_in is not None:
-            self.lig1_atoms = [int(i) for i in lig1_atoms_in]
+            self.lig1_atoms = lig1_atoms_in
         else:
             msg = "Error: LIGAND1_ATOMS is required"
             self._exit(msg)
         if lig2_atoms_in is not None:
-            self.lig2_atoms = [int(i) for i in lig2_atoms_in ]
+            self.lig2_atoms = lig2_atoms_in
         else:
             msg = "Error: LIGAND2_ATOMS is required"
             self._exit(msg)
@@ -481,12 +479,12 @@ class OMMSystemRBFE(OMMSystem):
     def set_displacement(self):
         #set displacements and offsets for ligand 1 and ligand 2
         if self.keywords.get('DISPLACEMENT') is not None:
-            self.displ = [float(displ) for displ in self.keywords.get('DISPLACEMENT').split(',')]*angstrom
+            self.displ = self.keywords.get('DISPLACEMENT')*angstrom
             #offset from VsiteCM
             ligoffset = [0,0,0]*angstrom
             ligoffset_keyword = self.keywords.get('LIGOFFSET')
             if ligoffset_keyword is not None:
-                ligoffset = [float(offset) for offset in ligoffset_keyword.split(',')]*angstrom
+                ligoffset = ligoffset_keyword * angstrom
             #the offset for lig1 is the specified LIGOFFSET
             self.lig1offset = ligoffset
             #the offset for lig2 is the displacement + LIGOFFSET
@@ -506,34 +504,22 @@ class OMMSystemRBFE(OMMSystem):
             (self.keywords.get('DISPL1_LIG1') is not None) and
             (self.keywords.get('DISPL0_LIG2') is not None) and
             (self.keywords.get('DISPL1_LIG2') is not None) ):
-            self.displ0_lig1 = [float(displ) for displ in self.keywords.get('DISPL0_LIG1').split(',')]*angstrom
-            self.displ1_lig1 = [float(displ) for displ in self.keywords.get('DISPL1_LIG1').split(',')]*angstrom
-            self.displ0_lig2 = [float(displ) for displ in self.keywords.get('DISPL0_LIG2').split(',')]*angstrom
-            self.displ1_lig2 = [float(displ) for displ in self.keywords.get('DISPL1_LIG2').split(',')]*angstrom
+            self.displ0_lig1 = self.keywords.get('DISPL0_LIG1')*angstrom
+            self.displ1_lig1 = self.keywords.get('DISPL1_LIG1')*angstrom
+            self.displ0_lig2 = self.keywords.get('DISPL0_LIG2')*angstrom
+            self.displ1_lig2 = self.keywords.get('DISPL1_LIG2')*angstrom
 
     def set_vsite_restraints(self):
         #ligand 1 Vsite restraint
-        cm_lig1_atoms = self.keywords.get('LIGAND1_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
-        if cm_lig1_atoms is not None:
-            lig1_atom_restr = [int(i) for i in cm_lig1_atoms]
-        else:
-            lig1_atom_restr = None
+        lig1_atom_restr = self.keywords.get('LIGAND1_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
 
         #ligand 2 Vsite restraint
-        cm_lig2_atoms = self.keywords.get('LIGAND2_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
-        if cm_lig2_atoms is not None:
-            lig2_atom_restr = [int(i) for i in cm_lig2_atoms]
-        else:
-            lig2_atom_restr = None
+        lig2_atom_restr = self.keywords.get('LIGAND2_CM_ATOMS')   #indexes of ligand atoms for CM-CM Vsite restraint
 
         #Vsite restraint receptor atoms
-        cm_rcpt_atoms = self.keywords.get('RCPT_CM_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
-        if cm_rcpt_atoms is None:
-            cm_rcpt_atoms = self.keywords.get('REST_LIGAND_CMREC_ATOMS')
-        if cm_rcpt_atoms is not None:
-            rcpt_atom_restr = [int(i) for i in cm_rcpt_atoms]
-        else:
-            rcpt_atom_restr = None
+        rcpt_atom_restr = self.keywords.get('RCPT_CM_ATOMS')   #indexes of rcpt atoms for CM-CM Vsite restraint
+        if rcpt_atom_restr is None:
+            rcpt_atom_restr = self.keywords.get('REST_LIGAND_CMREC_ATOMS')
 
         cmrestraints_present = (rcpt_atom_restr is not None) and (lig1_atom_restr is not None) and (lig2_atom_restr is not None)
 
@@ -635,12 +621,12 @@ class OMMSystemRBFE(OMMSystem):
         refatoms1_cntl = self.keywords.get('ALIGN_LIGAND1_REF_ATOMS')
         refatoms2_cntl = self.keywords.get('ALIGN_LIGAND2_REF_ATOMS')
 
-        if refatoms1_cntl == None or refatoms2_cntl == None:
+        if refatoms1_cntl is None or refatoms2_cntl is None:
             return
 
-        self.refatoms1 = [int(refatoms1) for refatoms1 in refatoms1_cntl]
+        self.refatoms1 = refatoms1_cntl
         lig1_ref_atoms  = [ self.refatoms1[i]+self.lig1_atoms[0] for i in range(3)]
-        self.refatoms2 = [int(refatoms2) for refatoms2 in refatoms2_cntl]
+        self.refatoms2 = refatoms2_cntl
         lig2_ref_atoms  = [ self.refatoms2[i]+self.lig2_atoms[0] for i in range(3)]
 
         #add alignment force

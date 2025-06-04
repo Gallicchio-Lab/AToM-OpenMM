@@ -17,13 +17,12 @@ import shutil
 import logging, logging.config
 import signal
 
-from configobj import ConfigObj
-
 from atom_openmm.gibbs_sampling import *
 
 from atom_openmm.ommreplica import *
 from atom_openmm.ommworker import *
 from atom_openmm.local_openmm_transport import *
+from atom_openmm.utils.config import parse_config
 
 import multiprocessing as mp
 
@@ -49,7 +48,7 @@ class async_re(object):
            self._exit('No such file: %s'%self.command_file)
 
         self.jobname = os.path.splitext(os.path.basename(command_file))[0]
-        self.keywords = ConfigObj(self.command_file)
+        self.keywords = parse_config(self.command_file)
 
         self._checkInput()
         self._printStatus()
@@ -130,7 +129,7 @@ class async_re(object):
         self.logger.info("command_file = %s", self.command_file)
         self.logger.info("jobname = %s", self.jobname)
         self.logger.info("Keywords:")
-        for k,v in self.keywords.iteritems():
+        for k,v in self.keywords.items():
             self.logger.info("%s: %s", k, v)
 
     def _checkInput(self):
@@ -211,12 +210,9 @@ class async_re(object):
         self.nreplicas = None
 
         # verbose printing
-        if self.keywords.get('VERBOSE').lower() == 'yes':
-            self.verbose = True
-            if self.logger:
-                self.logger.setLevel(logging.DEBUG)
-        else:
-            self.verbose = False
+        self.verbose = self.keywords.get('VERBOSE', False)
+        if self.verbose and self.logger:
+            self.logger.setLevel(logging.DEBUG)
 
         self.implicitsolvent =  self.keywords.get('IMPLICITSOLVENT')
         self.totalsteps = self.keywords.get('PRODUCTION_STEPS')

@@ -50,6 +50,20 @@ def parse_config(config_file):
                     keywords[key] = True
                 elif keywords[key].lower() == "no":
                     keywords[key] = False
+
+        # Try casting the rest to int or float
+        for key in keywords:
+            if isinstance(keywords[key], str):
+                try:
+                    keywords[key] = int(keywords[key])
+                except ValueError:
+                    pass
+                try:
+                    keywords[key] = float(keywords[key])
+                except ValueError:
+                    pass
+
+        return keywords.dict()
     elif config_file.endswith(".yaml") or config_file.endswith(".yml"):
         import yaml
 

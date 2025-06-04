@@ -71,3 +71,14 @@ def _test_rbfe_production(tmp_path):
     rx = openmm_job_RBFE("QB_A08_A07_asyncre.yaml", options=None)
     rx.setupJob()
     rx.scheduleJobs()
+
+
+def _test_input_parser():
+    from atom_openmm.utils.config import parse_config
+
+    config_yaml = parse_config(os.path.join(curr_dir, "QB_A08_A07_asyncre.yaml"))
+    config_json = parse_config(os.path.join(curr_dir, "QB_A08_A07_asyncre.json"))
+    config_cntl = parse_config(os.path.join(curr_dir, "QB_A08_A07_asyncre.cntl"))
+
+    assert config_yaml == config_json
+    assert config_yaml == config_cntl

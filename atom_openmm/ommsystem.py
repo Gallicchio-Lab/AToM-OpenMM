@@ -159,7 +159,12 @@ class OMMSystem(object):
         bias_offsets = self.keywords.get('METADBIAS_IDXOFFSET')
 
         for mdir,offset in zip(bias_dirs,bias_offsets) :
-            cntlfile = "%s/%s.cntl" % (mdir, mdir)
+            for ext in ("cntl", "yaml", "json"):
+                cntlfile = "%s/%s.%s" % (mdir, mdir, ext)
+                if os.path.exists(cntlfile):
+                    break
+            else:
+                self._exit("Error: No cntl/yaml/json config file found in %s" % mdir)
             keywords  = parse_config(cntlfile)
 
             #metadynamics settings

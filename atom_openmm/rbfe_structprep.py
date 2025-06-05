@@ -405,6 +405,8 @@ def massage_keywords(keywords, restrain_solutes = True):
 
 if __name__ == '__main__':
     from atom_openmm.utils.config import parse_config
+    from atom_openmm.utils import set_directory
+    from pathlib import Path
 
     # Parse arguments:
     usage = "%prog <ConfigFile>"
@@ -433,13 +435,14 @@ if __name__ == '__main__':
     restrain_solutes = True
 
     old_keywords = keywords.copy()
-    massage_keywords(keywords, restrain_solutes)
-    
-    do_mintherm(keywords, logger)
-    do_lambda_annealing(keywords, logger)
+    with set_directory(Path(commandFile).parent):
+        massage_keywords(keywords, restrain_solutes)
+        
+        do_mintherm(keywords, logger)
+        do_lambda_annealing(keywords, logger)
 
-    #reestablish the restrained atoms
-    if restrain_solutes:
-        keywords['POS_RESTRAINED_ATOMS'] = old_keywords.get('POS_RESTRAINED_ATOMS') 
+        #reestablish the restrained atoms
+        if restrain_solutes:
+            keywords['POS_RESTRAINED_ATOMS'] = old_keywords.get('POS_RESTRAINED_ATOMS') 
 
-    do_equil(keywords, logger)
+        do_equil(keywords, logger)

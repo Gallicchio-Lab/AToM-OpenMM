@@ -1,0 +1,14 @@
+name: CI/CD
+
+on: [push]
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+    secrets: inherit
+
+  publish:
+    if: startsWith(github.event.ref, 'refs/tags/')
+    needs: test
+    uses: ./.github/workflows/publish.yml
+    secrets: inherit

@@ -19,7 +19,7 @@ from datetime import datetime
 
 from atom_openmm.openmm_async_re import openmm_job_RBFE
 
-if __name__ == "__main__":
+if __name__ == '__main__':
 
     # Parse arguments:
     usage = "%prog <ConfigFile>"

@@ -6,6 +6,7 @@ from numpy.random import random as _random
 from random import choice
 from itertools import permutations
 import six
+import sys
 
 def _exit(message):
     """Print and flush a message to stdout and then exit."""

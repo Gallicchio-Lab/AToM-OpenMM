@@ -39,7 +39,7 @@ class OMMWorker(object):
         self.nthreads = None
         if node_info is not None:
             self.node_name = node_info['node_name']
-            pattern = re.compile('(\d+):(\d+)')
+            pattern = re.compile(r'(\d+):(\d+)')
             self.platform_name = node_info['arch']
             matches = pattern.search(node_info["slot_number"])
             self.platformId = int(matches.group(1))

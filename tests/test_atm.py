@@ -5,6 +5,36 @@ import os
 curr_dir = os.path.dirname(os.path.abspath(__file__))
 
 
+def _test_abfe_structprep(tmp_path):
+    from atom_openmm.abfe_structprep import (
+        massage_keywords,
+        do_mintherm,
+        do_lambda_annealing,
+        do_equil,
+    )
+    from atom_openmm.utils.config import parse_config
+    import logging
+
+    logger = logging.getLogger("abfe_structprep")
+    run_dir = os.path.join(tmp_path, "1STP")
+    shutil.copytree(os.path.join(curr_dir, "1STP"), run_dir)
+    os.chdir(run_dir)
+
+    keywords = parse_config("1STP_asyncre.yaml")
+    restrain_solutes = True
+    old_keywords = keywords.copy()
+    massage_keywords(keywords, restrain_solutes)
+
+    do_mintherm(keywords, logger)
+    do_lambda_annealing(keywords, logger)
+
+    # reestablish the restrained atoms
+    if restrain_solutes:
+        keywords["POS_RESTRAINED_ATOMS"] = old_keywords.get("POS_RESTRAINED_ATOMS")
+
+    do_equil(keywords, logger)
+
+
 def _test_rbfe_structprep(tmp_path):
     from atom_openmm.rbfe_structprep import (
         massage_keywords,

@@ -35,6 +35,21 @@ def _test_abfe_structprep(tmp_path):
     do_equil(keywords, logger)
 
 
+def _test_abfe_production(tmp_path):
+    from atom_openmm.openmm_async_re import openmm_job_ABFE
+
+    shutil.copytree(
+        os.path.join(curr_dir, "1STP_equil"),
+        os.path.join(tmp_path, "1STP_equil"),
+    )
+    run_dir = os.path.join(tmp_path, "1STP_equil")
+    os.chdir(run_dir)
+
+    rx = openmm_job_ABFE("1STP_asyncre.yaml", options=None)
+    rx.setupJob()
+    rx.scheduleJobs()
+
+
 def _test_rbfe_structprep(tmp_path):
     from atom_openmm.rbfe_structprep import (
         massage_keywords,

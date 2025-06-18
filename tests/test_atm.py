@@ -127,3 +127,13 @@ def _test_input_parser():
 
     assert config_yaml == config_json
     assert config_yaml == config_cntl
+
+    for key in config_yaml.keys():
+        assert config_yaml[key] == config_json[key]
+        assert config_yaml[key] == config_cntl[key]
+        assert type(config_yaml[key]) is type(
+            config_json[key]
+        ), f"{key} {type(config_yaml[key])} {type(config_json[key])}"
+        assert type(config_yaml[key]) is type(
+            config_cntl[key]
+        ), f"{key} {type(config_yaml[key])} {type(config_cntl[key])}"

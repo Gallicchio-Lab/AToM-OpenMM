@@ -188,7 +188,7 @@ class openmm_job_TRE(openmm_job):
 
         # creates openmm workers
         self.openmm_workers = []
-        pattern = re.compile('(\d+):(\d+)')
+        pattern = re.compile(r'(\d+):(\d+)')
         for node in self.compute_nodes:
             slot_id = node["slot_number"]
             matches = pattern.search(slot_id)

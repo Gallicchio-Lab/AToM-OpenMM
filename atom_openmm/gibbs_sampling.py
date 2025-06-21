@@ -6,6 +6,7 @@ from numpy.random import random as _random
 from random import choice
 from itertools import permutations
 import six
+import sys
 
 def _exit(message):
     """Print and flush a message to stdout and then exit."""
@@ -16,7 +17,7 @@ def _exit(message):
 
 def weighted_choice(choices):
     """Return a discrete outcome given a set of outcome/weight pairs."""
-    r = _random()*sum(w for c,w in list(choices))
+    r = _random()*sum([w for _,w in list(choices)])
     for c,w in choices:
         r -= w
         if r < 0:

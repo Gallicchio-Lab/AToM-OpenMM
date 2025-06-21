@@ -41,7 +41,7 @@ jobs:
       - name: Install conda deps
         run: |
           conda install mamba
-          mamba install -y -q python=${{ matrix.python-version }} openmm openmm-ml pyyaml numpy cuda-version>=11.8 pandas
+          mamba install -y -q python=${{ matrix.python-version }} openmm pyyaml numpy pandas
 
       - name: Install package
         run: |

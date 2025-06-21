@@ -63,6 +63,21 @@ def parse_config(config_file):
                 except ValueError:
                     pass
 
+        for key in (
+            "MAX_SAMPLES",
+            "PRODUCTION_STEPS",
+            "PRNT_FREQUENCY",
+            "TRJ_FREQUENCY",
+            "CHECKPOINT_FREQUENCY",
+            "THERMALIZATION_STEPS",
+            "ANNEALING_STEPS",
+            "EQUILIBRATION_STEPS",
+            "STEPS_PER_CYCLE",
+            "WALL_TIME",
+        ):
+            if key in keywords:
+                keywords[key] = int(keywords[key])
+
         return keywords.dict()
     elif config_file.endswith(".yaml") or config_file.endswith(".yml"):
         import yaml

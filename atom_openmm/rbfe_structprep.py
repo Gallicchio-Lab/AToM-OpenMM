@@ -256,7 +256,7 @@ def do_lambda_annealing(keywords, logger):
 
     print("Annealing to lambda = 1/2 ...")
 
-    totalSteps = int(keywords.get("ANNEALING_STEPS", 150000))
+    totalSteps = int(keywords.get("ANNEALING_STEPS", 250000))
     steps_per_cycle = int(keywords.get("STEPS_PER_CYCLE", 5000))
     number_of_cycles = int(totalSteps/steps_per_cycle)
     deltalambda = (0.5 - 0.0)/float(number_of_cycles)

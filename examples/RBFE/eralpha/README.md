@@ -5,9 +5,9 @@ In this tutorial we will calculate the relative binding free energies between fo
 
 It is highly recommended to go through less complex [tutorials](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples)before attempting this one. The following assumes familiarity with the terms and procedures introduced in the [TEMOA G1 ABFE tutorial](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/ABFE/temoa-g1) and others.
 
-### System preparation
+We assume that the OpenMM and AToM-OpenMM packages and their dependencies are available in a `conda` environment (see the [README](../../../README.md), and that the `examples` folder is available under `$HOME/AToM-OpenMM/examples`. Adjust this pathname as needed.
 
-We assume in this tutorial that AToM-OpenMM is available under `$HOME/AToM-OpenMM`. Adjust the pathname pointing to the AToM-OpenMM installation folder in `setup-settings.sh` as needed. See the [TEMOA G1 ABFE tutorial](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/ABFE/temoa-g1) for help setting up OpenMM and the AToM-OpenMM software.
+### System preparation
 
 This tutorial assumes that the [Ambertools](http://ambermd.org) executables are in the search path. They can be conveniently installed under the same conda environment:
 

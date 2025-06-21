@@ -9,5 +9,6 @@
 #SBATCH --no-requeue
 #SBATCH -t 02:15:00
 
+. $HOME/miniforge3/bin/activate
 echo "localhost,0:0,1,CUDA,,/tmp" > nodefile
-python <ASYNCRE_DIR>/abfe_production.py <JOBNAME>_asyncre.cntl
+abfe_production.py <JOBNAME>_asyncre.cntl

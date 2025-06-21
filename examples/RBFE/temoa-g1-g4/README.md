@@ -7,17 +7,17 @@ See [Solmaz Azimi, Sheenam Khuttan, Joe Z. Wu, Rajat K. Pal, and Emilio  Gallicc
 
 It is highly recommended to go through the [TEMOA G1 ABFE tutorial](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/ABFE/temoa-g1) before attempting this one. The following assumes familiarity with the terms and procedures introduced in the [TEMOA G1 ABFE tutorial](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/ABFE/temoa-g1).
 
+We assume in this tutorial that the OpenMM and AToM-OpenMM packages and their dependencies are available in a `conda` environment (see the [README](../../../README.md), and that the `examples` folder is available under `$HOME/AToM-OpenMM/examples`. Adjust this pathname as needed.
+
 ### System preparation
 
 The starting point are the topology and coordinate files of a simulation box with the TEMOA host and the G1 and G4 guests in the Amber files `temoa-g1-g4.prmtop` and `temoa-g1-g4.inpcrd` provided in this folder. How to prepare systems in Amber format is beyond the scope of this tutorial. We used the `Antechamber` and `tleap` programs of the [`AmberTools` suite version 19](https://ambermd.org/) using the GAFF force field and the TIP3P water model. G1 was placed in the binding site of the host and G4 at some distance away in the bulk. See the [paper](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129) for more information.
 
-We assume in this tutorial that this repository has been cloned under `$HOME`. Adjust the pathnames as needed. We are also assuming that OpenMM can be launched by running ``python`` in a conda environment. See [examples/README](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples).
-
 Prepare, minimize, thermalize, relax, and equilibrate the complex:
 ```
 cd $HOME/AToM-OpenMM/examples/RBFE/temoa-g1-g4
-python $HOME/AToM-OpenMM/atom_openmm/make_atm_system_from_Amber.py --AmberPrmtopinFile temoa-g1-g4.prmtop --AmberInpcrdinFile temoa-g1-g4.inpcrd --systemXMLoutFile temoa-g1-g4_sys.xml --systemPDBoutFile temoa-g1-g4.pdb
-python $HOME/AToM-OpenMM/atom_openmm/rbfe_structprep.py temoa-g1-g4_asyncre.cntl
+make_atm_system_from_Amber.py --AmberPrmtopinFile temoa-g1-g4.prmtop --AmberInpcrdinFile temoa-g1-g4.inpcrd --systemXMLoutFile temoa-g1-g4_sys.xml --systemPDBoutFile temoa-g1-g4.pdb
+rbfe_structprep.py temoa-g1-g4_asyncre.cntl
 ```
 The lower cup of the host loosely restrained as in the original work. Each step creates an OpenMM checkpoint file in XML format to start the subsequent step. Each step also generates a PDB file for visualization. The result is an equilibrated system at the alchemical intermediate state at λ=1/2.
 
@@ -26,7 +26,7 @@ The lower cup of the host loosely restrained as in the original work. Each step 
 See the [TEMOA-G1 ABFE tutorial](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/ABFE/temoa-g1) about the nodefile and how to customize it in different ways to match the hardware on your machine.
 
 ```
-python $HOME/AToM-OpenMM/atom_openmm/rbfe_production.py temoa-g1-g4_asyncre.cntl
+rbfe_production.py temoa-g1-g4_asyncre.cntl
 ```
 
 You should see the contents of the control file echo-ed back and messages indicating that replica are dispatched to the GPU and that replicas change alchemical states by exchanging them with other replicas. The job is set to run for 4 hours.

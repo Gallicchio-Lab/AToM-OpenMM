@@ -76,7 +76,7 @@ EOF
     tleap -f tleap.cmd || exit 1
     
     #convert prmtop/inpcrd to OpenMM's System + PDB topology
-    python $AToM_dir/make_atm_system_from_Amber.py --AmberPrmtopinFile ${jobname}.prmtop --AmberInpcrdinFile ${jobname}.inpcrd --systemXMLoutFile ${jobname}_sys.xml --systemPDBoutFile ${jobname}.pdb
+    make_atm_system_from_Amber.py --AmberPrmtopinFile ${jobname}.prmtop --AmberInpcrdinFile ${jobname}.inpcrd --systemXMLoutFile ${jobname}_sys.xml --systemPDBoutFile ${jobname}.pdb
 
     #residue ligand names
     lig1resname="UNK"
@@ -97,13 +97,13 @@ EOF
     
     
     #copy slurm files, etc
-    sed "s#<JOBNAME>#${jobname}#;s#<ASYNCRE_DIR>#${AToM_dir}#" < ${work_dir}/scripts/run_template.sh > ${work_dir}/complexes/${jobname}/run.sh
+    sed "s#<JOBNAME>#${jobname}#" < ${work_dir}/scripts/run_template.sh > ${work_dir}/complexes/${jobname}/run.sh
 
     cp ${work_dir}/scripts/analyze.sh ${work_dir}/scripts/uwham_analysis.R ${work_dir}/complexes/${jobname}/
     
 done
 
 #prepare prep script
-sed "s#<RECEPTOR>#${receptor}# ; s#<LIGPAIRS>#${ligpreppairs}# ; s#<ASYNCRE_DIR>#${AToM_dir}#g " < ${work_dir}/scripts/prep_template.sh > ${work_dir}/complexes/prep.sh
+sed "s#<RECEPTOR>#${receptor}# ; s#<LIGPAIRS>#${ligpreppairs}#g " < ${work_dir}/scripts/prep_template.sh > ${work_dir}/complexes/prep.sh
 #prepare free energy calculation script
 sed "s#<RECEPTOR>#${receptor}# ; s#<LIGPAIRS>#${ligpreppairs}# " < ${work_dir}/scripts/free_energies_template.sh > ${work_dir}/complexes/free_energies.sh

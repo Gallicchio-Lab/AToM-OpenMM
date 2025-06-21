@@ -48,7 +48,7 @@ for l in `seq 0 $n` ; do
 	displs="$displs $d"
     done
     echo "Displacement vector: $displs"
-    python $AToM_dir/make_atm_system_from_rcpt_lig.py --receptorinFile "${rcptpdb}" --LIG1SDFinFile "${lig1sdf}" --LIG2SDFinFile "${lig2sdf}" --displacement "${displs}" --systemXMLoutFile "${jobname}_sys.xml" --systemPDBoutFile "${jobname}.pdb" --hmass 1.5 --forcefieldJSONCachefile "${work_dir}/ligands/ffdb.json" || exit 1
+    make_atm_system_from_rcpt_lig.py --receptorinFile "${rcptpdb}" --LIG1SDFinFile "${lig1sdf}" --LIG2SDFinFile "${lig2sdf}" --displacement "${displs}" --systemXMLoutFile "${jobname}_sys.xml" --systemPDBoutFile "${jobname}.pdb" --hmass 1.5 --forcefieldJSONCachefile "${work_dir}/ligands/ffdb.json" || exit 1
     #residue ligand names
     lig1resname=L1
     lig2resname=L2
@@ -66,13 +66,13 @@ for l in `seq 0 $n` ; do
     
     python $scripts_dir/create_cntlfile_from_template_rbfe.py --systemPDBFile "${jobname}.pdb" --templatein ${work_dir}/scripts/asyncre_template.cntl --jobname "${jobname}" --displacement "${displs}" --lig1resname "${lig1resname}" --lig1refatoms "${ref_atoms1a}" --lig2resname "${lig2resname}" --lig2refatoms "${ref_atoms2a}"  --vsiteResidues "${vres}" --cntlfileout ${jobname}_asyncre.cntl || exit 1
 
-    sed "s#<JOBNAME>#${jobname}#g;s#<ASYNCRE_DIR>#${AToM_dir}#g" < ${work_dir}/scripts/run_template.sh > ${work_dir}/complexes/${jobname}/run.sh
+    sed "s#<JOBNAME>#${jobname}#g" < ${work_dir}/scripts/run_template.sh > ${work_dir}/complexes/${jobname}/run.sh
 
     cp ${work_dir}/scripts/analyze.sh ${work_dir}/scripts/uwham_analysis.R ${work_dir}/complexes/${jobname}/
     
 done
 
 #prepare prep script
-sed "s#<RECEPTOR>#${receptor}# ; s#<LIGPAIRS>#${ligpreppairs}# ; s#<ASYNCRE_DIR>#${AToM_dir}#g " < ${work_dir}/scripts/prep_template.sh > ${work_dir}/complexes/prep.sh
+sed "s#<RECEPTOR>#${receptor}# ; s#<LIGPAIRS>#${ligpreppairs}#" < ${work_dir}/scripts/prep_template.sh > ${work_dir}/complexes/prep.sh
 #prepare free energy calculation script
 sed "s#<RECEPTOR>#${receptor}# ; s#<LIGPAIRS>#${ligpreppairs}# " < ${work_dir}/scripts/free_energies_template.sh > ${work_dir}/complexes/free_energies.sh

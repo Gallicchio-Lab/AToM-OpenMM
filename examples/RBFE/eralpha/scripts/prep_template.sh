@@ -10,9 +10,9 @@
 #SBATCH --account=<account>
 #SBATCH -t 12:00:00
 
-. ~/miniconda3/bin/activate atm
+. $HOME/miniforge3/bin/activate
 for pair in <LIGPAIRS> ; do
     jobname=<RECEPTOR>-$pair
     echo "Prepping $jobname"
-    ( cd ${jobname} &&  python <ASYNCRE_DIR>/rbfe_structprep.py ${jobname}_asyncre.cntl )  || exit 1
+    ( cd ${jobname} &&  rbfe_structprep.py ${jobname}_asyncre.cntl )  || exit 1
 done

@@ -9,8 +9,9 @@
 #SBATCH --no-requeue
 #SBATCH -t 02:15:00
 
+. $HOME/miniforge3/bin/activate
 for lig in <LIGS> ; do
     jobname=<RECEPTOR>-${lig}
     echo "Prepping $jobname"
-    ( cd ${jobname} &&  python <ASYNCRE_DIR>/abfe_structprep.py ${jobname}_asyncre.cntl  )  || exit 1
+    ( cd ${jobname} &&  abfe_structprep.py ${jobname}_asyncre.cntl  )  || exit 1
 done

@@ -12,12 +12,12 @@
 
 jobname=<JOBNAME>
 
-. ~/miniconda3/bin/activate atm8.1
+. $HOME/miniforge3/bin/activate
 echo "Running on $(hostname)"
 
 if [ ! -f ${jobname}_0.xml ]; then
-   python <ASYNCRE_DIR>/rbfe_structprep.py ${jobname}_asyncre.cntl || exit 1
+   rbfe_structprep.py ${jobname}_asyncre.cntl || exit 1
 fi
 
 echo "localhost,0:0,1,CUDA,,/tmp" > nodefile
-python <ASYNCRE_DIR>/rbfe_production.py ${jobname}_asyncre.cntl
+rbfe_production.py ${jobname}_asyncre.cntl

@@ -32,7 +32,7 @@ for l in `seq 0 ${nlig_m1}` ; do
     for d in ${displacement[@]}; do
 	displs="$displs $d"
     done
-    python $AToM_dir/make_atm_system_from_rcpt_lig.py --receptorinFile "${rcptpdb}" --LIG1SDFinFile "${ligsdf}" --displacement "${displs}" --systemXMLoutFile "${jobname}_sys.xml" --systemPDBoutFile "${jobname}.pdb" --forcefieldJSONCachefile "${work_dir}/ligands/ffdb.json" || exit 1
+    make_atm_system_from_rcpt_lig.py --receptorinFile "${rcptpdb}" --LIG1SDFinFile "${ligsdf}" --displacement "${displs}" --systemXMLoutFile "${jobname}_sys.xml" --systemPDBoutFile "${jobname}.pdb" --forcefieldJSONCachefile "${work_dir}/ligands/ffdb.json" || exit 1
 
     #residue ligand name
     lig1resname=L1
@@ -44,14 +44,14 @@ for l in `seq 0 ${nlig_m1}` ; do
     python $scripts_dir/create_cntlfile_from_template_abfe.py --systemPDBFile "${jobname}.pdb" --templatein ${work_dir}/scripts/asyncre_template.cntl --jobname "${jobname}" --displacement "${displs}" --lig1resname "${lig1resname}" --vsiteResidues "${vres}" --cntlfileout ${jobname}_asyncre.cntl || exit 1
 
     #copy slurm files, etc
-    sed "s#<JOBNAME>#${jobname}#;s#<ASYNCRE_DIR>#${AToM_dir}#" < ${work_dir}/scripts/run_template.sh > ${work_dir}/complexes/${jobname}/run.sh
+    sed "s#<JOBNAME>#${jobname}#" < ${work_dir}/scripts/run_template.sh > ${work_dir}/complexes/${jobname}/run.sh
     cp ${work_dir}/scripts/analyze.sh ${work_dir}/scripts/uwham_analysis.R ${work_dir}/complexes/${jobname}/
     
 done
 
 #prepare prep script
 ligs=${ligands[@]}
-sed "s#<RECEPTOR>#${receptor}#;s#<LIGS>#${ligs}#  ; s#<ASYNCRE_DIR>#${AToM_dir}#g "< ${work_dir}/scripts/prep_template.sh > ${work_dir}/complexes/prep.sh
+sed "s#<RECEPTOR>#${receptor}#;s#<LIGS>#${ligs}#g "< ${work_dir}/scripts/prep_template.sh > ${work_dir}/complexes/prep.sh
 
 #prepare free energy calculation script
 sed "s#<RECEPTOR>#${receptor}#;s#<LIGS>#${ligs}# " < ${work_dir}/scripts/free_energies_template.sh > ${work_dir}/complexes/free_energies.sh

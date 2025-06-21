@@ -27,7 +27,7 @@ WALL_TIME = 240
 #Frequency of replica exchange attempts in seconds
 CYCLE_TIME = 10
 
-#Frequency of saving checkpoint files in minutes
+#Frequency of saving checkpoint files in seconds
 CHECKPOINT_TIME = 600
 
 #The nodefile. Each line corresponds to a GPU device.
@@ -87,8 +87,8 @@ FRICTION_COEFF = 0.500000
 #MD time step in ps
 TIME_STEP = 0.002
 
-#GPU platform 
-OPENMM_PLATFORM = OpenCL
+#OpenMM platform 
+OPENMM_PLATFORM = CPU
 
 #set to 'yes' to turn on verbose logging
 VERBOSE = 'no'

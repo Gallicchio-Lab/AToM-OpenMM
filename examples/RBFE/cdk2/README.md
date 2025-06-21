@@ -4,9 +4,9 @@ Relative Binding Free Energies of a set of ligands of the CDK2 Kinase
 
 In this tutorial we will calculate the relative binding free energies between congeneric ligands binding to the CDK2 receptor with six ligands from the paper: [Wang et al. (2013) Modeling Local Structural Rearrangements Using FEP/REST: Application to Relative Binding Affinity Predictions of CDK2 Inhibitors](https://pubs.acs.org/doi/10.1021/ct300911a). This tutorial uses an automated workflow to prepare and run the eight relative binding free energy calculations between all pairs of complexes.
 
-### System preparation
+We assume that the OpenMM and AToM-OpenMM packages and their dependencies are available in a `conda` environment (see the [README](../../../README.md), and that the `examples` folder is available under `$HOME/AToM-OpenMM/examples`. Adjust this pathname as needed.
 
-We assume that AToM-OpenMM is available under `$HOME/AToM-OpenMM`. Adjust the pathname pointing to the AToM-OpenMM installation folder in `setup-settings.sh` as needed. 
+### System preparation
 
 Setup the simulation input files. The automated setup script below reads the parameters from the `setup-settings.sh` file.
 

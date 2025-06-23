@@ -1,11 +1,34 @@
 import string
 import random
 import numpy as np
+from contextlib import contextmanager
+from pathlib import Path
+import os
 from openmm import version as ommversion
 from simtk import openmm as mm
 from simtk.openmm.app import *
 from simtk.openmm import *
 from simtk.unit import *
+
+
+@contextmanager
+def set_directory(path: Path):
+    """Sets the cwd within the context
+
+    Args:
+        path (Path): The path to the cwd
+
+    Yields:
+        None
+    """
+
+    origin = Path().absolute()
+    try:
+        os.chdir(path)
+        yield
+    finally:
+        os.chdir(origin)
+
 
 class AtomUtils(object):
     """

@@ -60,69 +60,69 @@ program_start_timer = time()
 parser = argparse.ArgumentParser(description=whatItDoes)
 
 # Required input
-parser.add_argument('--AmberPrmtopinFile', required=True,  type=str, default=None,
+parser.add_argument('--AmberPrmtopinFile', required=True,  type=str, default=None, dest='prmtopfile',
                     help='Amber topology file')
-parser.add_argument('--AmberInpcrdinFile', required=True,  type=str, default=None,
+parser.add_argument('--AmberInpcrdinFile', required=True,  type=str, default=None, dest='crdfile',
                     help='Amber coordinate file')
-parser.add_argument('--systemXMLoutFile',  required=True,  type=str, default=None,
+parser.add_argument('--systemXMLoutFile',  required=True,  type=str, default=None, dest='xmloutfile',
                     help='Name of the XML file where to save the System')
-parser.add_argument('--systemPDBoutFile', required=True, type=str, default=None,
+parser.add_argument('--systemPDBoutFile', required=True, type=str, default=None, dest='pdboutfile',
                     help='Name of the PDB file where to output to system')
 
 # Optional input
 parser.add_argument('--hmass', required=False, type=float,
                     default=1.0,
                     help='Hydrogen mass, set it to 1.5 amu to use a 4 fs time-step')
+parser.add_argument('--nonbondedCutoff', required=False, type=float,
+                    default=0.9,
+                    help='Nonbonded cutoff, default is 0.9 nm')
+parser.add_argument('--switchDistance', required=False, type=float,
+                    default=0.0,
+                    help='Switch distance, default is 0.0 nm')
 
 # Arguments that are flags
 parser.add_argument('--verbose', required=False, action='store_true',
                     help='Get more output with this flag')
 
-args = vars(parser.parse_args())
-
-# Pull data from command line into local variables
-prmtopfile = args['AmberPrmtopinFile']
-crdfile = args['AmberInpcrdinFile']
-xmloutfile = args['systemXMLoutFile']
-pdboutfile = args['systemPDBoutFile']
-hmass = float(args['hmass'])
-
-# flag for printing (verbose) 
-flagverbose = args['verbose']
-
-#####################################################
-#   Echo out the suppliable input parameters        #
-#####################################################
+def make_system(prmtopfile, crdfile, xmloutfile, pdboutfile, hmass, nonbondedCutoff, switchDistance, verbose=False):
+    #####################################################
+    #   Echo out the suppliable input parameters        #
+    #####################################################
 
 
-print('\nUser-supplied input parameters')
-print('Amber prmtop file:               ', prmtopfile)
-print('Amber coordinate file:           ', crdfile)
-print('Topology PDB output file:        ', pdboutfile)
-print('System XML output file:          ', xmloutfile)
-print('Hydrogen mass:                   ', hmass)  
+    print('\nUser-supplied input parameters')
+    print('Amber prmtop file:               ', prmtopfile)
+    print('Amber coordinate file:           ', crdfile)
+    print('Topology PDB output file:        ', pdboutfile)
+    print('System XML output file:          ', xmloutfile)
+    print('Hydrogen mass:                   ', hmass)  
 
 
-############################################
-#                                          #
-#   READ THE AMBER SYSTEM                  #
-#                                          #
-############################################
+    ############################################
+    #                                          #
+    #   READ THE AMBER SYSTEM                  #
+    #                                          #
+    ############################################
 
-prmtop = AmberPrmtopFile(prmtopfile)
-inpcrd = AmberInpcrdFile(crdfile)
-system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=0.9*nanometer,
-                                               constraints=HBonds, hydrogenMass = hmass * amu)
+    prmtop = AmberPrmtopFile(prmtopfile)
+    inpcrd = AmberInpcrdFile(crdfile)
+    system = prmtop.createSystem(nonbondedMethod=PME, nonbondedCutoff=nonbondedCutoff*nanometer,
+                                                constraints=HBonds, hydrogenMass = float(hmass) * amu, switchDistance=switchDistance*nanometer)
 
-with open(xmloutfile, 'w') as output:
-    output.write(XmlSerializer.serialize(system))
+    with open(xmloutfile, 'w') as output:
+        output.write(XmlSerializer.serialize(system))
 
-if pdboutfile is not None:
-    PDBFile.writeFile(prmtop.topology, inpcrd.positions, 
-                      open(pdboutfile,'w'), keepIds=True )
-    
-today = datetime.today()
-print('\n\nDate and time at end:   ', today)
-program_end_timer = time()
-print('\nTotal compute time %.3f seconds' %  (program_end_timer-program_start_timer))
+    if pdboutfile is not None:
+        PDBFile.writeFile(prmtop.topology, inpcrd.positions, 
+                        open(pdboutfile,'w'), keepIds=True )
+        
+    today = datetime.today()
+    print('\n\nDate and time at end:   ', today)
+    program_end_timer = time()
+    print('\nTotal compute time %.3f seconds' %  (program_end_timer-program_start_timer))
+    return system
 
+
+if __name__ == "__main__":
+    args = vars(parser.parse_args())
+    make_system(**args)

@@ -16,7 +16,7 @@ Setup the simulation input files. The automated setup script below reads the par
 cd $HOME/AToM-OpenMM/examples/RBFE/eralpha
 bash ./scripts/setup-atm.sh
 ```
-The automated script runs `antechamber` and `tleap` from the AmberTools package to prepare the ligands and the receptor and to solvated them in a solution box. The `make_atm_system_from_Amber.py` script is used to convert Amber's topology and coordinate files to OpenMM System and Topology stored in XML and PDB files, respectively. 
+The automated script runs `antechamber` and `tleap` from the AmberTools package to prepare the ligands and the receptor and to solvated them in a solution box. The `make_atm_system_from_amber` command is used to convert Amber's topology and coordinate files to OpenMM System and Topology stored in XML and PDB files, respectively. 
 
 `setup-settings.sh` includes the list of ligand pairs and their reference alignment atoms, the ATM displacement vector, and the list of residues of the receptor that define the binding site. The script assumes that the `mol2` files of the ligand are stored in the `ligands` subdirectory and the `pdb` file of the receptor is stored in the `receptor` subdirectory. It is assumed that the `pdb` file of the receptor is prepared for Amber (see the [Amber tutorials](https://ambermd.org/tutorials/)). The ligands are assumed to have been docked into the binding site.
 

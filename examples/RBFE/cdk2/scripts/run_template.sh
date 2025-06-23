@@ -16,8 +16,8 @@ jobname=<JOBNAME>
 echo "Running on $(hostname)"
 
 if [ ! -f ${jobname}_0.xml ]; then
-   rbfe_structprep.py ${jobname}_asyncre.cntl || exit 1
+   rbfe_structprep ${jobname}_asyncre.cntl || exit 1
 fi
 
 echo "localhost,0:0,1,CUDA,,/tmp" > nodefile
-rbfe_production.py ${jobname}_asyncre.cntl
+rbfe_production ${jobname}_asyncre.cntl

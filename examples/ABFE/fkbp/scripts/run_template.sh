@@ -11,4 +11,4 @@
 
 . $HOME/miniforge3/bin/activate
 echo "localhost,0:0,1,CUDA,,/tmp" > nodefile
-abfe_production.py <JOBNAME>_asyncre.cntl
+abfe_production <JOBNAME>_asyncre.cntl

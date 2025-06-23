@@ -74,14 +74,27 @@ def _test_make_atm_system_from_amber(tmp_path):
 
     refxml = os.path.join(curr_dir, "QB_A08_A07_equil", "QB_A08_A07_sys.xml")
     outxml = os.path.join(tmp_path, "QB_A08_A07_sys.xml")
+    prmtopfile = os.path.join(curr_dir, "QB_A08_A07", "QB_A08_A07.prmtop")
+    crdfile = os.path.join(curr_dir, "QB_A08_A07", "QB_A08_A07.inpcrd")
+    pdboutfile = os.path.join(tmp_path, "QB_A08_A07_sys.pdb")
     make_system(
-        prmtopfile=os.path.join(curr_dir, "QB_A08_A07", "QB_A08_A07.prmtop"),
-        crdfile=os.path.join(curr_dir, "QB_A08_A07", "QB_A08_A07.inpcrd"),
+        prmtopfile=prmtopfile,
+        crdfile=crdfile,
         xmloutfile=outxml,
-        pdboutfile=os.path.join(tmp_path, "QB_A08_A07_sys.pdb"),
+        pdboutfile=pdboutfile,
         hmass=1.5,
         switchDistance=0.7,
         nonbondedCutoff=0.9,
+    )
+    with open(outxml, "r") as f:
+        lines = f.readlines()[2:]  # Skipping OpenMM version header
+    with open(refxml, "r") as f:
+        ref_lines = f.readlines()[2:]  # Skipping OpenMM version header
+    assert lines == ref_lines, f"Failed comparison of XML files: {outxml} != {refxml}"
+
+    os.remove(outxml)
+    os.system(
+        f"make_atm_system_from_amber --AmberPrmtopinFile {prmtopfile} --AmberInpcrdinFile {crdfile} --systemXMLoutFile {outxml} --systemPDBoutFile {pdboutfile} --hmass 1.5 --switchDistance 0.7 --nonbondedCutoff 0.9"
     )
     with open(outxml, "r") as f:
         lines = f.readlines()[2:]  # Skipping OpenMM version header

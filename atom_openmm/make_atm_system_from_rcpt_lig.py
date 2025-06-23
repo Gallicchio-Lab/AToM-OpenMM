@@ -419,6 +419,10 @@ def make_system(receptorfile, lig1sdffile, displacement, xmloutfile, pdboutfile,
     print('\nTotal compute time %.3f seconds' %  (program_end_timer-program_start_timer))
 
 
-if __name__ == "__main__":
+def main():
     args = vars(parser.parse_args())
     make_system(**args)
+
+
+if __name__ == "__main__":
+    main()

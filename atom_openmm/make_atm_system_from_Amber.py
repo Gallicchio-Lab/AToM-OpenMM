@@ -123,6 +123,10 @@ def make_system(prmtopfile, crdfile, xmloutfile, pdboutfile, hmass, nonbondedCut
     return system
 
 
-if __name__ == "__main__":
+def main():
     args = vars(parser.parse_args())
     make_system(**args)
+
+
+if __name__ == "__main__":
+    main()

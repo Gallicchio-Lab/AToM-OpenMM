@@ -137,3 +137,19 @@ def _test_input_parser():
         assert type(config_yaml[key]) is type(
             config_cntl[key]
         ), f"{key} {type(config_yaml[key])} {type(config_cntl[key])}"
+
+
+def _test_sync_production_ats(tmp_path):
+    from atom_openmm.rbfe_sync_production import rbfe_production
+
+    shutil.copytree(
+        os.path.join(curr_dir, "QB_A08_A07_equil_sync_ats"),
+        os.path.join(tmp_path, "QB_A08_A07_equil_sync_ats"),
+    )
+    rbfe_production(os.path.join(tmp_path, "QB_A08_A07_equil_sync_ats", "QB_A08_A07_asyncre.yaml"))
+    for i in range(4):
+        assert os.path.exists(
+            os.path.join(
+                tmp_path, "QB_A08_A07_equil_sync_ats", f"r{i}", "QB_A08_A07.xtc"
+            )
+        )

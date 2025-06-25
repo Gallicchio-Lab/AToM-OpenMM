@@ -96,8 +96,7 @@ class openmm_job(async_re):
             if stateid != old_stateid:
                 temperature = par['temperature']
                 scale = math.sqrt(temperature/old_temperature)
-                for i in range(0,len(replica.velocities)):
-                    replica.velocities[i] = scale*replica.velocities[i]
+                replica.velocities *= scale
 
         #additional operations if any
         self._update_state_of_replica_addcustom(replica)
@@ -409,8 +408,11 @@ class openmm_job_ABFE(openmm_job_ATM):
             self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
 
 class openmm_job_RBFE(openmm_job_ATM):
-    def __init__(self, command_file, options):
+    def __init__(self, command_file, options, async_mode=True):
         super().__init__(command_file, options)
+
+        self.async_mode = async_mode
+        ommworkercls = OMMWorkerATM if async_mode else OMMWorkerATMSync
         
         pdbtopfile = self.basename + ".pdb"
         systemfile = self.basename + "_sys.xml"
@@ -420,7 +422,7 @@ class openmm_job_RBFE(openmm_job_ATM):
 
         #builds service worker for replicas use
         service_ommsys = OMMSystemRBFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger)
-        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
+        self.service_worker = ommworkercls(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
@@ -436,5 +438,5 @@ class openmm_job_RBFE(openmm_job_ATM):
         self.openmm_workers = []
         for node in self.compute_nodes:
             ommsys = OMMSystemRBFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger) 
-            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
+            self.openmm_workers.append(ommworkercls(self.basename, ommsys, self.keywords, node_info = node, compute = async_mode, logger = self.logger))
 

@@ -159,3 +159,86 @@ def _test_sync_production_ats(tmp_path):
                 tmp_path, "QB_A08_A07_equil_sync_ats", f"r{i}", "QB_A08_A07.xtc"
             )
         )
+
+
+def _test_sync_production_incremental(tmp_path):
+    from atom_openmm.openmm_async_re import openmm_job_RBFE
+    from openmm.app.internal.xtc_utils import read_xtc
+    import yaml
+
+    def rbfe_production(configfile):
+        rx = openmm_job_RBFE(configfile, options=None)
+        rx.setupJob()
+        rx.scheduleJobs()
+
+    exec_dir = os.path.join(tmp_path, "QB_A08_A07_equil_sync")
+    shutil.copytree(os.path.join(curr_dir, "QB_A08_A07_equil_sync"), exec_dir)
+
+    os.chdir(exec_dir)
+
+    configfile = os.path.join(exec_dir, "QB_A08_A07_asyncre.yaml")
+    with open(configfile, "r") as f:
+        config = yaml.safe_load(f)
+    config["MAX_SAMPLES"] = "+1"
+    with open(configfile, "w") as f:
+        yaml.dump(config, f)
+
+    rbfe_production(configfile)
+    for i in range(4):
+        xtcf = os.path.join(exec_dir, f"r{i}", "QB_A08_A07.xtc")
+        coords_read, box_read, time, step = read_xtc(xtcf.encode("utf-8"))
+        assert coords_read.shape == (46380, 3, 1)
+        assert box_read.shape == (3, 3, 1)
+        assert len(time) == 1
+        assert len(step) == 1
+
+    startsampl_file = os.path.join(exec_dir, "starting_sample")
+    with open(startsampl_file, "r") as f:
+        starting_sample = int(f.read().strip())
+        assert starting_sample == 0
+    prog_file = os.path.join(exec_dir, "progress")
+    with open(prog_file, "r") as f:
+        progress = float(f.read().strip())
+        assert progress == 0.0
+
+    # Test restarting
+    config["MAX_SAMPLES"] = "+2"
+    with open(configfile, "w") as f:
+        yaml.dump(config, f)
+    rbfe_production(configfile)
+    for i in range(4):
+        xtcf = os.path.join(exec_dir, f"r{i}", "QB_A08_A07.xtc")
+        coords_read, box_read, time, step = read_xtc(xtcf.encode("utf-8"))
+        assert coords_read.shape == (46380, 3, 2)
+        assert box_read.shape == (3, 3, 2)
+        assert len(time) == 2
+        assert len(step) == 2
+
+    with open(startsampl_file, "r") as f:
+        starting_sample = int(f.read().strip())
+        assert starting_sample == 0 # The starting_sample file existed so was not overwritten
+    with open(prog_file, "r") as f:
+        progress = float(f.read().strip())
+        assert progress == 0.5
+
+    # Add two more samples (only the final frame is written)
+    os.remove(startsampl_file)
+    os.remove(prog_file)
+    config["MAX_SAMPLES"] = "+2"
+    with open(configfile, "w") as f:
+        yaml.dump(config, f)
+    rbfe_production(configfile)
+    for i in range(4):
+        xtcf = os.path.join(exec_dir, f"r{i}", "QB_A08_A07.xtc")
+        coords_read, box_read, time, step = read_xtc(xtcf.encode("utf-8"))
+        assert coords_read.shape == (46380, 3, 4)
+        assert box_read.shape == (3, 3, 4)
+        assert len(time) == 4
+        assert len(step) == 4
+
+    with open(startsampl_file, "r") as f:
+        starting_sample = int(f.read().strip())
+        assert starting_sample == 2  # We removed the starting_sample file so it was written from the checkpoint
+    with open(prog_file, "r") as f:
+        progress = float(f.read().strip())
+        assert progress == 0.75

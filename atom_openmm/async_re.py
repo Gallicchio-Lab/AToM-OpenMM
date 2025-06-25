@@ -266,12 +266,31 @@ class async_re(object):
 
         sample_steps = int(self.keywords.get('PRNT_FREQUENCY'))
         cycle_steps = int(self.keywords.get('PRODUCTION_STEPS'))
-        cycle_to_sample = sample_steps/cycle_steps
+        checkpoint_frequency = int(self.keywords.get('CHECKPOINT_FREQUENCY', 0))
+        cycle_to_sample = sample_steps//cycle_steps
         enough_samples = False
+        write_progress = False
+        max_samples = None
+
+        def current_samples():
+            return [(replica.get_cycle()-1)//cycle_to_sample for replica in self.openmm_replicas]
+
         if self.keywords.get('MAX_SAMPLES')  is not None:
-            max_samples = int(self.keywords.get('MAX_SAMPLES'))
-            enough_samples = all( [ (replica.get_cycle()-1)/cycle_to_sample >=  max_samples
-                                    for replica in self.openmm_replicas ]  )
+            max_samples_str = self.keywords.get('MAX_SAMPLES')
+            max_samples = int(max_samples_str)
+
+            if isinstance(max_samples_str, str) and max_samples_str.startswith("+"):
+                # Handle cases where we want to increase the number of samples from a starting checkpoint
+                write_progress = True
+                if not os.path.isfile("starting_sample"):
+                    with open("starting_sample", "w") as f:
+                        f.write(f"{min(current_samples())}\n")
+                with open("starting_sample", "r") as f:
+                    max_samples += int(f.read().strip())
+
+            self.logger.info(f"Target number of samples: {max_samples}. Current samples: {min(current_samples())}")
+
+            enough_samples = all( [ repl_sample >= max_samples for repl_sample in current_samples() ] )
             if enough_samples:
                 self.logger.info("All replicas collected the requested number of samples (%d)" % max_samples)
 
@@ -282,6 +301,9 @@ class async_re(object):
         while ( time.time() < end_time and
                 self.transport.numNodesAlive() > 0 and
                 not enough_samples ) :
+            if write_progress:
+                with open("progress", "w") as f:
+                    f.write(f"{min(current_samples()) / max_samples}\n")
             current_time = time.time()
 
             self.updateStatus()
@@ -300,15 +322,14 @@ class async_re(object):
             self.print_status()
             self.transport.fixnodes()
 
-            if current_time - last_checkpoint_time > checkpoint_time:
+            if current_time - last_checkpoint_time > checkpoint_time or (checkpoint_frequency != 0 and (min(current_samples()) % checkpoint_frequency == 0)):
                 self.logger.info("Checkpointing ...")
                 self.checkpointJob()
                 last_checkpoint_time = current_time
                 self.logger.info("done.")
 
             #terminates if enough samples have been collected
-            if self.keywords.get('MAX_SAMPLES')  is not None:
-                max_samples = int(self.keywords.get('MAX_SAMPLES'))
+            if max_samples is not None:
                 enough_samples = all( [ (replica.get_cycle()-1)/cycle_to_sample >=  max_samples
                                         for replica in self.openmm_replicas ]  )
                 if enough_samples:

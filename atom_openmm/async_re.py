@@ -443,6 +443,7 @@ class async_re(object):
                     if status != None:
                         self.status[k]['running_status'] = 'R'
         else:
+            # In sync mode launch all replicas at once and they will be executed sequentially
             for k in range(self.nreplicas):
                 self.logger.info('Launching replica %d cycle %d', k, self.status[k]['cycle_current'])
                 # the _launchReplica function is implemented by

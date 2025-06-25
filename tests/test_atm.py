@@ -140,13 +140,19 @@ def _test_input_parser():
 
 
 def _test_sync_production_ats(tmp_path):
-    from atom_openmm.rbfe_sync_production import rbfe_production
+    from atom_openmm.openmm_async_re import openmm_job_RBFE
 
     shutil.copytree(
         os.path.join(curr_dir, "QB_A08_A07_equil_sync_ats"),
         os.path.join(tmp_path, "QB_A08_A07_equil_sync_ats"),
     )
-    rbfe_production(os.path.join(tmp_path, "QB_A08_A07_equil_sync_ats", "QB_A08_A07_asyncre.yaml"))
+
+    run_dir = os.path.join(tmp_path, "QB_A08_A07_equil_sync_ats")
+    os.chdir(run_dir)
+
+    rx = openmm_job_RBFE("QB_A08_A07_asyncre.yaml", options=None)
+    rx.setupJob()
+    rx.scheduleJobs()
     for i in range(4):
         assert os.path.exists(
             os.path.join(

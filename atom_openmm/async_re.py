@@ -56,6 +56,9 @@ class async_re(object):
         #set to False to run without exchanges
         self.exchange = True
 
+        # Set the async mode to True by default
+        self.async_mode = self.keywords.get('ASYNC_MODE', True)
+
         #catch ctrl-C and SIGTERM to terminate threads gracefully
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
@@ -425,18 +428,27 @@ class async_re(object):
         """
         Scans the replicas in wait state and randomly launches them
         """
-        jobs_to_launch = self._njobs_to_run()
-        if jobs_to_launch > 0:
-            #prioritize replicas that are most behind
-            wait = sorted(self.replicas_waiting, key=self._cycle_of_replica)
-            #  random.shuffle(wait)
-            n = min(jobs_to_launch,len(wait))
-            for k in wait[0:n]:
+        if self.async_mode:
+            jobs_to_launch = self._njobs_to_run()
+            if jobs_to_launch > 0:
+                #prioritize replicas that are most behind
+                wait = sorted(self.replicas_waiting, key=self._cycle_of_replica)
+                #  random.shuffle(wait)
+                n = min(jobs_to_launch,len(wait))
+                for k in wait[0:n]:
+                    self.logger.info('Launching replica %d cycle %d', k, self.status[k]['cycle_current'])
+                    # the _launchReplica function is implemented by
+                    # MD engine modules
+                    status = self._launchReplica(k,self.status[k]['cycle_current'])
+                    if status != None:
+                        self.status[k]['running_status'] = 'R'
+        else:
+            for k in range(self.nreplicas):
                 self.logger.info('Launching replica %d cycle %d', k, self.status[k]['cycle_current'])
                 # the _launchReplica function is implemented by
                 # MD engine modules
                 status = self._launchReplica(k,self.status[k]['cycle_current'])
-                if status != None:
+                if status is not None:
                     self.status[k]['running_status'] = 'R'
 
     def doExchanges(self):

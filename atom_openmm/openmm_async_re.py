@@ -408,11 +408,11 @@ class openmm_job_ABFE(openmm_job_ATM):
             self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
 
 class openmm_job_RBFE(openmm_job_ATM):
-    def __init__(self, command_file, options, async_mode=True):
+    def __init__(self, command_file, options):
         super().__init__(command_file, options)
 
-        self.async_mode = async_mode
-        ommworkercls = OMMWorkerATM if async_mode else OMMWorkerATMSync
+        self.async_mode = self.keywords.get('ASYNC_MODE', True)
+        ommworkercls = OMMWorkerATM if self.async_mode else OMMWorkerATMSync
         
         pdbtopfile = self.basename + ".pdb"
         systemfile = self.basename + "_sys.xml"
@@ -438,5 +438,5 @@ class openmm_job_RBFE(openmm_job_ATM):
         self.openmm_workers = []
         for node in self.compute_nodes:
             ommsys = OMMSystemRBFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger) 
-            self.openmm_workers.append(ommworkercls(self.basename, ommsys, self.keywords, node_info = node, compute = async_mode, logger = self.logger))
+            self.openmm_workers.append(ommworkercls(self.basename, ommsys, self.keywords, node_info = node, compute = self.async_mode, logger = self.logger))
 

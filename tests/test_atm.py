@@ -216,12 +216,12 @@ def _test_sync_production_incremental(tmp_path):
 
     with open(startsampl_file, "r") as f:
         starting_sample = int(f.read().strip())
-        assert starting_sample == 0 # The starting_sample file existed so was not overwritten
+        assert starting_sample == 0  # The starting_sample file existed so was not overwritten
     with open(prog_file, "r") as f:
         progress = float(f.read().strip())
         assert progress == 0.5
 
-    # Add two more samples (only the final frame is written)
+    # Add two more samples
     os.remove(startsampl_file)
     os.remove(prog_file)
     config["MAX_SAMPLES"] = "+2"
@@ -241,4 +241,4 @@ def _test_sync_production_incremental(tmp_path):
         assert starting_sample == 2  # We removed the starting_sample file so it was written from the checkpoint
     with open(prog_file, "r") as f:
         progress = float(f.read().strip())
-        assert progress == 0.75
+        assert progress == 0.5

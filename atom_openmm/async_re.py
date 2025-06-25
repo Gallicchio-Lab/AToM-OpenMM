@@ -269,7 +269,6 @@ class async_re(object):
         checkpoint_frequency = int(self.keywords.get('CHECKPOINT_FREQUENCY', 0))
         cycle_to_sample = sample_steps//cycle_steps
         enough_samples = False
-        write_progress = False
         max_samples = None
 
         def current_samples():
@@ -278,15 +277,16 @@ class async_re(object):
         if self.keywords.get('MAX_SAMPLES')  is not None:
             max_samples_str = self.keywords.get('MAX_SAMPLES')
             max_samples = int(max_samples_str)
+            starting_samples = 0
 
             if isinstance(max_samples_str, str) and max_samples_str.startswith("+"):
                 # Handle cases where we want to increase the number of samples from a starting checkpoint
-                write_progress = True
                 if not os.path.isfile("starting_sample"):
                     with open("starting_sample", "w") as f:
                         f.write(f"{min(current_samples())}\n")
                 with open("starting_sample", "r") as f:
-                    max_samples += int(f.read().strip())
+                    starting_samples = int(f.read().strip())
+                    max_samples += starting_samples
 
             self.logger.info(f"Target number of samples: {max_samples}. Current samples: {min(current_samples())}")
 
@@ -301,9 +301,9 @@ class async_re(object):
         while ( time.time() < end_time and
                 self.transport.numNodesAlive() > 0 and
                 not enough_samples ) :
-            if write_progress:
+            if max_samples is not None:
                 with open("progress", "w") as f:
-                    f.write(f"{min(current_samples()) / max_samples}\n")
+                    f.write(f"{(min(current_samples())-starting_samples) / (max_samples - starting_samples)}\n")
             current_time = time.time()
 
             self.updateStatus()

@@ -338,8 +338,8 @@ class OMMWorker(object):
                 outq.put(pot)
             elif command == "GETPOSVEL":
                 state = self.context.getState(getPositions=True, getVelocities=True)
-                self.positions = state.getPositions(asNumpy=True)
-                self.velocities = state.getVelocities(asNumpy=True)
+                self.positions = state.getPositions(asNumpy=True).value_in_unit(nanometers)
+                self.velocities = state.getVelocities(asNumpy=True).value_in_unit(nanometers/picoseconds)
                 outq.put(self.positions)
                 outq.put(self.velocities)
             elif command == "SETCHKPT":
@@ -465,8 +465,8 @@ class OMMWorkerATMSync(OMMWorkerATM):
     # get positions and velocities from worker
     def get_posvel(self):
         state = self.context.getState(getPositions=True, getVelocities=True)
-        self.positions = state.getPositions(asNumpy=True)
-        self.velocities = state.getVelocities(asNumpy=True)
+        self.positions = state.getPositions(asNumpy=True).value_in_unit(nanometers)
+        self.velocities = state.getVelocities(asNumpy=True).value_in_unit(nanometers/picoseconds)
         return (self.positions, self.velocities)
 
     # set positions and velocities of worker

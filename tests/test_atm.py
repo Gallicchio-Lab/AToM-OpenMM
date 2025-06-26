@@ -70,7 +70,7 @@ def _test_rbfe_production(tmp_path):
 
 
 def _test_make_atm_system_from_amber(tmp_path):
-    from atom_openmm.make_atm_system_from_Amber import make_system
+    from atom_openmm.make_atm_system_from_amber import make_system
 
     refxml = os.path.join(curr_dir, "QB_A08_A07_equil", "QB_A08_A07_sys.xml")
     outxml = os.path.join(tmp_path, "QB_A08_A07_sys.xml")
@@ -98,8 +98,66 @@ def _test_make_atm_system_from_amber(tmp_path):
     )
     with open(outxml, "r") as f:
         lines = f.readlines()[2:]  # Skipping OpenMM version header
+    assert lines == ref_lines, f"Failed comparison of XML files: {outxml} != {refxml}"
+
+
+def _test_make_atm_system_from_pdb(tmp_path):
+    from atom_openmm.make_atm_system_from_pdb import make_system
+
+    refxml = os.path.join(curr_dir, "3ptb", "3ptb_sys.xml")
+    outxml = os.path.join(tmp_path, "3ptb_sys.xml")
+    pdb = os.path.join(curr_dir, "3ptb", "3ptb.pdb")
+    sdffile = os.path.join(curr_dir, "3ptb", "BEN_ideal.sdf")
+    pdboutfile = os.path.join(tmp_path, "3ptb_sys.pdb")
+    make_system(
+        systempdbfile=pdb,
+        ligandsdffile=sdffile,
+        lig1resid=1,
+        xmloutfile=outxml,
+        pdboutfile=pdboutfile,
+    )
+    with open(outxml, "r") as f:
+        lines = f.readlines()[2:]  # Skipping OpenMM version header
     with open(refxml, "r") as f:
         ref_lines = f.readlines()[2:]  # Skipping OpenMM version header
+    assert lines == ref_lines, f"Failed comparison of XML files: {outxml} != {refxml}"
+
+    os.remove(outxml)
+    os.system(
+        f"make_atm_system_from_pdb --systemPDBinFile {pdb} --ligandsSDFFile {sdffile} --LIG1resid 1 --systemXMLoutFile {outxml} --systemPDBoutFile {pdboutfile}"
+    )
+    with open(outxml, "r") as f:
+        lines = f.readlines()[2:]  # Skipping OpenMM version header
+    assert lines == ref_lines, f"Failed comparison of XML files: {outxml} != {refxml}"
+
+
+def _test_make_atm_system_from_rcpt_lig(tmp_path):
+    from atom_openmm.make_atm_system_from_rcpt_lig import make_system
+
+    refxml = os.path.join(curr_dir, "3ptb", "3ptb_sys_2.xml")
+    outxml = os.path.join(tmp_path, "3ptb_sys_2.xml")
+    pdb = os.path.join(curr_dir, "3ptb", "3ptb.pdb")
+    sdffile = os.path.join(curr_dir, "3ptb", "BEN_ideal.sdf")
+    pdboutfile = os.path.join(tmp_path, "3ptb_sys_2.pdb")
+    make_system(
+        receptorfile=pdb,
+        lig1sdffile=sdffile,
+        displacement=[22, 22, 22],
+        xmloutfile=outxml,
+        pdboutfile=pdboutfile,
+    )
+    with open(outxml, "r") as f:
+        lines = f.readlines()[2:]  # Skipping OpenMM version header
+    with open(refxml, "r") as f:
+        ref_lines = f.readlines()[2:]  # Skipping OpenMM version header
+    assert lines == ref_lines, f"Failed comparison of XML files: {outxml} != {refxml}"
+
+    os.remove(outxml)
+    os.system(
+        f"make_atm_system_from_rcpt_lig --receptorinFile {pdb} --LIG1SDFinFile {sdffile} --displacement '22.0 22.0 22.0' --systemXMLoutFile {outxml} --systemPDBoutFile {pdboutfile}"
+    )
+    with open(outxml, "r") as f:
+        lines = f.readlines()[2:]  # Skipping OpenMM version header
     assert lines == ref_lines, f"Failed comparison of XML files: {outxml} != {refxml}"
 
 

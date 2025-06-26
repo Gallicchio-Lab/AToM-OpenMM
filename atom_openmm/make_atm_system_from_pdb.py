@@ -35,7 +35,22 @@ from openmmforcefields.generators import SystemGenerator
 
 
 
-def make_system(systempdbfile, ligandsdffile, lig1resid, xmloutfile, pdboutfile, lig1refatoms, lig2resid, lig2refatoms, proteinforcefield, solventforcefield, ligandforcefield, ffcachefile, hmass, flagverbose=False):
+def make_system(
+        systempdbfile,
+        ligandsdffile,
+        lig1resid,
+        xmloutfile,
+        pdboutfile,
+        lig1refatoms=None,
+        lig2resid=None,
+        lig2refatoms=None,
+        proteinforcefield='amber14-all.xml',
+        solventforcefield='amber14/tip3p.xml',
+        ligandforcefield='openff-2.0.0',
+        ffcachefile=None,
+        hmass=1.0,
+        flagverbose=False
+    ):
     print('Generate ATM RBFE OpenMM System')
     today = datetime.today()
     print('\nDate and time at start: ', today.strftime('%c'))
@@ -49,8 +64,7 @@ def make_system(systempdbfile, ligandsdffile, lig1resid, xmloutfile, pdboutfile,
             (lig2refatoms is not None) ):
             rbfe = True
         else:
-            print("Error: missing information for RBFE setup")
-            print(parser.print_help())
+            print("Error: missing information for RBFE setup. Check the help for the required arguments.")
             sys.exit(1)
         
     if rbfe:

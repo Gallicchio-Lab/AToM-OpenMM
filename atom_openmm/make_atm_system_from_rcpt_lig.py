@@ -60,7 +60,22 @@ def boundingBoxSizes(positions):
     return [ (xmin,xmax), (ymin,ymax), (zmin,zmax) ] 
 
 
-def make_system(receptorfile, lig1sdffile, displacement, xmloutfile, pdboutfile, lig2sdffile, cofsdffile, proteinforcefield, solventforcefield, ligandforcefield, ffcachefile, implsolv, hmass, flagverbose=False):
+def make_system(
+        receptorfile,
+        lig1sdffile,
+        displacement,
+        xmloutfile,
+        pdboutfile,
+        lig2sdffile=None,
+        cofsdffile=None,
+        proteinforcefield='amber14-all.xml',
+        solventforcefield='amber14/tip3p.xml',
+        ligandforcefield='openff-2.0.0',
+        ffcachefile=None,
+        implsolv='None',
+        hmass=1.0,
+        flagverbose=False
+    ):
     print('Generate ATM RBFE OpenMM System')
     today = datetime.today()
     print('\nDate and time at start: ', today.strftime('%c'))
@@ -72,8 +87,8 @@ def make_system(receptorfile, lig1sdffile, displacement, xmloutfile, pdboutfile,
         rbfe = True
 
     if isinstance(displacement, str):
-        displ = [float(r) for r in displacement.split()]
-    displacement = Vec3(displ[0], displ[1], displ[2]) * angstrom
+        displacement = [float(r) for r in displacement.split()]
+    displacement = Vec3(*displacement) * angstrom
 
     #implicit solvent
     if implsolv == 'None':

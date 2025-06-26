@@ -28,7 +28,7 @@ import multiprocessing as mp
 
 __version__ = '8.2.1'
 
-class async_re(object):
+class JobManager(object):
     """
     Class to set up and run asynchronous file-based RE calculations
     """
@@ -322,7 +322,7 @@ class async_re(object):
             self.print_status()
             self.transport.fixnodes()
 
-            if current_time - last_checkpoint_time > checkpoint_time or (checkpoint_frequency != 0 and (min(current_samples()) % checkpoint_frequency == 0)):
+            if current_time - last_checkpoint_time > checkpoint_time or (checkpoint_frequency != 0 and all([(sample % checkpoint_frequency) == 0 for sample in current_samples()] )):
                 self.logger.info("Checkpointing ...")
                 self.checkpointJob()
                 last_checkpoint_time = current_time

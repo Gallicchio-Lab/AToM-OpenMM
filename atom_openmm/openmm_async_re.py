@@ -12,15 +12,15 @@ from openmm.app import *
 from openmm import *
 from openmm.unit import *
 
-from atom_openmm.async_re import async_re
+from atom_openmm.async_re import JobManager
 from atom_openmm.local_openmm_transport import *
 from atom_openmm.ommreplica import *
 from atom_openmm.ommsystem import *
 from atom_openmm.ommworker import *
 
-class openmm_job(async_re):
+class openmm_job(JobManager):
     def __init__(self, command_file, options):
-        async_re.__init__(self, command_file, options)
+        super().__init__(command_file, options)
         self.openmm_replicas = None
         self.stateparams = None
         self.openmm_workers = None
@@ -206,7 +206,7 @@ class openmm_job_TRE(openmm_job):
         return len(self.stateparams)
 
     def _checkInput(self):
-        async_re._checkInput(self)
+        super()._checkInput()
 
         if self.keywords.get('TEMPERATURES') is None:
             self._exit("TEMPERATURES needs to be specified")
@@ -266,7 +266,7 @@ class openmm_job_ATM(openmm_job):
         return len(self.stateparams)
 
     def _checkInput(self):
-        async_re._checkInput(self)
+        super()._checkInput()
 
         if self.keywords.get('LAMBDAS') is None:
             self._exit("LAMBDAS needs to be specified")

@@ -15,13 +15,14 @@ dependencies = ["configobj", "numpy", "six"]
 "Homepage" = "https://github.com/Gallicchio-Lab/AToM-OpenMM"
 "Bug Tracker" = "https://github.com/Gallicchio-Lab/AToM-OpenMM/issues"
 
-# [project.scripts]
-# abfe_structprep = "atom_openmm.abfe_structprep:main"
-# rbfe_structprep = "atom_openmm.rbfe_structprep:main"
-# abfe_production = "atom_openmm.abfe_production:main"
-# rbfe_production = "atom_openmm.rbfe_production:main"
-# make_atm_system_from_pdb = "atom_openmm.make_atm_system_from_pdb:main"
-# make_atm_system_from_rcpt_lig = "atom_openmm.make_atm_system_from_rcpt_lig:main"
+[project.scripts]
+abfe_structprep = "atom_openmm.abfe_structprep:abfe_structprep"
+rbfe_structprep = "atom_openmm.rbfe_structprep:rbfe_structprep"
+abfe_production = "atom_openmm.abfe_production:abfe_production"
+rbfe_production = "atom_openmm.rbfe_production:rbfe_production"
+make_atm_system_from_pdb = "atom_openmm.make_atm_system_from_pdb:main"
+make_atm_system_from_rcpt_lig = "atom_openmm.make_atm_system_from_rcpt_lig:main"
+make_atm_system_from_amber = "atom_openmm.make_atm_system_from_amber:main"
 
 [tool.setuptools.packages.find]
 where = [""]

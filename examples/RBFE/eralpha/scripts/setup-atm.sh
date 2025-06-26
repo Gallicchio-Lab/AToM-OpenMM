@@ -76,7 +76,7 @@ EOF
     tleap -f tleap.cmd || exit 1
     
     #convert prmtop/inpcrd to OpenMM's System + PDB topology
-    make_atm_system_from_Amber.py --AmberPrmtopinFile ${jobname}.prmtop --AmberInpcrdinFile ${jobname}.inpcrd --systemXMLoutFile ${jobname}_sys.xml --systemPDBoutFile ${jobname}.pdb
+    make_atm_system_from_amber --AmberPrmtopinFile ${jobname}.prmtop --AmberInpcrdinFile ${jobname}.inpcrd --systemXMLoutFile ${jobname}_sys.xml --systemPDBoutFile ${jobname}.pdb
 
     #residue ligand names
     lig1resname="UNK"

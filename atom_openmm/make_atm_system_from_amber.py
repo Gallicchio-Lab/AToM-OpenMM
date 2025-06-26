@@ -12,10 +12,6 @@
 # following for argument passing tools
 import argparse
 
-# following used to generate a subdirectory named after the ligand
-# for the output files
-import subprocess
-
 # following for date and time
 from datetime import datetime
 
@@ -26,69 +22,17 @@ from time import time
 from openmm import XmlSerializer
 from openmm.app import AmberPrmtopFile, AmberInpcrdFile, PDBFile
 from openmm.app import PME, HBonds
+from openmm.unit import nanometer, amu
 
-from openmm.unit import Quantity
-from openmm.unit import angstrom, nanometer, nanometers, picoseconds, amu
-from openmm import unit
-
-from sys import stdout
-
-# System calls - to invoke sdfTagTool from the python code
-import os, sys
-
-print('Generate ATM OpenMM System from Amber files (prmtop and inpcrd)')
-today = datetime.today()
-print('\nDate and time at start: ', today.strftime('%c'))
-
-
-whatItDoes = """
-Produces an .xml file with the OpenMM's system for ATM binding
-free energy calculations from Amber's topology and coordinate files
-produced by tleap.
-
-Emilio Gallicchio 6/2023
-"""
-
-#####################################################
-#                                                   #
-#   PASS COMMAND LINE ARGUMENTS TO LOCAL VARIABLES  #
-#                                                   #
-#####################################################
-
-
-program_start_timer = time()
-parser = argparse.ArgumentParser(description=whatItDoes)
-
-# Required input
-parser.add_argument('--AmberPrmtopinFile', required=True,  type=str, default=None, dest='prmtopfile',
-                    help='Amber topology file')
-parser.add_argument('--AmberInpcrdinFile', required=True,  type=str, default=None, dest='crdfile',
-                    help='Amber coordinate file')
-parser.add_argument('--systemXMLoutFile',  required=True,  type=str, default=None, dest='xmloutfile',
-                    help='Name of the XML file where to save the System')
-parser.add_argument('--systemPDBoutFile', required=True, type=str, default=None, dest='pdboutfile',
-                    help='Name of the PDB file where to output to system')
-
-# Optional input
-parser.add_argument('--hmass', required=False, type=float,
-                    default=1.0,
-                    help='Hydrogen mass, set it to 1.5 amu to use a 4 fs time-step')
-parser.add_argument('--nonbondedCutoff', required=False, type=float,
-                    default=0.9,
-                    help='Nonbonded cutoff, default is 0.9 nm')
-parser.add_argument('--switchDistance', required=False, type=float,
-                    default=0.0,
-                    help='Switch distance, default is 0.0 nm')
-
-# Arguments that are flags
-parser.add_argument('--verbose', required=False, action='store_true',
-                    help='Get more output with this flag')
 
 def make_system(prmtopfile, crdfile, xmloutfile, pdboutfile, hmass, nonbondedCutoff, switchDistance, verbose=False):
     #####################################################
     #   Echo out the suppliable input parameters        #
     #####################################################
-
+    print('Generate ATM OpenMM System from Amber files (prmtop and inpcrd)')
+    today = datetime.today()
+    program_start_timer = time()
+    print('\nDate and time at start: ', today.strftime('%c'))
 
     print('\nUser-supplied input parameters')
     print('Amber prmtop file:               ', prmtopfile)
@@ -124,6 +68,39 @@ def make_system(prmtopfile, crdfile, xmloutfile, pdboutfile, hmass, nonbondedCut
 
 
 def main():
+    whatItDoes = """
+    Produces an .xml file with the OpenMM's system for ATM binding
+    free energy calculations from Amber's topology and coordinate files
+    produced by tleap.
+
+    Emilio Gallicchio 6/2023
+    """
+    parser = argparse.ArgumentParser(description=whatItDoes)
+
+    # Required input
+    parser.add_argument('--AmberPrmtopinFile', required=True,  type=str, default=None, dest='prmtopfile',
+                        help='Amber topology file')
+    parser.add_argument('--AmberInpcrdinFile', required=True,  type=str, default=None, dest='crdfile',
+                        help='Amber coordinate file')
+    parser.add_argument('--systemXMLoutFile',  required=True,  type=str, default=None, dest='xmloutfile',
+                        help='Name of the XML file where to save the System')
+    parser.add_argument('--systemPDBoutFile', required=True, type=str, default=None, dest='pdboutfile',
+                        help='Name of the PDB file where to output to system')
+
+    # Optional input
+    parser.add_argument('--hmass', required=False, type=float,
+                        default=1.0,
+                        help='Hydrogen mass, set it to 1.5 amu to use a 4 fs time-step')
+    parser.add_argument('--nonbondedCutoff', required=False, type=float,
+                        default=0.9,
+                        help='Nonbonded cutoff, default is 0.9 nm')
+    parser.add_argument('--switchDistance', required=False, type=float,
+                        default=0.0,
+                        help='Switch distance, default is 0.0 nm')
+
+    # Arguments that are flags
+    parser.add_argument('--verbose', required=False, action='store_true',
+                        help='Get more output with this flag')
     args = vars(parser.parse_args())
     make_system(**args)
 

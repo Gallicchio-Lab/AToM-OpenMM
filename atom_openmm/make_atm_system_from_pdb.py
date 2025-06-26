@@ -12,126 +12,35 @@
 # following for argument passing tools
 import argparse
 
-# following used to generate a subdirectory named after the ligand
-# for the output files
-import subprocess
-
 # following for date and time
 from datetime import datetime
 
 # following for timing code components
 from time import time
 
-# OpenMM components
-# from simtk.openmm.app import Modeller, ForceField, Simulation
-# from simtk.openmm.app import PDBReporter, StateDataReporter, PDBFile
-# from simtk.openmm.app import PME, HBonds
 from openmm import XmlSerializer
-from openmm.app import Modeller, ForceField, Simulation
-from openmm.app import PDBReporter, StateDataReporter, PDBFile
+from openmm.app import PDBFile
 from openmm.app import PME, HBonds
-
-# from simtk.openmm import Platform, MonteCarloBarostat, LangevinMiddleIntegrator
-# from simtk.openmm import Vec3
-from openmm import Platform, MonteCarloBarostat, LangevinMiddleIntegrator
-from openmm import Vec3
-
-# from simtk.unit import Quantity, bar, kelvin
-# from simtk.unit import angstrom, nanometer, nanometers, picoseconds
-# from simtk import unit
-from openmm.unit import Quantity
-from openmm.unit import angstrom, nanometer, nanometers, picoseconds, amu
-from openmm import unit
-
-from sys import stdout
+from openmm.unit import nanometer, amu
 
 # System calls - to invoke sdfTagTool from the python code
-import os, sys
+import sys
 
 # OpenFF and OpenMM components for ligand force field parameters
 from openmmforcefields.generators import SMIRNOFFTemplateGenerator
 from openff.toolkit.topology import Molecule
 
 # OpenFF components for SystemGenerator (for input entire ssytem in pdb file)
-from openmm import app
 from openmmforcefields.generators import SystemGenerator
 
 
-############################################
-#                                          #
-#   ACTUAL CODE                            #
-#                                          #
-############################################
-
-print('Generate ATM RBFE OpenMM System')
-today = datetime.today()
-print('\nDate and time at start: ', today.strftime('%c'))
-
-
-whatItDoes = """
-Produces an .xml file with the OpenMM's system for ATM relative binding
-free energy calcuations.
-
-The user supplies a pdb file that contains protein, cofactors, ligands, 
-water, ions, probably prepared by a different software package 
-(Maestro, OpenEye).  Cofactors and ligands have to be described in an
-sdf file.  Then force fields are assigned to all components
-
-Emilio Gallicchio 5/2023
-adapted from simProteinLigandWater.py script by Bill Swope 11/2021
-"""
-
-#####################################################
-#                                                   #
-#   PASS COMMAND LINE ARGUMENTS TO LOCAL VARIABLES  #
-#                                                   #
-#####################################################
-
-
-program_start_timer = time()
-parser = argparse.ArgumentParser(description=whatItDoes)
-
-# Required input
-parser.add_argument('--systemPDBinFile', required=True,  type=str, default=None, dest='systempdbfile',
-                    help='Prepared system in PDB format')
-parser.add_argument('--ligandsSDFFile',  required=True,  type=str, default=None, dest='ligandsdffile',
-                    help='SDF file with all ligands and cofactors')
-parser.add_argument('--LIG1resid',  required=True,  type=int, default=None, dest='lig1resid',
-                    help='Residue id of the first ligand')
-parser.add_argument('--systemXMLoutFile',  required=True,  type=str, default=None, dest='xmloutfile',
-                    help='Name of the XML file where to save the System')
-parser.add_argument('--systemPDBoutFile', required=True, type=str, default=None, dest='pdboutfile',
-                    help='Name of the PDB file where to output to system')
-
-# Optional input
-parser.add_argument('--LIG1refatoms',  required=False,  type=str, default=None, dest='lig1refatoms',
-                    help='string of reference atoms of the first ligand "1 2 3" ')
-parser.add_argument('--LIG2resid',  required=False,  type=int, default=None, dest='lig2resid',
-                    help='Residue id of the second ligand')
-parser.add_argument('--LIG2refatoms',  required=False,  type=str, default=None, dest='lig2refatoms',
-                    help='string of reference atoms of the first ligand "1 2 3"')
-parser.add_argument('--proteinForceField', required=False, type=str, dest='proteinforcefield',
-                    default='amber14-all.xml',
-                    help='Force field for protein` amber14-all.xml ')
-parser.add_argument('--solventForceField', required=False, type=str, dest='solventforcefield',
-                    default='amber14/tip3p.xml',
-                    help='Force field for solvent/ions` amber14/tip3p.xml ')
-parser.add_argument('--ligandForceField', required=False, type=str, dest='ligandforcefield',
-                    default='openff-2.0.0',
-                    help='Force field for ligand:  openff-2.0.0')
-parser.add_argument('--forcefieldJSONCachefile', required=False, type=str, dest='ffcachefile',
-                    default=None,
-                    help='Force field ligand cache database')
-parser.add_argument('--hmass', required=False, type=float,
-                    default=1.0,
-                    help='Hydrogen mass, set it to 1.5 amu to use a 4 fs time-step')
-
-# Arguments that are flags
-parser.add_argument('--verbose', required=False, action='store_true', dest='flagverbose',
-                    help='Get more output with this flag')
-
 
 def make_system(systempdbfile, ligandsdffile, lig1resid, xmloutfile, pdboutfile, lig1refatoms, lig2resid, lig2refatoms, proteinforcefield, solventforcefield, ligandforcefield, ffcachefile, hmass, flagverbose=False):
+    print('Generate ATM RBFE OpenMM System')
+    today = datetime.today()
+    print('\nDate and time at start: ', today.strftime('%c'))
+    program_start_timer = time()
+
     #catch abfe or rbfe
     rbfe = False
     if lig2resid  is not None:
@@ -262,7 +171,60 @@ def make_system(systempdbfile, ligandsdffile, lig1resid, xmloutfile, pdboutfile,
     program_end_timer = time()
     print('\nTotal compute time %.3f seconds' %  (program_end_timer-program_start_timer))
 
+
 def main():
+    whatItDoes = """
+    Produces an .xml file with the OpenMM's system for ATM relative binding
+    free energy calcuations.
+
+    The user supplies a pdb file that contains protein, cofactors, ligands, 
+    water, ions, probably prepared by a different software package 
+    (Maestro, OpenEye).  Cofactors and ligands have to be described in an
+    sdf file.  Then force fields are assigned to all components
+
+    Emilio Gallicchio 5/2023
+    adapted from simProteinLigandWater.py script by Bill Swope 11/2021
+    """
+    parser = argparse.ArgumentParser(description=whatItDoes)
+
+    # Required input
+    parser.add_argument('--systemPDBinFile', required=True,  type=str, default=None, dest='systempdbfile',
+                        help='Prepared system in PDB format')
+    parser.add_argument('--ligandsSDFFile',  required=True,  type=str, default=None, dest='ligandsdffile',
+                        help='SDF file with all ligands and cofactors')
+    parser.add_argument('--LIG1resid',  required=True,  type=int, default=None, dest='lig1resid',
+                        help='Residue id of the first ligand')
+    parser.add_argument('--systemXMLoutFile',  required=True,  type=str, default=None, dest='xmloutfile',
+                        help='Name of the XML file where to save the System')
+    parser.add_argument('--systemPDBoutFile', required=True, type=str, default=None, dest='pdboutfile',
+                        help='Name of the PDB file where to output to system')
+
+    # Optional input
+    parser.add_argument('--LIG1refatoms',  required=False,  type=str, default=None, dest='lig1refatoms',
+                        help='string of reference atoms of the first ligand "1 2 3" ')
+    parser.add_argument('--LIG2resid',  required=False,  type=int, default=None, dest='lig2resid',
+                        help='Residue id of the second ligand')
+    parser.add_argument('--LIG2refatoms',  required=False,  type=str, default=None, dest='lig2refatoms',
+                        help='string of reference atoms of the first ligand "1 2 3"')
+    parser.add_argument('--proteinForceField', required=False, type=str, dest='proteinforcefield',
+                        default='amber14-all.xml',
+                        help='Force field for protein` amber14-all.xml ')
+    parser.add_argument('--solventForceField', required=False, type=str, dest='solventforcefield',
+                        default='amber14/tip3p.xml',
+                        help='Force field for solvent/ions` amber14/tip3p.xml ')
+    parser.add_argument('--ligandForceField', required=False, type=str, dest='ligandforcefield',
+                        default='openff-2.0.0',
+                        help='Force field for ligand:  openff-2.0.0')
+    parser.add_argument('--forcefieldJSONCachefile', required=False, type=str, dest='ffcachefile',
+                        default=None,
+                        help='Force field ligand cache database')
+    parser.add_argument('--hmass', required=False, type=float,
+                        default=1.0,
+                        help='Hydrogen mass, set it to 1.5 amu to use a 4 fs time-step')
+
+    # Arguments that are flags
+    parser.add_argument('--verbose', required=False, action='store_true', dest='flagverbose',
+                        help='Get more output with this flag')
     args = vars(parser.parse_args())
     make_system(**args)
 

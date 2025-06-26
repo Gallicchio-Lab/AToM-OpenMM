@@ -9,8 +9,7 @@
 #                                          #
 ############################################
 
-import os, sys, re
-import numpy as np
+import os, sys
 from datetime import datetime
 from time import time
 
@@ -20,30 +19,18 @@ import argparse
 # OpenMM components
 from openmm import XmlSerializer
 from openmm import Vec3
-from openmm.app import PDBReporter, StateDataReporter, PDBFile
+from openmm.app import PDBFile
 from openmm.app import ForceField, Modeller
-from openmm.app import PME, HBonds, NoCutoff, OBC2
+from openmm.app import PME, HBonds, NoCutoff
 
 # OpenFF components from the toolkit
 from openff.toolkit.topology import Molecule
 
-from openmm.unit import Quantity
-from openmm.unit import angstrom, nanometer, nanometers, picoseconds, amu
-from openmm import unit
-
-from sys import stdout
-
-# System calls - to invoke sdfTagTool from the python code
-import os, sys
+from openmm.unit import angstrom, nanometer, amu
 
 # OpenFF and OpenMM components for ligand force field parameters
 from openff.toolkit.topology import Molecule
 
-#from pdbfixer import PDBFixer
-
-# OpenFF components for SystemGenerator (for input entire ssytem in pdb file)
-from openmm import app
-from openmmforcefields.generators import SystemGenerator
 
 def boundingBoxSizes(positions):
     xmin = positions[0][0]
@@ -72,83 +59,13 @@ def boundingBoxSizes(positions):
             zmin = z
     return [ (xmin,xmax), (ymin,ymax), (zmin,zmax) ] 
 
-############################################
-#                                          #
-#   ACTUAL CODE                            #
-#                                          #
-############################################
-
-print('Generate ATM RBFE OpenMM System')
-today = datetime.today()
-print('\nDate and time at start: ', today.strftime('%c'))
-
-
-whatItDoes = """
-Produces an .xml file with the OpenMM's system for ATM relative binding
-free energy calcuations.
-
-The user supplies a pdb file that contains protein, cofactors, ligands, 
-water, ions, probably prepared by a different software package 
-(Maestro, OpenEye).  Cofactors and ligands have to be described in an
-sdf file.  Then force fields are assigned to all components
-
-Emilio Gallicchio 5/2023
-adapted from simProteinLigandWater.py script by Bill Swope 11/2021
-"""
-
-#####################################################
-#                                                   #
-#   PASS COMMAND LINE ARGUMENTS TO LOCAL VARIABLES  #
-#                                                   #
-#####################################################
-
-
-program_start_timer = time()
-parser = argparse.ArgumentParser(description=whatItDoes)
-
-# Required input
-parser.add_argument('--receptorinFile', required=True,  type=str, default=None, dest='receptorfile',
-                    help='Receptor in SDF (.sdf) or PDB format (.pdb)')
-parser.add_argument('--LIG1SDFinFile',  required=True,  type=str, default=None, dest='lig1sdffile',
-                    help='SDF file of first ligand')
-parser.add_argument('--displacement',  required=True,  type=str, default=None, dest='displacement',
-                    help='string with displacement vector in angstroms like "22. 0.0 0.0" ')
-parser.add_argument('--systemXMLoutFile',  required=True,  type=str, default=None, dest='xmloutfile',
-                    help='Name of the XML file where to save the System')
-parser.add_argument('--systemPDBoutFile', required=True, type=str, default=None, dest='pdboutfile',
-                    help='Name of the PDB file where to output to system')
-
-# Optional input
-parser.add_argument('--LIG2SDFinFile',  required=False,  type=str, default=None, dest='lig2sdffile',
-                    help='SDF file of second ligand')
-parser.add_argument('--cofactorsSDFFile',  required=False,  type=str, default=None, dest='cofsdffile',
-                    help='SDF file with receptor cofactors')
-
-parser.add_argument('--proteinForceField', required=False, type=str, dest='proteinforcefield',
-                    default='amber14-all.xml',
-                    help='Force field for protein` amber14-all.xml ')
-parser.add_argument('--solventForceField', required=False, type=str, dest='solventforcefield',
-                    default='amber14/tip3p.xml',
-                    help='Force field for solvent/ions` amber14/tip3p.xml ')
-parser.add_argument('--ligandForceField', required=False, type=str, dest='ligandforcefield',
-                    default='openff-2.0.0',
-                    help='Force field for ligand:  openff-2.0.0, gaff, or espaloma-0.3.2')
-parser.add_argument('--implicitSolvent', required=False, type=str, dest='implsolv',
-                    default='None',
-                    help='Implicit solvent to use: HCT OBC2 GBn2. None for vacuum.')
-parser.add_argument('--forcefieldJSONCachefile', required=False, type=str, dest='ffcachefile',
-                    default=None,
-                    help='Force field ligand cache database')
-parser.add_argument('--hmass', required=False, type=float, dest='hmass',
-                    default=1.0,
-                    help='Hydrogen mass, set it to 1.5 amu to use a 4 fs time-step')
-
-# Arguments that are flags
-parser.add_argument('--verbose', required=False, action='store_true', dest='flagverbose',
-                    help='Get more output with this flag')
-
 
 def make_system(receptorfile, lig1sdffile, displacement, xmloutfile, pdboutfile, lig2sdffile, cofsdffile, proteinforcefield, solventforcefield, ligandforcefield, ffcachefile, implsolv, hmass, flagverbose=False):
+    print('Generate ATM RBFE OpenMM System')
+    today = datetime.today()
+    print('\nDate and time at start: ', today.strftime('%c'))
+    program_start_timer = time()
+
     #catch abfe or rbfe
     rbfe = False
     if lig2sdffile  is not None:
@@ -420,6 +337,62 @@ def make_system(receptorfile, lig1sdffile, displacement, xmloutfile, pdboutfile,
 
 
 def main():
+    whatItDoes = """
+    Produces an .xml file with the OpenMM's system for ATM relative binding
+    free energy calcuations.
+
+    The user supplies a pdb file that contains protein, cofactors, ligands, 
+    water, ions, probably prepared by a different software package 
+    (Maestro, OpenEye).  Cofactors and ligands have to be described in an
+    sdf file.  Then force fields are assigned to all components
+
+    Emilio Gallicchio 5/2023
+    adapted from simProteinLigandWater.py script by Bill Swope 11/2021
+    """
+
+    parser = argparse.ArgumentParser(description=whatItDoes)
+
+    # Required input
+    parser.add_argument('--receptorinFile', required=True,  type=str, default=None, dest='receptorfile',
+                        help='Receptor in SDF (.sdf) or PDB format (.pdb)')
+    parser.add_argument('--LIG1SDFinFile',  required=True,  type=str, default=None, dest='lig1sdffile',
+                        help='SDF file of first ligand')
+    parser.add_argument('--displacement',  required=True,  type=str, default=None, dest='displacement',
+                        help='string with displacement vector in angstroms like "22. 0.0 0.0" ')
+    parser.add_argument('--systemXMLoutFile',  required=True,  type=str, default=None, dest='xmloutfile',
+                        help='Name of the XML file where to save the System')
+    parser.add_argument('--systemPDBoutFile', required=True, type=str, default=None, dest='pdboutfile',
+                        help='Name of the PDB file where to output to system')
+
+    # Optional input
+    parser.add_argument('--LIG2SDFinFile',  required=False,  type=str, default=None, dest='lig2sdffile',
+                        help='SDF file of second ligand')
+    parser.add_argument('--cofactorsSDFFile',  required=False,  type=str, default=None, dest='cofsdffile',
+                        help='SDF file with receptor cofactors')
+
+    parser.add_argument('--proteinForceField', required=False, type=str, dest='proteinforcefield',
+                        default='amber14-all.xml',
+                        help='Force field for protein` amber14-all.xml ')
+    parser.add_argument('--solventForceField', required=False, type=str, dest='solventforcefield',
+                        default='amber14/tip3p.xml',
+                        help='Force field for solvent/ions` amber14/tip3p.xml ')
+    parser.add_argument('--ligandForceField', required=False, type=str, dest='ligandforcefield',
+                        default='openff-2.0.0',
+                        help='Force field for ligand:  openff-2.0.0, gaff, or espaloma-0.3.2')
+    parser.add_argument('--implicitSolvent', required=False, type=str, dest='implsolv',
+                        default='None',
+                        help='Implicit solvent to use: HCT OBC2 GBn2. None for vacuum.')
+    parser.add_argument('--forcefieldJSONCachefile', required=False, type=str, dest='ffcachefile',
+                        default=None,
+                        help='Force field ligand cache database')
+    parser.add_argument('--hmass', required=False, type=float, dest='hmass',
+                        default=1.0,
+                        help='Hydrogen mass, set it to 1.5 amu to use a 4 fs time-step')
+
+    # Arguments that are flags
+    parser.add_argument('--verbose', required=False, action='store_true', dest='flagverbose',
+                        help='Get more output with this flag')
+
     args = vars(parser.parse_args())
     make_system(**args)
 

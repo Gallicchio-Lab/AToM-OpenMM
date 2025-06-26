@@ -171,7 +171,9 @@ class LocalOpenMMTransport(Transport):
 
                 # updates number of jobs launched
                 njobs_launched += 1
-
+                if not hasattr(job['openmm_worker'], '_runningSignal'):
+                    # Synchronous single worker. Set node_status to None to reuse for next replica.
+                    self.node_status[node] = None
                 node = self._availableNode()
 
             self._finalize_replicas()
@@ -199,6 +201,8 @@ class LocalOpenMMTransport(Transport):
             self.replica_to_job[replica] = None
 
     def _update_replica(self, job):
+        import numpy as np
+
         #update replica cycle, mdsteps, write out, etc. from worker
         ommreplica = job['openmm_replica']
         if job['openmm_worker'].has_crashed(): #refuses to update replica from a crashed worker
@@ -211,12 +215,10 @@ class LocalOpenMMTransport(Transport):
         for value in pot.values():
             if math.isnan(value._value):
                 return None
-        for p in pos:
-            if math.isnan(p.x) or math.isnan(p.y) or math.isnan(p.z):
-                return None
-        for v in vel:
-            if math.isnan(v.x) or math.isnan(v.y) or math.isnan(v.z):
-                return None
+        if np.any(np.isnan(pos)):
+            return None
+        if np.any(np.isnan(vel)):
+            return None
         cycle = ommreplica.get_cycle() + 1
         ommreplica.set_cycle(cycle)
         mdsteps = ommreplica.get_mdsteps() + job['nsteps']
@@ -280,7 +282,8 @@ class LocalOpenMMTransport(Transport):
 
             if done:
                 #update replica info
-                openmm_worker._runningSignal.clear()
+                if hasattr(openmm_worker, '_runningSignal'):
+                    openmm_worker._runningSignal.clear()
                 retcode = self._update_replica(job)
                 if retcode is None:
                     self.logger.warning("isDone(): replica %d has completed with errors", replica)

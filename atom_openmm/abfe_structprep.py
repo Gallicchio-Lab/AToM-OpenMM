@@ -420,9 +420,10 @@ def abfe_structprep(config_file=None):
 
     with set_directory(Path(config_file).parent):
         restrain_solutes = True
+        if keywords.get('MINTHERM_RESTRAIN_SOLUTES'):
+            restrain_solutes = keywords.get('MINTHERM_RESTRAIN_SOLUTES').upper() == "YES"
         old_keywords = keywords.copy()
         massage_keywords(keywords, restrain_solutes)
-        
         do_mintherm(keywords, logger)
         do_lambda_annealing(keywords, logger)
 

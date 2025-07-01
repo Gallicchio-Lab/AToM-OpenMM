@@ -24,8 +24,40 @@ from atom_openmm.ommsystem import *
 from atom_openmm.utils.AtomUtils import AtomUtils, residue_is_solvent
 
 class OMMSystemRBFEnoATM(OMMSystemRBFE):
+    def populate_atmforcegroup(self):
+        import re
+        nbpattern = re.compile(".*Nonbonded.*")
+        gbpattern = re.compile(".*GB.*")
+        harmpattern = re.compile(".*Harmonic.*")
+        torpattern  = re.compile(".*Torsion.*")
+        if self.var_force_group is not None:
+            #add all forces in the var_force_group to ATMForce
+            for i in range(self.system.getNumForces()):
+                if self.system.getForce(i).getForceGroup() == self.var_force_group:
+                    self.logger.info("Assigning Force %s to atmforcegroup" % self.system.getForce(i).getName())
+                    self.system.getForce(i).setForceGroup(self.atmforcegroup)
+        elif self.keywords.get('LIGAND1_VAR_ATOMS') is not None:
+            #add all standard bonded and non-bonded forces to ATMForce
+            for i in range(self.system.getNumForces()):
+                if ( nbpattern.match(self.system.getForce(i).getName())   or
+                     gbpattern.match(self.system.getForce(i).getName())   or
+                     harmpattern.match(self.system.getForce(i).getName()) or
+                     torpattern.match(self.system.getForce(i).getName())    ):
+                    self.logger.info("Assigning Force %s to atmforcegroup" % self.system.getForce(i).getName())
+                    self.system.getForce(i).setForceGroup(self.atmforcegroup)
+        else:
+            #add only non-bonded forces, after separating out the 1-4 interactions
+            for i in range(self.system.getNumForces()):
+                if ( nbpattern.match(self.system.getForce(i).getName()) or
+                     gbpattern.match(self.system.getForce(i).getName()) ):
+                    self.logger.info("Assigning Force %s to atmforcegroup" % self.system.getForce(i).getName())
+                    self.system.getForce(i).setForceGroup(self.atmforcegroup)
+                    
+        self.logger.info("System's Forces:")
+        for i in range(self.system.getNumForces()):
+            self.logger.info("   %s" % self.system.getForce(i).getName())
+                    
     def create_system(self):
-
         self.load_system()
         self.atm_utils = AtomUtils(self.system)
         self.set_ligand_atoms()
@@ -53,22 +85,8 @@ class OMMSystemRBFEnoATM(OMMSystemRBFE):
         #do not include ATM Force, instead place the nonbonded
         #forces in what it would be the the ATMForce group
         #for the integrator
-        #self.set_atmforce()
         self.atmforcegroup = self.free_force_group()
-        import re
-        nbpattern = re.compile(".*Nonbonded.*")
-        for i in range(self.system.getNumForces()):
-            if nbpattern.match(str(type(self.system.getForce(i)))):
-                nbforce = self.system.getForce(i)
-                nbforce.setForceGroup(self.atmforcegroup)
-                break
-        gbpattern = re.compile(".*GB.*")
-        for i in range(self.system.getNumForces()):
-            if gbpattern.match(self.system.getForce(i).getName()):
-                print("Adding GB implicit solvent force %s to non-bonded force group" % self.system.getForce(i).getName())
-                gbforce = self.system.getForce(i)
-                gbforce.setForceGroup(self.atmforcegroup)
-                break
+        self.populate_atmforcegroup()
 
         #add barostat
         pressure=1*bar
@@ -390,6 +408,8 @@ def massage_keywords(keywords, restrain_solutes = True):
 
     #use 1 fs time step
     keywords['TIME_STEP'] = 0.001
+    if keywords.get('MINTHERM_TIME_STEP') is not None:
+        keywords['TIME_STEP'] = float(keywords.get('MINTHERM_TIME_STEP'))
 
     #temporarily restrain all non-solvent atoms
     if restrain_solutes:
@@ -427,6 +447,10 @@ def rbfe_structprep(config_file=None):
 
     with set_directory(Path(config_file).parent):
         restrain_solutes = True
+        if keywords.get('MINTHERM_RESTRAIN_SOLUTES'):
+            restrain_solutes = keywords.get('MINTHERM_RESTRAIN_SOLUTES').upper() == "YES"
+        if not restrain_solutes:
+            logger.info("Solutes are not restrained during mintherm.")
         old_keywords = keywords.copy()
         massage_keywords(keywords, restrain_solutes)
 

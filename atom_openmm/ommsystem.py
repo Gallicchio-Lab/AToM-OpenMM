@@ -52,6 +52,8 @@ class OMMSystem(object):
         self.nonbondedforcegroup = None
         self.metaDforcegroup = None
 
+        self.var_force_group = int(keywords.get('VARIABLE_FORCE_GROUP'))
+
         self.frictionCoeff = float(self.keywords.get('FRICTION_COEFF')) / picosecond
         self.MDstepsize = float(self.keywords.get('TIME_STEP')) * picosecond
 
@@ -114,32 +116,13 @@ class OMMSystem(object):
         self.system.addForce(self.barostat)
 
     def free_force_group(self):
-        freeGroups = set(range(32)) - set(force.getForceGroup() for force in self.system.getForces())
+        varset = set([self.var_force_group]) if self.var_force_group is not None else set()
+        freeGroups = set(range(32)) - set(force.getForceGroup() for force in self.system.getForces()) - varset
         if len(freeGroups) == 0:
             self._exit('Cannot find a free force group. '
                        'The maximum number (32) of the force groups is already used.')
         return max(freeGroups)
         
-    def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
-        #place non-bonded force in its own group, assume all other bonded forces are in group 0
-        nonbonded = [f for f in self.system.getForces() if isinstance(f, NonbondedForce)][0]
-        self.nonbondedforcegroup = self.free_force_group()
-        nonbonded.setForceGroup(self.nonbondedforcegroup)
-        gbpattern = re.compile(".*GB.*")
-        for i in range(self.system.getNumForces()):
-            if gbpattern.match(str(type(self.system.getForce(i)))):
-                self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
-                break
-        #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
-        bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
-        self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
-        if doMetaD:
-            fgroups = [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.nonbondedforcegroup,1)]
-        else:
-            fgroups = [(0,bonded_frequency), (self.nonbondedforcegroup,1)]
-        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, fgroups)
-        self.integrator.setConstraintTolerance(0.00001)
-
     def set_positional_restraints(self):
         #indexes of the atoms whose position is restrained near the initial positions
         #by a flat-bottom harmonic potential. 
@@ -202,8 +185,122 @@ class OMMSystem(object):
             self.metaDforcegroup = metaD._force.getForceGroup()
         self.doMetaD = True
 
+    def add_forces_to_atmforce(self):
+        import re
+        nbpattern = re.compile(".*Nonbonded.*")
+        gbpattern = re.compile(".*GB.*")
+        harmpattern = re.compile(".*Harmonic.*")
+        torpattern  = re.compile(".*Torsion.*")
+        if self.var_force_group is not None:
+            #add all forces in the var_force_group to ATMForce
+            force_removed = True
+            while force_removed:
+                force_removed = False
+                for i in range(self.system.getNumForces()):
+                    if self.system.getForce(i).getForceGroup() == self.var_force_group:
+                        self.logger.info("Adding Force %s to ATMForce" % self.system.getForce(i).getName())
+                        self.atmforce.addForce(copy.copy(self.system.getForce(i)))
+                        self.system.removeForce(i)
+                        force_removed = True
+                        break
+        elif self.var_regions:
+            #add all standard bonded and non-bonded forces to ATMForce
+            force_removed = True
+            while force_removed:
+                force_removed = False
+                for i in range(self.system.getNumForces()):
+                    if ( nbpattern.match(self.system.getForce(i).getName())   or
+                         gbpattern.match(self.system.getForce(i).getName())   or
+                         harmpattern.match(self.system.getForce(i).getName()) or
+                         torpattern.match(self.system.getForce(i).getName())    ):
+                        self.logger.info("Adding Force %s to ATMForce" % self.system.getForce(i).getName())
+                        self.atmforce.addForce(copy.copy(self.system.getForce(i)))
+                        self.system.removeForce(i)
+                        force_removed = True
+                        break
+        else:
+            #add only non-bonded forces, after separating out the 1-4 interactions
+            force_removed = True
+            while force_removed:
+                force_removed = False
+                for i in range(self.system.getNumForces()):
+                    if nbpattern.match(self.system.getForce(i).getName()):
+                        #separate 1-4 interactions from non-bonded force so they get evaluated
+                        #with the bonded terms
+                        self.logger.info("Adding Force %s to ATMForce" % self.system.getForce(i).getName())
+                        force14 = separate14(self.system.getForce(i))
+                        self.system.addForce(force14)
+                        self.atmforce.addForce(copy.copy(self.system.getForce(i)))
+                        force_removed = True
+                        self.system.removeForce(i)
+                        break
+                    elif gbpattern.match(self.system.getForce(i).getName()):
+                        self.logger.info("Adding Force %s to ATMForce" % self.system.getForce(i).getName())
+                        self.atmforce.addForce(copy.copy(self.system.getForce(i)))
+                        force_removed = True
+                        self.system.removeForce(i)
+                        break
+
+        self.logger.info("System's Forces after adding variable Forces to ATMForce:")
+        for i in range(self.system.getNumForces()):
+            self.logger.info("   %s" % self.system.getForce(i).getName())
+
+    def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
+
+        drudeForce = None
+        for i in range(self.system.getNumForces()):
+            if self.system.getForce(i).getName() == "DrudeForce":
+                drudeForce = copy.copy(self.system.getForce(i))
+                break
+        if drudeForce is None:
+            for i in range(self.atmforce.getNumForces()):
+                if self.atmforce.getForce(i).getName() == "DrudeForce":
+                    drudeForce = copy.copy(self.atmforce.getForce(i))
+                    break
+
+        if drudeForce is not None:
+            self.logger.info("Using Drude Langevin integrator with a %f fs time-step." % (MDstepsize/femtosecond))
+            self.drude_temperature = 1.0*kelvin if self.keywords.get('DRUDE_TEMPERATURE') is None else float(self.keywords.get('DRUDE_TEMPERATURE'))*kelvin
+            self.drude_frictionCoeff = 20.0/picosecond if self.keywords.get('DRUDE_TEMPERATURE') is None else float(self.keywords.get('DRUDE_TEMPERATURE'))*kelvin
+            self.drude_hardwall = 0.02 if self.keywords.get('DRUDE_TEMPERATURE') is None else float(self.keywords.get('DRUDE_TEMPERATURE'))
+            self.integrator = DrudeLangevinIntegrator(temperature, frictionCoeff, self.drude_temperature, self.drude_frictionCoeff, MDstepsize)
+            self.integrator.setMaxDrudeDistance(self.drude_hardwall) # Drude Hardwall
+            self.integrator.setDrudeForce(drudeForce)
+        else:
+            #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
+            bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
+            self.logger.info("Using Langevin MTS integrator with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
+            #TO-DO: place metaD force in group 0
+            if self.doMetaD:
+                fgroups = [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.atmforcegroup,1)]
+            else:
+                fgroups = [(0,bonded_frequency), (self.atmforcegroup,1)]
+            self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, fgroups )   
+        self.integrator.setConstraintTolerance(0.00001)
+            
+        
 #Temperature RE
 class OMMSystemTRE(OMMSystem):
+    def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
+        #place non-bonded force in its own group, assume all other bonded forces are in group 0
+        nonbonded = [f for f in self.system.getForces() if isinstance(f, NonbondedForce)][0]
+        self.nonbondedforcegroup = self.free_force_group()
+        nonbonded.setForceGroup(self.nonbondedforcegroup)
+        gbpattern = re.compile(".*GB.*")
+        for i in range(self.system.getNumForces()):
+            if gbpattern.match(str(type(self.system.getForce(i)))):
+                self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
+                break
+        #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
+        bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
+        self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
+        if doMetaD:
+            fgroups = [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.nonbondedforcegroup,1)]
+        else:
+            fgroups = [(0,bonded_frequency), (self.nonbondedforcegroup,1)]
+        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, fgroups)
+        self.integrator.setConstraintTolerance(0.00001)
+
     def create_system(self):
         self.load_system()
         #the temperature defines the state and will be overriden in set_state()
@@ -311,16 +408,6 @@ class OMMSystemABFE(OMMSystem):
                                                       kfphi, phi0, phitol,
                                                       kfpsi, psi0, psitol)
 
-    def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
-        #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
-        bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
-        self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
-        if self.doMetaD:
-            fgroups = [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.atmforcegroup,1)]
-        else:
-            fgroups = [(0,bonded_frequency), (self.atmforcegroup,1)]
-        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, fgroups )
-        self.integrator.setConstraintTolerance(0.00001)
 
     def set_atmforce(self):
         #these define the state and will be overriden in set_state()
@@ -366,33 +453,15 @@ class OMMSystemABFE(OMMSystem):
         self.atmforce.addGlobalParameter("Direction", direction);
         self.atmforce.addGlobalParameter("UOffset", uoffset/kilojoules_per_mole);
 
-        #adds nonbonded Force from the system to the ATMForce
-        import re
-        nbpattern = re.compile(".*Nonbonded.*")
-        for i in range(self.system.getNumForces()):
-            if nbpattern.match(str(type(self.system.getForce(i)))):
-                #separate 1-4 interactions from non-bonded force so they get evaluated
-                #with the bonded terms
-                force14 = separate14(self.system.getForce(i))
-                self.system.addForce(force14)
-                self.atmforce.addForce(copy.copy(self.system.getForce(i)))
-                self.nonbondedforcegroup = self.free_force_group()
-                if self.v82plus:
-                    print("Added %s and removed from system" % self.system.getForce(i).getName())
-                    self.system.removeForce(i)
-                else:
-                    #rather then removing the nonbonded force, disable it by assigning a force
-                    #group not included in the MTS integrator. This way it can do atom reordering.
-                    print("Added %s and disabled from system" % self.system.getForce(i).getName())
-                    self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
-                break
-        gbpattern = re.compile(".*GB.*")
-        for i in range(self.system.getNumForces()):
-            if gbpattern.match(self.system.getForce(i).getName()):
-                self.logger.info("Adding GB implicit solvent Force %s to ATMForce" % self.system.getForce(i).getName())
-                self.atmforce.addForce(copy.copy(self.system.getForce(i)))
-                self.system.removeForce(i)
-                break
+        #assign a group to ATMForce for multiple time-steps
+        self.atmforcegroup = self.free_force_group()
+        self.atmforce.setForceGroup(self.atmforcegroup)
+        self.system.addForce(self.atmforce)
+        self.nonbondedforcegroup = self.free_force_group()
+
+        #adds Forces of the variable group to ATMForce
+        self.add_forces_to_atmforce()
+
         #adds atoms to ATMForce
         for i in range(self.topology.getNumAtoms()):
             self.atmforce.addParticle(Vec3(0., 0., 0.))
@@ -402,13 +471,6 @@ class OMMSystemABFE(OMMSystem):
             for i in self.lig_atoms0:
                 self.atmforce.setParticleParameters(i, Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer,
                                                        Vec3(self.displ[0], self.displ[1], self.displ[2])/nanometer)
-
-        #assign a group to ATMForce for multiple time-steps
-        self.atmforcegroup = self.free_force_group()
-        self.atmforce.setForceGroup(self.atmforcegroup)
-
-        #add ATMForce to the system
-        self.system.addForce(self.atmforce)
 
         #these are the global parameters specified in the cntl files that need to be reset
         #by the worker after reading the first configuration
@@ -637,83 +699,6 @@ class OMMSystemRBFE(OMMSystem):
                                     kpsi = float(self.keywords.get('ALIGN_K_PSI'))*kilocalorie_per_mole,
                                     offset = self.displ)
 
-    def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
-        #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
-        bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
-        self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
-        if self.doMetaD:
-            fgroups = [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.atmforcegroup,1)]
-        else:
-            fgroups = [(0,bonded_frequency), (self.atmforcegroup,1)]
-        self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, fgroups )
-        self.integrator.setConstraintTolerance(0.00001)
-
-    def add_all_standard_forces_to_atmforce(self):
-        #adds all standard Forces from the system to the ATMForce
-        import re
-        nbpattern = re.compile(".*Nonbonded.*")
-        gbpattern = re.compile(".*GB.*")
-        harmpattern = re.compile(".*Harmonic.*")
-        torpattern  = re.compile(".*PeriodicTorsion.*")
-        force_removed = True
-        while force_removed:
-            force_removed = False
-            for i in range(self.system.getNumForces()):
-                if ( nbpattern.match(self.system.getForce(i).getName())   or
-                     gbpattern.match(self.system.getForce(i).getName())   or
-                     harmpattern.match(self.system.getForce(i).getName()) or
-                     torpattern.match(self.system.getForce(i).getName())    ):
-                    self.logger.info("Adding Force %s to ATMForce" % self.system.getForce(i).getName())
-                    self.atmforce.addForce(copy.copy(self.system.getForce(i)))
-                    force_removed = True
-                    if self.v82plus:
-                        self.system.removeForce(i)
-                    else:
-                        #rather then removing the nonbonded force, disable it by assigning a force
-                        #group not included in the MTS integrator. This way it can do atom reordering.
-                        self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
-                    break
-
-        self.logger.info("System's Forces:")
-        for i in range(self.system.getNumForces()):
-            self.logger.info("   %s" % self.system.getForce(i).getName())
-                
-    def add_nonbonded_forces_to_atmforce(self):
-        #adds standard non-bonded Forces to the ATMForce
-        import re
-        nbpattern = re.compile(".*Nonbonded.*")
-        gbpattern = re.compile(".*GB.*")
-        force_removed = True
-        while force_removed:
-            force_removed = False
-            for i in range(self.system.getNumForces()):
-                if nbpattern.match(self.system.getForce(i).getName()):
-                    #separate 1-4 interactions from non-bonded force so they get evaluated
-                    #with the bonded terms
-                    self.logger.info("Adding Force %s to ATMForce" % self.system.getForce(i).getName())
-                    force14 = separate14(self.system.getForce(i))
-                    self.system.addForce(force14)
-                    self.atmforce.addForce(copy.copy(self.system.getForce(i)))
-                    force_removed = True
-                    if self.v82plus:
-                        self.system.removeForce(i)
-                    else:
-                        self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
-                    break
-                elif gbpattern.match(self.system.getForce(i).getName()):
-                    self.logger.info("Adding Force %s to ATMForce" % self.system.getForce(i).getName())
-                    self.atmforce.addForce(copy.copy(self.system.getForce(i)))
-                    force_removed = True
-                    if self.v82plus:
-                        self.system.removeForce(i)
-                    else:
-                        self.system.getForce(i).setForceGroup(self.nonbondedforcegroup)
-                    break
-
-        self.logger.info("System's Forces:")
-        for i in range(self.system.getNumForces()):
-            self.logger.info("   %s" % self.system.getForce(i).getName())
-
     def add_atoms_to_atmforce(self):
         #adds atoms to atmforce using standard fixed molecular displacements
         nodispl = Vec3(0., 0., 0.)
@@ -813,7 +798,6 @@ class OMMSystemRBFE(OMMSystem):
         self.atmforce.addGlobalParameter("UOffset", uoffset/kilojoules_per_mole);
         
         #assign a group to ATMForce for multiple time-steps
-        #self.nonbondedforcegroup = self.free_force_group()
         self.atmforcegroup = self.free_force_group()
         self.atmforce.setForceGroup(self.atmforcegroup)
         self.system.addForce(self.atmforce)
@@ -829,13 +813,8 @@ class OMMSystemRBFE(OMMSystem):
         if self.keywords.get('LIGAND1_VAR_ATOMS') is not None:
             self.var_regions = True
 
-        #adds Forces from the system to the ATMForce
-        if self.var_regions:
-            #when transferring only the variable region, the bonded forces are affected
-            self.add_all_standard_forces_to_atmforce()
-        else:
-            #standard molecular displacements affect only non-bonded forces
-            self.add_nonbonded_forces_to_atmforce()
+        #adds Forces of the given group to ATMForce
+        self.add_forces_to_atmforce()
 
         #adds atoms to ATMForce
         if self.pos_displacement:

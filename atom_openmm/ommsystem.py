@@ -253,10 +253,11 @@ class OMMSystem(object):
                 drudeForce = copy.copy(self.system.getForce(i))
                 break
         if drudeForce is None:
-            for i in range(self.atmforce.getNumForces()):
-                if self.atmforce.getForce(i).getName() == "DrudeForce":
-                    drudeForce = copy.copy(self.atmforce.getForce(i))
-                    break
+            if self.atmforce is not None:
+                for i in range(self.atmforce.getNumForces()):
+                    if self.atmforce.getForce(i).getName() == "DrudeForce":
+                        drudeForce = copy.copy(self.atmforce.getForce(i))
+                        break
 
         if drudeForce is not None:
             self.logger.info("Using Drude Langevin integrator with a %f fs time-step." % (MDstepsize/femtosecond))

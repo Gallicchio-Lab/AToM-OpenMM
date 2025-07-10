@@ -62,17 +62,19 @@ def boundingBoxSizes(positions):
 
 def make_system(
         receptorfile,
-        lig1sdffile,
         displacement,
         xmloutfile,
         pdboutfile,
+        lig1file=None,
+        lig2file=None,
+        lig1sdffile=None,
         lig2sdffile=None,
         cofsdffile=None,
         proteinforcefield='amber14-all.xml',
         solventforcefield='amber14/tip3p.xml',
         ligandforcefield='openff-2.0.0',
         ffcachefile=None,
-        implsolv='None',
+        implsolv=None,
         hmass=1.0,
         flagverbose=False
     ):
@@ -81,9 +83,19 @@ def make_system(
     print('\nDate and time at start: ', today.strftime('%c'))
     program_start_timer = time()
 
+    if lig1sdffile is not None:
+        print('Warning: LIG1SDFinFile id deprecated. Use LIG1inFile')
+        if lig1file is None:
+            lig1file = lig1sdffile
+
+    if lig2sdffile is not None:
+        print('Warning: LIG2SDFinFile id deprecated. Use LIG2inFile')
+        if lig2file is None:
+            lig2file = lig2sdffile
+            
     #catch abfe or rbfe
     rbfe = False
-    if lig2sdffile  is not None:
+    if lig2file  is not None:
         rbfe = True
 
     if isinstance(displacement, str):
@@ -161,6 +173,7 @@ def make_system(
         rcpt_ommtopology = offtopology.to_openmm(ensure_unique_atom_names=True)
     else:
         print("Error: Unrecognized receptor file name: %s" % receptorfile)
+        sys.exit(1)
 
     nrcpt = rcpt_ommtopology.getNumAtoms()
     print('Number of atoms in receptor:', nrcpt)
@@ -209,17 +222,28 @@ def make_system(
 
 
     print('Read ligand 1:')
-    mollig1 = Molecule.from_file(lig1sdffile, file_format='SDF',
-                                allow_undefined_stereo=True)
-    ligandmolecules.append(mollig1)
-    lig1_ommtopology = mollig1.to_topology().to_openmm(ensure_unique_atom_names=True)
+    fileext = (os.path.splitext(lig1file)[1]).upper()
+    if fileext == '.SDF':
+        mollig1 = Molecule.from_file(lig1file, file_format='SDF', allow_undefined_stereo=True)
+        ligandmolecules.append(mollig1)
+        lig1_ommtopology = mollig1.to_topology().to_openmm(ensure_unique_atom_names=True)
+        pos = mollig1.conformers[0].to('angstrom').magnitude
+        lig1_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
+        #assign the residue name, assumes one residue
+        resname_lig2 = "L2"
+        for residue in lig2_ommtopology.residues():
+            residue.name = resname_lig2
+    elif fileext == '.PDB':
+        lig1pdb = PDBFile(lig1file)
+        lig1_ommtopology = lig1pdb.topology
+        lig1_positions = lig1pdb.positions
+        chainname_lig1 = "L"
+        for chain in lig1_ommtopology.chains():
+            chain.id = chainname_lig1
+    else:
+        print("Error: unrecognized file: %s" % lig1file)
+        sys.exit(1)
 
-    #assign the residue name to the ligand, assumes one residue
-    resname_lig1 = "L1"
-    for residue in lig1_ommtopology.residues():
-        residue.name = resname_lig1
-    pos = mollig1.conformers[0].to('angstrom').magnitude
-    lig1_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
     nlig1 = lig1_ommtopology.getNumAtoms()
     print('Number of atoms in ligand 1:', nlig1)
     print('Call Modeller: include ligand 1')
@@ -234,16 +258,29 @@ def make_system(
         # RBFE mode:
         # read ligand 2 and place it in the solvent
         print('Read ligand 2:')
-        mollig2 = Molecule.from_file(lig2sdffile, file_format='SDF',
-                                    allow_undefined_stereo=True)
-        ligandmolecules.append(mollig2)
-        lig2_ommtopology = mollig2.to_topology().to_openmm(ensure_unique_atom_names=True)
-        #assign the residue name, assumes one residue
-        resname_lig2 = "L2"
-        for residue in lig2_ommtopology.residues():
-            residue.name = resname_lig2
-        pos = mollig2.conformers[0].to('angstrom').magnitude
-        lig2_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
+        fileext = (os.path.splitext(lig2file)[1]).upper()
+        if fileext == '.SDF':
+            mollig2 = Molecule.from_file(lig2sdffile, file_format='SDF',
+                                         allow_undefined_stereo=True)
+            ligandmolecules.append(mollig2)
+            lig2_ommtopology = mollig2.to_topology().to_openmm(ensure_unique_atom_names=True)
+            pos = mollig2.conformers[0].to('angstrom').magnitude
+            lig2_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
+            #assign the residue name, assumes one residue
+            resname_lig2 = "L2"
+            for residue in lig2_ommtopology.residues():
+                residue.name = resname_lig2
+        elif fileext == '.PDB':
+            lig2pdb = PDBFile(lig2file)
+            lig2_ommtopology = lig2pdb.topology
+            lig2_positions = lig2pdb.positions
+            chainname_lig2 = "M"
+            for chain in lig2_ommtopology.chains():
+                chain.id = chainname_lig2
+        else:
+            print("Error: unrecognized file: %s" % lig2file)
+            sys.exit(1)
+        
         nlig2 = lig2_ommtopology.getNumAtoms()
         print('Number of atoms in ligand 2:', nlig2)
         for i in range(nlig2):
@@ -327,24 +364,6 @@ def make_system(
         PDBFile.writeFile(modeller.topology, modeller.positions,
                         open(pdboutfile,'w'), keepIds=True)
 
-
-    #find the first atom index of the ligand
-    lig1_start = modeller.topology.getNumAtoms()
-    for at in modeller.topology.atoms():
-        if at.residue.name == resname_lig1:
-            if at.index < lig1_start:
-                lig1_start = at.index
-    if lig1_start == modeller.topology.getNumAtoms():
-        raise Exception("Error: could not find ligand %s" % resname_lig1)
-        
-    lig1atom_indexes = [ i for i in range(lig1_start,lig1_start+nlig1)]
-    print("Indexes of ligand 1 (starting from 0):", lig1atom_indexes)
-
-    if rbfe:
-        print("Indexes of ligand 2 (starting from 0):", [ i for i in range(lig1_start+nlig1,lig1_start+nlig1+nlig2)])
-        
-    print("Box Vectors:", modeller.topology.getPeriodicBoxVectors())
-        
     today = datetime.today()
     print('\n\nDate and time at end:   ', today)
     program_end_timer = time()
@@ -370,8 +389,6 @@ def main():
     # Required input
     parser.add_argument('--receptorinFile', required=True,  type=str, default=None, dest='receptorfile',
                         help='Receptor in SDF (.sdf) or PDB format (.pdb)')
-    parser.add_argument('--LIG1SDFinFile',  required=True,  type=str, default=None, dest='lig1sdffile',
-                        help='SDF file of first ligand')
     parser.add_argument('--displacement',  required=True,  type=str, default=None, dest='displacement',
                         help='string with displacement vector in angstroms like "22. 0.0 0.0" ')
     parser.add_argument('--systemXMLoutFile',  required=True,  type=str, default=None, dest='xmloutfile',
@@ -380,6 +397,12 @@ def main():
                         help='Name of the PDB file where to output to system')
 
     # Optional input
+    parser.add_argument('--LIG1inFile',  required=False,  type=str, default=None, dest='lig1file',
+                        help='First ligand in SDF (.sdf) or PDB format (.pdb)')
+    parser.add_argument('--LIG2inFile',  required=False,  type=str, default=None, dest='lig2file',
+                        help='Second ligand in SDF (.sdf) or PDB format (.pdb)')
+    parser.add_argument('--LIG1SDFinFile',  required=False,  type=str, default=None, dest='lig1sdffile',
+                        help='SDF file of first ligand')
     parser.add_argument('--LIG2SDFinFile',  required=False,  type=str, default=None, dest='lig2sdffile',
                         help='SDF file of second ligand')
     parser.add_argument('--cofactorsSDFFile',  required=False,  type=str, default=None, dest='cofsdffile',
@@ -395,8 +418,8 @@ def main():
                         default='openff-2.0.0',
                         help='Force field for ligand:  openff-2.0.0, gaff, or espaloma-0.3.2')
     parser.add_argument('--implicitSolvent', required=False, type=str, dest='implsolv',
-                        default='None',
-                        help='Implicit solvent to use: HCT OBC2 GBn2. None for vacuum.')
+                        default=None,
+                        help='Implicit solvent to use: HCT OBC2 GBn2, vacuum.')
     parser.add_argument('--forcefieldJSONCachefile', required=False, type=str, dest='ffcachefile',
                         default=None,
                         help='Force field ligand cache database')

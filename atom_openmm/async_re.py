@@ -69,6 +69,9 @@ class JobManager(object):
         self._cleanup()
         self.logger.info(message)
         sys.stdout.flush()
+        if not self.async_mode:
+            sys.exit(1)
+
         self.logger.info('Waiting for children to complete ...')
         while True:
             time.sleep(1)

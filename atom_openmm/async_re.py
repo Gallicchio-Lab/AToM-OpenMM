@@ -59,9 +59,10 @@ class JobManager(object):
         # Set the async mode to True by default
         self.async_mode = self.keywords.get('ASYNC_MODE', True)
 
-        #catch ctrl-C and SIGTERM to terminate threads gracefully
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
+        if self.async_mode:
+            #catch ctrl-C and SIGTERM to terminate threads gracefully
+            signal.signal(signal.SIGINT, self._signal_handler)
+            signal.signal(signal.SIGTERM, self._signal_handler)
 
     def _exit(self, message):
         """Print and flush a message to stdout and then exit."""

@@ -6,76 +6,44 @@ curr_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 def _test_abfe_structprep(tmp_path):
-    from atom_openmm.abfe_structprep import (
-        massage_keywords,
-        do_mintherm,
-        do_lambda_annealing,
-        do_equil,
-    )
-    from atom_openmm.utils.config import parse_config
-    import logging
+    from atom_openmm.abfe_structprep import abfe_structprep
 
-    logger = logging.getLogger("abfe_structprep")
     run_dir = os.path.join(tmp_path, "1STP")
     shutil.copytree(os.path.join(curr_dir, "1STP"), run_dir)
-    os.chdir(run_dir)
 
-    keywords = parse_config("1STP_asyncre.yaml")
-    restrain_solutes = True
-    old_keywords = keywords.copy()
-    massage_keywords(keywords, restrain_solutes)
-
-    do_mintherm(keywords, logger)
-    do_lambda_annealing(keywords, logger)
-
-    # reestablish the restrained atoms
-    if restrain_solutes:
-        keywords["POS_RESTRAINED_ATOMS"] = old_keywords.get("POS_RESTRAINED_ATOMS")
-
-    do_equil(keywords, logger)
+    abfe_structprep(os.path.join(run_dir, "1STP_asyncre.yaml"))
 
 
 def _test_abfe_production(tmp_path):
-    from atom_openmm.openmm_async_re import openmm_job_ABFE
+    from atom_openmm.abfe_production import abfe_production
 
     shutil.copytree(
         os.path.join(curr_dir, "1STP_equil"),
         os.path.join(tmp_path, "1STP_equil"),
     )
     run_dir = os.path.join(tmp_path, "1STP_equil")
-    os.chdir(run_dir)
-
-    rx = openmm_job_ABFE("1STP_asyncre.yaml", options=None)
-    rx.setupJob()
-    rx.scheduleJobs()
+    abfe_production(os.path.join(run_dir, "1STP_asyncre.yaml"))
 
 
 def _test_rbfe_structprep(tmp_path):
-    from atom_openmm.rbfe_structprep import (
-        massage_keywords,
-        do_mintherm,
-        do_lambda_annealing,
-        do_equil,
-    )
-    from atom_openmm.utils.config import parse_config
-    import logging
+    from atom_openmm.rbfe_structprep import rbfe_structprep
     from openmm import unit
     from openmm import app
     from openmm.app.amberprmtopfile import AmberPrmtopFile
     from openmm import XmlSerializer
     import numpy as np
 
-    logger = logging.getLogger("rbfe_structprep")
     run_dir = os.path.join(tmp_path, "QB_A08_A07")
     shutil.copytree(os.path.join(curr_dir, "QB_A08_A07"), run_dir)
-    os.chdir(run_dir)
 
     box_vectors = np.array([[80.1356, 0, 0], [0, 86.0443, 0], [0, 0, 81.4926]])
     a = unit.Quantity(box_vectors[0] * unit.angstrom)
     b = unit.Quantity(box_vectors[1] * unit.angstrom)
     c = unit.Quantity(box_vectors[2] * unit.angstrom)
     box_vectors = (a, b, c)
-    omm_structure = AmberPrmtopFile("QB_A08_A07.prmtop", periodicBoxVectors=box_vectors)
+    omm_structure = AmberPrmtopFile(
+        os.path.join(run_dir, "QB_A08_A07.prmtop"), periodicBoxVectors=box_vectors
+    )
     system = omm_structure.createSystem(
         nonbondedMethod=app.PME,
         nonbondedCutoff=9 * unit.angstrom,
@@ -84,38 +52,113 @@ def _test_rbfe_structprep(tmp_path):
         rigidWater=True,
         switchDistance=7 * unit.angstrom,
     )
-    with open("QB_A08_A07_sys.xml", "w") as f:
+    with open(os.path.join(run_dir, "QB_A08_A07_sys.xml"), "w") as f:
         f.write(XmlSerializer.serialize(system))
-    keywords = parse_config("QB_A08_A07_asyncre.yaml")
 
-    restrain_solutes = True
-
-    old_keywords = keywords.copy()
-    massage_keywords(keywords, restrain_solutes)
-
-    do_mintherm(keywords, logger)
-    do_lambda_annealing(keywords, logger)
-
-    # reestablish the restrained atoms
-    if restrain_solutes:
-        keywords["POS_RESTRAINED_ATOMS"] = old_keywords.get("POS_RESTRAINED_ATOMS")
-
-    do_equil(keywords, logger)
+    rbfe_structprep(os.path.join(run_dir, "QB_A08_A07_asyncre.yaml"))
 
 
 def _test_rbfe_production(tmp_path):
-    from atom_openmm.openmm_async_re import openmm_job_RBFE
+    from atom_openmm.rbfe_production import rbfe_production
 
     shutil.copytree(
         os.path.join(curr_dir, "QB_A08_A07_equil"),
         os.path.join(tmp_path, "QB_A08_A07_equil"),
     )
     run_dir = os.path.join(tmp_path, "QB_A08_A07_equil")
-    os.chdir(run_dir)
+    rbfe_production(os.path.join(run_dir, "QB_A08_A07_asyncre.yaml"))
 
-    rx = openmm_job_RBFE("QB_A08_A07_asyncre.yaml", options=None)
-    rx.setupJob()
-    rx.scheduleJobs()
+
+def _test_make_atm_system_from_amber(tmp_path):
+    from atom_openmm.make_atm_system_from_amber import make_system
+
+    refxml = os.path.join(curr_dir, "QB_A08_A07_equil", "QB_A08_A07_sys.xml")
+    outxml = os.path.join(tmp_path, "QB_A08_A07_sys.xml")
+    prmtopfile = os.path.join(curr_dir, "QB_A08_A07", "QB_A08_A07.prmtop")
+    crdfile = os.path.join(curr_dir, "QB_A08_A07", "QB_A08_A07.inpcrd")
+    pdboutfile = os.path.join(tmp_path, "QB_A08_A07_sys.pdb")
+    make_system(
+        prmtopfile=prmtopfile,
+        crdfile=crdfile,
+        xmloutfile=outxml,
+        pdboutfile=pdboutfile,
+        hmass=1.5,
+        switchDistance=0.7,
+        nonbondedCutoff=0.9,
+    )
+    with open(outxml, "r") as f:
+        lines = f.readlines()[2:]  # Skipping OpenMM version header
+    with open(refxml, "r") as f:
+        ref_lines = f.readlines()[2:]  # Skipping OpenMM version header
+    assert lines == ref_lines, f"Failed comparison of XML files: {outxml} != {refxml}"
+
+    os.remove(outxml)
+    os.system(
+        f"make_atm_system_from_amber --AmberPrmtopinFile {prmtopfile} --AmberInpcrdinFile {crdfile} --systemXMLoutFile {outxml} --systemPDBoutFile {pdboutfile} --hmass 1.5 --switchDistance 0.7 --nonbondedCutoff 0.9"
+    )
+    with open(outxml, "r") as f:
+        lines = f.readlines()[2:]  # Skipping OpenMM version header
+    assert lines == ref_lines, f"Failed comparison of XML files: {outxml} != {refxml}"
+
+
+def _test_make_atm_system_from_pdb(tmp_path):
+    from atom_openmm.make_atm_system_from_pdb import make_system
+
+    refxml = os.path.join(curr_dir, "3ptb", "3ptb_sys.xml")
+    outxml = os.path.join(tmp_path, "3ptb_sys.xml")
+    pdb = os.path.join(curr_dir, "3ptb", "3ptb.pdb")
+    sdffile = os.path.join(curr_dir, "3ptb", "BEN_ideal.sdf")
+    pdboutfile = os.path.join(tmp_path, "3ptb_sys.pdb")
+    make_system(
+        systempdbfile=pdb,
+        ligandsdffile=sdffile,
+        lig1resid=1,
+        xmloutfile=outxml,
+        pdboutfile=pdboutfile,
+    )
+    with open(outxml, "r") as f:
+        lines = f.readlines()[2:]  # Skipping OpenMM version header
+    with open(refxml, "r") as f:
+        ref_lines = f.readlines()[2:]  # Skipping OpenMM version header
+    assert lines == ref_lines, f"Failed comparison of XML files: {outxml} != {refxml}"
+
+    os.remove(outxml)
+    os.system(
+        f"make_atm_system_from_pdb --systemPDBinFile {pdb} --ligandsSDFFile {sdffile} --LIG1resid 1 --systemXMLoutFile {outxml} --systemPDBoutFile {pdboutfile}"
+    )
+    with open(outxml, "r") as f:
+        lines = f.readlines()[2:]  # Skipping OpenMM version header
+    assert lines == ref_lines, f"Failed comparison of XML files: {outxml} != {refxml}"
+
+
+def _test_make_atm_system_from_rcpt_lig(tmp_path):
+    from atom_openmm.make_atm_system_from_rcpt_lig import make_system
+
+    refxml = os.path.join(curr_dir, "3ptb", "3ptb_sys_2.xml")
+    outxml = os.path.join(tmp_path, "3ptb_sys_2.xml")
+    pdb = os.path.join(curr_dir, "3ptb", "3ptb.pdb")
+    sdffile = os.path.join(curr_dir, "3ptb", "BEN_ideal.sdf")
+    pdboutfile = os.path.join(tmp_path, "3ptb_sys_2.pdb")
+    make_system(
+        receptorfile=pdb,
+        lig1sdffile=sdffile,
+        displacement=[22, 22, 22],
+        xmloutfile=outxml,
+        pdboutfile=pdboutfile,
+    )
+    with open(outxml, "r") as f:
+        lines = f.readlines()[2:]  # Skipping OpenMM version header
+    with open(refxml, "r") as f:
+        ref_lines = f.readlines()[2:]  # Skipping OpenMM version header
+    assert lines == ref_lines, f"Failed comparison of XML files: {outxml} != {refxml}"
+
+    os.remove(outxml)
+    os.system(
+        f"make_atm_system_from_rcpt_lig --receptorinFile {pdb} --LIG1SDFinFile {sdffile} --displacement '22.0 22.0 22.0' --systemXMLoutFile {outxml} --systemPDBoutFile {pdboutfile}"
+    )
+    with open(outxml, "r") as f:
+        lines = f.readlines()[2:]  # Skipping OpenMM version header
+    assert lines == ref_lines, f"Failed comparison of XML files: {outxml} != {refxml}"
 
 
 def _test_input_parser():

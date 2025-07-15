@@ -403,17 +403,14 @@ def massage_keywords(keywords, restrain_solutes = True):
                     non_ion_wat_atoms.append(atom.index)
         keywords['POS_RESTRAINED_ATOMS'] = non_ion_wat_atoms
 
-if __name__ == '__main__':
+
+def rbfe_structprep(config_file=None):
+    from atom_openmm.utils.AtomUtils import set_directory
     from atom_openmm.utils.config import parse_config
+    from pathlib import Path
 
-    # Parse arguments:
-    usage = "%prog <ConfigFile>"
-
-    if len(sys.argv) != 2:
-        print("Please specify ONE input file")
-        sys.exit(1)
-
-    commandFile = sys.argv[1]
+    if config_file is None:
+        config_file = sys.argv[1]
 
     print("")
     print("========================================")
@@ -421,25 +418,29 @@ if __name__ == '__main__':
     print("========================================")
     print("")
     print("Started at: " + str(time.asctime()))
-    print("Input file:", commandFile)
+    print("Input file:", config_file)
     print("")
     sys.stdout.flush()
-    
-    keywords = parse_config(commandFile)
+
+    keywords = parse_config(config_file)
     logger = logging.getLogger("rbfe_structprep")
-    logging.basicConfig()
-    logger.setLevel(logging.INFO)
 
-    restrain_solutes = True
+    with set_directory(Path(config_file).parent):
+        restrain_solutes = True
+        old_keywords = keywords.copy()
+        massage_keywords(keywords, restrain_solutes)
 
-    old_keywords = keywords.copy()
-    massage_keywords(keywords, restrain_solutes)
-    
-    do_mintherm(keywords, logger)
-    do_lambda_annealing(keywords, logger)
+        do_mintherm(keywords, logger)
+        do_lambda_annealing(keywords, logger)
 
-    #reestablish the restrained atoms
-    if restrain_solutes:
-        keywords['POS_RESTRAINED_ATOMS'] = old_keywords.get('POS_RESTRAINED_ATOMS') 
+        # reestablish the restrained atoms
+        if restrain_solutes:
+            keywords["POS_RESTRAINED_ATOMS"] = old_keywords.get("POS_RESTRAINED_ATOMS")
 
-    do_equil(keywords, logger)
+        do_equil(keywords, logger)
+
+
+if __name__ == "__main__":
+    assert len(sys.argv) == 2, "Specify ONE input file"
+
+    rbfe_structprep(sys.argv[1])

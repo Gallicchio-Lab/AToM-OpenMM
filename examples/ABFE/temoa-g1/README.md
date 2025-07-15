@@ -14,8 +14,8 @@ The starting point are the topology and coordinate files of the TEMOA-G1 complex
 Prepare, minimize, thermalize, relax, and equilibrate the complex:
 ```
 cd $HOME/AToM-OpenMM/examples/ABFE/temoa-g1
-make_atm_system_from_Amber.py --AmberPrmtopinFile temoa-g1.prmtop --AmberInpcrdinFile temoa-g1.inpcrd --systemXMLoutFile temoa-g1_sys.xml --systemPDBoutFile temoa-g1.pdb
-abfe_structprep.py temoa-g1_asyncre.cntl
+make_atm_system_from_amber --AmberPrmtopinFile temoa-g1.prmtop --AmberInpcrdinFile temoa-g1.inpcrd --systemXMLoutFile temoa-g1_sys.xml --systemPDBoutFile temoa-g1.pdb
+abfe_structprep temoa-g1_asyncre.cntl
 ```
 
 The resulting structure, stored in the `temoa-g1_0.xml` file is the input of the replica exchange production calculation. The PDB version of each structure is also available.
@@ -43,7 +43,7 @@ would use an AMD GPU together with 4 CPU cores on the same system. In most cases
 
 Now run replica exchange
 ```
-abfe_production.py temoa-g1_asyncre.cntl
+abfe_production temoa-g1_asyncre.cntl
 ```
 
 You should see the contents of the control file echo-ed back and messages indicating that replicas are dispatched for execution to the GPUs/CPUs and that replicas change alchemical states by exchanging them with other replicas. 
@@ -68,7 +68,7 @@ The output files and the trajectory files can be viewed while replica exchange i
 
 Hit `ctrl-C` in the window that runs replica exchange to kill the calculation prematurely. It might take a few seconds for the job to clean up and terminate. The replica exchange job can be restarted by re-issuing the same command as above
 ```
-abfe_production.py temoa-g1_asyncre.cntl
+abfe_production temoa-g1_asyncre.cntl
 ```
 it will restart from the last saved checkpoint. In this example checkpoint files are saved every 10 minutes.
 

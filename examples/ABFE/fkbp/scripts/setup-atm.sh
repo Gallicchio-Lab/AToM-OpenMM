@@ -32,7 +32,7 @@ for l in `seq 0 ${nlig_m1}` ; do
     for d in ${displacement[@]}; do
 	displs="$displs $d"
     done
-    make_atm_system_from_rcpt_lig.py --receptorinFile "${rcptpdb}" --LIG1SDFinFile "${ligsdf}" --displacement "${displs}" --systemXMLoutFile "${jobname}_sys.xml" --systemPDBoutFile "${jobname}.pdb" --forcefieldJSONCachefile "${work_dir}/ligands/ffdb.json" || exit 1
+    make_atm_system_from_rcpt_lig --receptorinFile "${rcptpdb}" --LIG1SDFinFile "${ligsdf}" --displacement "${displs}" --systemXMLoutFile "${jobname}_sys.xml" --systemPDBoutFile "${jobname}.pdb" --forcefieldJSONCachefile "${work_dir}/ligands/ffdb.json" || exit 1
 
     #residue ligand name
     lig1resname=L1

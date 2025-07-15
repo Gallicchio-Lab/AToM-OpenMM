@@ -48,7 +48,7 @@ for l in `seq 0 $n` ; do
 	displs="$displs $d"
     done
     echo "Displacement vector: $displs"
-    make_atm_system_from_rcpt_lig.py --receptorinFile "${rcptpdb}" --LIG1SDFinFile "${lig1sdf}" --LIG2SDFinFile "${lig2sdf}" --displacement "${displs}" --systemXMLoutFile "${jobname}_sys.xml" --systemPDBoutFile "${jobname}.pdb" --hmass 1.5 --forcefieldJSONCachefile "${work_dir}/ligands/ffdb.json" || exit 1
+    make_atm_system_from_rcpt_lig --receptorinFile "${rcptpdb}" --LIG1SDFinFile "${lig1sdf}" --LIG2SDFinFile "${lig2sdf}" --displacement "${displs}" --systemXMLoutFile "${jobname}_sys.xml" --systemPDBoutFile "${jobname}.pdb" --hmass 1.5 --forcefieldJSONCachefile "${work_dir}/ligands/ffdb.json" || exit 1
     #residue ligand names
     lig1resname=L1
     lig2resname=L2

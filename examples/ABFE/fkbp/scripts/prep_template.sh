@@ -13,5 +13,5 @@
 for lig in <LIGS> ; do
     jobname=<RECEPTOR>-${lig}
     echo "Prepping $jobname"
-    ( cd ${jobname} &&  abfe_structprep.py ${jobname}_asyncre.cntl  )  || exit 1
+    ( cd ${jobname} &&  abfe_structprep ${jobname}_asyncre.cntl  )  || exit 1
 done

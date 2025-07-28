@@ -438,5 +438,5 @@ class openmm_job_RBFE(openmm_job_ATM):
         self.openmm_workers = []
         for node in self.compute_nodes:
             ommsys = OMMSystemRBFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger) 
-            self.openmm_workers.append(ommworkercls(self.basename, ommsys, self.keywords, node_info = node, compute = self.async_mode, logger = self.logger))
+            self.openmm_workers.append(ommworkercls(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
 

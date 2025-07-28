@@ -212,8 +212,8 @@ class OMMWorker(object):
                 self.integrator.setTemperature(production_temperature)
             self.simulation.step(self.nsteps)
             return 1
-        except:
-            self.logger.error("MD has crashed")
+        except Exception as e:
+            self.logger.error(f"MD has crashed: {e}")
             return None
 
     def _openmm_worker_makecontext(self):

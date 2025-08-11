@@ -41,7 +41,7 @@ jobs:
       - name: Install conda deps
         run: |
           conda install mamba
-          mamba install -y -q python=${{ matrix.python-version }} openmm pyyaml numpy pandas
+          mamba install -y -q python=${{ matrix.python-version }} openmm pyyaml numpy pandas openff-toolkit openmmforcefields
 
       - name: Install package
         run: |

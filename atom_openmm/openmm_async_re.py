@@ -12,15 +12,15 @@ from openmm.app import *
 from openmm import *
 from openmm.unit import *
 
-from atom_openmm.async_re import async_re
+from atom_openmm.async_re import JobManager
 from atom_openmm.local_openmm_transport import *
 from atom_openmm.ommreplica import *
 from atom_openmm.ommsystem import *
 from atom_openmm.ommworker import *
 
-class openmm_job(async_re):
+class openmm_job(JobManager):
     def __init__(self, command_file, options):
-        async_re.__init__(self, command_file, options)
+        super().__init__(command_file, options)
         self.openmm_replicas = None
         self.stateparams = None
         self.openmm_workers = None
@@ -96,8 +96,7 @@ class openmm_job(async_re):
             if stateid != old_stateid:
                 temperature = par['temperature']
                 scale = math.sqrt(temperature/old_temperature)
-                for i in range(0,len(replica.velocities)):
-                    replica.velocities[i] = scale*replica.velocities[i]
+                replica.velocities *= scale
 
         #additional operations if any
         self._update_state_of_replica_addcustom(replica)
@@ -207,7 +206,7 @@ class openmm_job_TRE(openmm_job):
         return len(self.stateparams)
 
     def _checkInput(self):
-        async_re._checkInput(self)
+        super()._checkInput()
 
         if self.keywords.get('TEMPERATURES') is None:
             self._exit("TEMPERATURES needs to be specified")
@@ -267,7 +266,7 @@ class openmm_job_ATM(openmm_job):
         return len(self.stateparams)
 
     def _checkInput(self):
-        async_re._checkInput(self)
+        super()._checkInput()
 
         if self.keywords.get('LAMBDAS') is None:
             self._exit("LAMBDAS needs to be specified")
@@ -411,6 +410,9 @@ class openmm_job_ABFE(openmm_job_ATM):
 class openmm_job_RBFE(openmm_job_ATM):
     def __init__(self, command_file, options):
         super().__init__(command_file, options)
+
+        self.async_mode = self.keywords.get('ASYNC_MODE', True)
+        ommworkercls = OMMWorkerATM if self.async_mode else OMMWorkerATMSync
         
         pdbtopfile = self.basename + ".pdb"
         systemfile = self.basename + "_sys.xml"
@@ -420,7 +422,7 @@ class openmm_job_RBFE(openmm_job_ATM):
 
         #builds service worker for replicas use
         service_ommsys = OMMSystemRBFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger)
-        self.service_worker = OMMWorkerATM(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
+        self.service_worker = ommworkercls(self.basename, service_ommsys, self.keywords, compute = False, logger = self.logger)
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
@@ -436,5 +438,5 @@ class openmm_job_RBFE(openmm_job_ATM):
         self.openmm_workers = []
         for node in self.compute_nodes:
             ommsys = OMMSystemRBFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger) 
-            self.openmm_workers.append(OMMWorkerATM(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
+            self.openmm_workers.append(ommworkercls(self.basename, ommsys, self.keywords, node_info = node, compute = True, logger = self.logger))
 

@@ -28,7 +28,7 @@ import multiprocessing as mp
 
 __version__ = '8.2.1'
 
-class async_re(object):
+class JobManager(object):
     """
     Class to set up and run asynchronous file-based RE calculations
     """
@@ -56,9 +56,13 @@ class async_re(object):
         #set to False to run without exchanges
         self.exchange = True
 
-        #catch ctrl-C and SIGTERM to terminate threads gracefully
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
+        # Set the async mode to True by default
+        self.async_mode = self.keywords.get('ASYNC_MODE', True)
+
+        if self.async_mode:
+            #catch ctrl-C and SIGTERM to terminate threads gracefully
+            signal.signal(signal.SIGINT, self._signal_handler)
+            signal.signal(signal.SIGTERM, self._signal_handler)
 
     def _exit(self, message):
         """Print and flush a message to stdout and then exit."""
@@ -66,6 +70,9 @@ class async_re(object):
         self._cleanup()
         self.logger.info(message)
         sys.stdout.flush()
+        if not self.async_mode:
+            sys.exit(1)
+
         self.logger.info('Waiting for children to complete ...')
         while True:
             time.sleep(1)
@@ -263,12 +270,31 @@ class async_re(object):
 
         sample_steps = int(self.keywords.get('PRNT_FREQUENCY'))
         cycle_steps = int(self.keywords.get('PRODUCTION_STEPS'))
-        cycle_to_sample = sample_steps/cycle_steps
+        checkpoint_frequency = int(self.keywords.get('CHECKPOINT_FREQUENCY', 0))
+        cycle_to_sample = sample_steps//cycle_steps
         enough_samples = False
+        max_samples = None
+
+        def current_samples():
+            return [(replica.get_cycle()-1)//cycle_to_sample for replica in self.openmm_replicas]
+
         if self.keywords.get('MAX_SAMPLES')  is not None:
-            max_samples = int(self.keywords.get('MAX_SAMPLES'))
-            enough_samples = all( [ (replica.get_cycle()-1)/cycle_to_sample >=  max_samples
-                                    for replica in self.openmm_replicas ]  )
+            max_samples_str = self.keywords.get('MAX_SAMPLES')
+            max_samples = int(max_samples_str)
+            starting_samples = 0
+
+            if isinstance(max_samples_str, str) and max_samples_str.startswith("+"):
+                # Handle cases where we want to increase the number of samples from a starting checkpoint
+                if not os.path.isfile("starting_sample"):
+                    with open("starting_sample", "w") as f:
+                        f.write(f"{min(current_samples())}\n")
+                with open("starting_sample", "r") as f:
+                    starting_samples = int(f.read().strip())
+                    max_samples += starting_samples
+
+            self.logger.info(f"Target number of samples: {max_samples}. Current samples: {min(current_samples())}")
+
+            enough_samples = all( [ repl_sample >= max_samples for repl_sample in current_samples() ] )
             if enough_samples:
                 self.logger.info("All replicas collected the requested number of samples (%d)" % max_samples)
 
@@ -279,6 +305,9 @@ class async_re(object):
         while ( time.time() < end_time and
                 self.transport.numNodesAlive() > 0 and
                 not enough_samples ) :
+            if max_samples is not None:
+                with open("progress", "w") as f:
+                    f.write(f"{(min(current_samples())-starting_samples) / (max_samples - starting_samples)}\n")
             current_time = time.time()
 
             self.updateStatus()
@@ -297,15 +326,14 @@ class async_re(object):
             self.print_status()
             self.transport.fixnodes()
 
-            if current_time - last_checkpoint_time > checkpoint_time:
+            if current_time - last_checkpoint_time > checkpoint_time or (checkpoint_frequency != 0 and all([(sample % checkpoint_frequency) == 0 for sample in current_samples()] )):
                 self.logger.info("Checkpointing ...")
                 self.checkpointJob()
                 last_checkpoint_time = current_time
                 self.logger.info("done.")
 
             #terminates if enough samples have been collected
-            if self.keywords.get('MAX_SAMPLES')  is not None:
-                max_samples = int(self.keywords.get('MAX_SAMPLES'))
+            if max_samples is not None:
                 enough_samples = all( [ (replica.get_cycle()-1)/cycle_to_sample >=  max_samples
                                         for replica in self.openmm_replicas ]  )
                 if enough_samples:
@@ -425,18 +453,28 @@ class async_re(object):
         """
         Scans the replicas in wait state and randomly launches them
         """
-        jobs_to_launch = self._njobs_to_run()
-        if jobs_to_launch > 0:
-            #prioritize replicas that are most behind
-            wait = sorted(self.replicas_waiting, key=self._cycle_of_replica)
-            #  random.shuffle(wait)
-            n = min(jobs_to_launch,len(wait))
-            for k in wait[0:n]:
+        if self.async_mode:
+            jobs_to_launch = self._njobs_to_run()
+            if jobs_to_launch > 0:
+                #prioritize replicas that are most behind
+                wait = sorted(self.replicas_waiting, key=self._cycle_of_replica)
+                #  random.shuffle(wait)
+                n = min(jobs_to_launch,len(wait))
+                for k in wait[0:n]:
+                    self.logger.info('Launching replica %d cycle %d', k, self.status[k]['cycle_current'])
+                    # the _launchReplica function is implemented by
+                    # MD engine modules
+                    status = self._launchReplica(k,self.status[k]['cycle_current'])
+                    if status != None:
+                        self.status[k]['running_status'] = 'R'
+        else:
+            # In sync mode launch all replicas at once and they will be executed sequentially
+            for k in range(self.nreplicas):
                 self.logger.info('Launching replica %d cycle %d', k, self.status[k]['cycle_current'])
                 # the _launchReplica function is implemented by
                 # MD engine modules
                 status = self._launchReplica(k,self.status[k]['cycle_current'])
-                if status != None:
+                if status is not None:
                     self.status[k]['running_status'] = 'R'
 
     def doExchanges(self):

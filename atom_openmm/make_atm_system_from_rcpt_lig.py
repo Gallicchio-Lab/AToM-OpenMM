@@ -26,7 +26,7 @@ from openmm.app import PME, HBonds, NoCutoff
 # OpenFF components from the toolkit
 from openff.toolkit.topology import Molecule
 
-from openmm.unit import angstrom, nanometer, amu
+from openmm.unit import angstrom, nanometer, amu, molar
 
 # OpenFF and OpenMM components for ligand force field parameters
 from openff.toolkit.topology import Molecule
@@ -74,6 +74,7 @@ def make_system(
         ffcachefile=None,
         implsolv='None',
         hmass=1.0,
+        ionicstrength=0.15,
         flagverbose=False
     ):
     print('Generate ATM RBFE OpenMM System')
@@ -308,8 +309,9 @@ def make_system(
     forcefield.registerTemplateGenerator(template_gen.generator)
 
     if implsolv is None:
+        print("Ionic strength = ", ionicstrength*molar)
         print("Adding solvent and processing system ...")
-        modeller.addSolvent(forcefield, boxVectors = (xBoxvec,yBoxvec,zBoxvec ))
+        modeller.addSolvent(forcefield, boxVectors = (xBoxvec,yBoxvec,zBoxvec ), ionicStrength = ionicstrength*molar)
         print("Number of atoms in solvated system:", modeller.topology.getNumAtoms())
         system=forcefield.createSystem(modeller.topology, nonbondedMethod = PME, nonbondedCutoff = 0.9*nanometer,
                                     constraints=HBonds, rigidWater = True, removeCMMotion = False, hydrogenMass = hmass*amu)
@@ -403,7 +405,10 @@ def main():
     parser.add_argument('--hmass', required=False, type=float, dest='hmass',
                         default=1.0,
                         help='Hydrogen mass, set it to 1.5 amu to use a 4 fs time-step')
-
+    parser.add_argument('--ionicStrength', required=False, type=float, dest='ionicstrength',
+                        default=0.15,
+                        help='Total concentration of monoatomic ions to add')
+    
     # Arguments that are flags
     parser.add_argument('--verbose', required=False, action='store_true', dest='flagverbose',
                         help='Get more output with this flag')

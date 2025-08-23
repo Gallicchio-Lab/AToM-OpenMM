@@ -29,8 +29,8 @@ class OMMReplica(object):
         self.safeckpt_file = "ckpt_is_valid"
 
         state = self.context.getState(getPositions=True, getVelocities=True)
-        self.positions = state.getPositions(asNumpy=True)
-        self.velocities = state.getVelocities(asNumpy=True)
+        self.positions = state.getPositions(asNumpy=True).value_in_unit(unit.nanometers)
+        self.velocities = state.getVelocities(asNumpy=True).value_in_unit(unit.nanometers/unit.picoseconds)
         self.contextchkpt = None #holds a complete state of the Context
         
         if not os.path.isdir('r%d' % self._id):
@@ -141,8 +141,8 @@ class OMMReplicaTRE(OMMReplica):
             self.pot = {}
         self.pot['potential_energy'] = self.context.getParameter(self.ommsystem.parameter['potential_energy'])*kilojoules_per_mole
         state = self.context.getState(getPositions=True, getVelocities=True)
-        self.positions = state.getPositions(asNumpy=True)
-        self.velocities = state.getVelocities(asNumpy=True)
+        self.positions = state.getPositions(asNumpy=True).value_in_unit(unit.nanometers)
+        self.velocities = state.getVelocities(asNumpy=True).value_in_unit(unit.nanometers/unit.picoseconds)
 
     def update_context_from_state(self):
         self.context.setParameter(self.ommsystem.parameter['cycle'], self.cycle)
@@ -224,8 +224,8 @@ class OMMReplicaATM(OMMReplica):
         self.pot['perturbation_energy'] = self.context.getParameter(self.ommsystem.parameter['perturbation_energy'])*kilojoules_per_mole
         self.pot['bias_energy'] = self.context.getParameter(self.ommsystem.parameter['bias_energy'])*kilojoules_per_mole
         state = self.context.getState(getPositions=True, getVelocities=True)
-        self.positions = state.getPositions(asNumpy=True)
-        self.velocities = state.getVelocities(asNumpy=True)
+        self.positions = state.getPositions(asNumpy=True).value_in_unit(unit.nanometers)
+        self.velocities = state.getVelocities(asNumpy=True).value_in_unit(unit.nanometers/unit.picoseconds)
 
     def update_context_from_state(self):
         self.context.setParameter(self.ommsystem.parameter['cycle'], self.cycle)

@@ -248,20 +248,50 @@ class OMMSystem(object):
             self.logger.info("   %s" % self.system.getForce(i).getName())
 
     def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):
+        integrator = self.keywords.get("INTEGRATOR", "atmmts")
 
+        # the Drude polarizable force field requires a special integrator
         drudeForce = None
+        # check for the Drude Force in the system
         for i in range(self.system.getNumForces()):
             if self.system.getForce(i).getName() == "DrudeForce":
                 drudeForce = copy.copy(self.system.getForce(i))
                 break
+        # check for the Drude Force in ATMForce
         if drudeForce is None:
             if self.atmforce is not None:
                 for i in range(self.atmforce.getNumForces()):
                     if self.atmforce.getForce(i).getName() == "DrudeForce":
                         drudeForce = copy.copy(self.atmforce.getForce(i))
                         break
-
         if drudeForce is not None:
+            integrator = "DrudeLangevin"
+
+        self.logger.info(f"Integrator: {integrator}")
+
+        if integrator.lower() == "atmmts":
+            #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
+            bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
+            self.logger.info("Running with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
+            if self.doMetaD:
+                fgroups = [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.atmforcegroup,1)]
+            else:
+                fgroups = [(0,bonded_frequency), (self.atmforcegroup,1)]
+            self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, fgroups )
+            self.integrator.setConstraintTolerance(0.00001)
+        elif integrator.lower() == "langevinmiddle":
+            self.integrator = LangevinMiddleIntegrator(
+                temperature, frictionCoeff, MDstepsize
+            )
+            self.integrator.setIntegrationForceGroups({0, self.atmforcegroup})
+
+            self.logger.info(f"Temperature: {self.integrator.getTemperature()}")
+            self.logger.info(f"Friction: {self.integrator.getFriction()}")
+            self.logger.info(f"Step size: {self.integrator.getStepSize()}")
+            self.logger.info(
+                f"Constraint tolerance: {self.integrator.getConstraintTolerance()}"
+            )
+        elif integrator.lower() == "drudelangevin":
             self.logger.info("Using Drude Langevin integrator with a %f fs time-step." % (MDstepsize/femtosecond))
             self.drude_temperature = 1.0*kelvin if self.keywords.get('DRUDE_TEMPERATURE') is None else float(self.keywords.get('DRUDE_TEMPERATURE'))*kelvin
             self.drude_frictionCoeff = 20.0/picosecond if self.keywords.get('DRUDE_FRICTIONCOEFF') is None else float(self.keywords.get('DRUDE_FRICTIONCOEFF'))*kelvin
@@ -270,17 +300,7 @@ class OMMSystem(object):
             self.integrator.setMaxDrudeDistance(self.drude_hardwall) # Drude Hardwall
             self.integrator.setDrudeForce(drudeForce)
         else:
-            #set the multiplicity of the calculation of bonded forces so that they are evaluated at least once every 1 fs (default time-step)
-            bonded_frequency = max(1, int(round(MDstepsize/defaultMDstepsize)))
-            self.logger.info("Using Langevin MTS integrator with a %f fs time-step with bonded forces integrated %d times per time-step" % (MDstepsize/femtosecond, bonded_frequency))
-            #TO-DO: place metaD force in group 0
-            if self.doMetaD:
-                fgroups = [(0,bonded_frequency), (self.metaDforcegroup, bonded_frequency), (self.atmforcegroup,1)]
-            else:
-                fgroups = [(0,bonded_frequency), (self.atmforcegroup,1)]
-            self.integrator = ATMMTSLangevinIntegrator(temperature, frictionCoeff, MDstepsize, fgroups )   
-        self.integrator.setConstraintTolerance(0.00001)
-            
+            self._exit(f"Invalid integrator: {integrator}")
         
 #Temperature RE
 class OMMSystemTRE(OMMSystem):

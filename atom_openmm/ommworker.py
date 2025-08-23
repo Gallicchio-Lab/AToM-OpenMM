@@ -212,8 +212,8 @@ class OMMWorker(object):
                 self.integrator.setTemperature(production_temperature)
             self.simulation.step(self.nsteps)
             return 1
-        except:
-            self.logger.error("MD has crashed")
+        except Exception as e:
+            self.logger.error(f"MD has crashed: {e}")
             return None
 
     def _openmm_worker_makecontext(self):
@@ -307,7 +307,7 @@ class OMMWorker(object):
             command = cmdq.get()
             readySignal.clear()
             if command == "SETSTATE":
-                self._worker_setstate_fromqueue()
+                self._worker_setstate(inq.get())
             elif command == "SETPOSVEL":
                 self.positions = inq.get()
                 self.velocities = inq.get()
@@ -335,10 +335,11 @@ class OMMWorker(object):
                 isDone.set()
             elif command == "GETENERGY":
                 pot = self._worker_getenergy()
+                outq.put(pot)
             elif command == "GETPOSVEL":
                 state = self.context.getState(getPositions=True, getVelocities=True)
-                self.positions = state.getPositions()
-                self.velocities = state.getVelocities()
+                self.positions = state.getPositions(asNumpy=True).value_in_unit(nanometers)
+                self.velocities = state.getVelocities(asNumpy=True).value_in_unit(nanometers/picoseconds)
                 outq.put(self.positions)
                 outq.put(self.velocities)
             elif command == "SETCHKPT":
@@ -368,18 +369,18 @@ class OMMWorker(object):
         readySignal.clear()
 
 class OMMWorkerTRE(OMMWorker):
-    def _worker_setstate_fromqueue(self):
-        self.par = self._inq.get()
+    def _worker_setstate(self, par):
+        self.par = par
         self.integrator.setTemperature(self.par['temperature'])
         self.context.setParameter(self.ommsystem.parameter['temperature'], self.par['temperature']/kelvin)
   
     def _worker_getenergy(self):
         self.pot['potential_energy'] = self.context.getState(getEnergy = True).getPotentialEnergy()
-        self._outq.put(self.pot)
+        return self.pot
 
 class OMMWorkerATM(OMMWorker):
-    def _worker_setstate_fromqueue(self):
-        self.par = self._inq.get()
+    def _worker_setstate(self, par):
+        self.par = par
         self.integrator.setTemperature(self.par['temperature'])
         self.context.setParameter(self.ommsystem.parameter['temperature'], self.par['temperature']/kelvin)
         atmforce = self.ommsystem.atmforce
@@ -419,4 +420,96 @@ class OMMWorkerATM(OMMWorker):
             self.pot['bias_energy'] = state.getPotentialEnergy()
         else:
             self.pot['bias_energy'] = 0.0 * kilojoules_per_mole
-        self._outq.put(self.pot)
+        return self.pot
+
+
+class OMMWorkerATMSync(OMMWorkerATM):
+    # Override start_worker to not add the queues and ctx
+    def start_worker(self):
+        self.simulation = None
+        self.context = None
+        self.atmforce = None
+        self.positions = None
+        self.velocities = None
+        self.chkpt = None
+        self.boxvectors = None
+        self.par = {}
+        self.pot = {}
+        self.platform = None
+        self.logfile_p = None
+        self.outfile_p = None
+        self.nprnt = int(self.keywords.get('PRNT_FREQUENCY'))
+        #the service worker needs only the context in this process
+        self._openmm_worker_body()
+        self._openmm_worker_makecontext()
+        return 1
+
+    def set_state(self, par):
+        self._worker_setstate(par)
+
+    def get_energy(self):
+        return self._worker_getenergy()
+
+    # set positions and velocities of worker
+    def set_posvel(self, positions, velocities):
+        self.positions = positions
+        self.velocities = velocities
+        self.context.setPositions(self.positions)
+        self.context.setVelocities(self.velocities)
+
+    # set positions and velocities of worker
+    def set_chkpt(self, chkpt):
+        self.chkpt = chkpt
+        self.context.loadCheckpoint(chkpt)
+        
+    # get positions and velocities from worker
+    def get_posvel(self):
+        state = self.context.getState(getPositions=True, getVelocities=True)
+        self.positions = state.getPositions(asNumpy=True).value_in_unit(nanometers)
+        self.velocities = state.getVelocities(asNumpy=True).value_in_unit(nanometers/picoseconds)
+        return (self.positions, self.velocities)
+
+    # set positions and velocities of worker
+    def get_chkpt(self):
+        self.chkpt = self.context.createCheckpoint()
+        return self.chkpt
+    
+    # sets the reporters of the worker
+    def set_reporters(self, current_steps, outfile, logfile, xtcfile):
+        return
+
+    # kills worker
+    def finish(self, wait = False):
+        return
+
+    # is worker running?
+    def is_running(self):
+        return True
+
+    # is worked done computing?
+    def is_done(self):
+        return True
+
+    # is worker started?
+    def is_started(self):
+        return True
+
+    # has worker died?
+    def has_crashed(self):
+        return False
+
+    # starts execution loop of the worker
+    def run(self, nsteps, nheating = 0, ncooling = 0, hightemp = 0.0):
+        from atom_openmm.utils.timer import Timer
+
+        self.nsteps = int(nsteps)
+        self.nheating = int(nheating)
+        self.ncooling = int(ncooling)
+        self.hightemp = float(hightemp)
+
+        #self.context.reinitialize(preserveState=True)
+        with Timer(self.logger.info, "Executing replica"):
+            self._openmm_worker_run()
+
+        if self.logfile_p is not None:
+            self.logfile_p.flush()

@@ -52,6 +52,7 @@ class OMMSystem(object):
         self.nonbondedforcegroup = None
         self.metaDforcegroup = None
         
+        self.var_regions = False
         self.var_force_group = None
         if keywords.get('VARIABLE_FORCE_GROUP') is not None:
             self.var_force_group = int(keywords.get('VARIABLE_FORCE_GROUP'))

@@ -51,8 +51,10 @@ class OMMSystem(object):
         self.atmforcegroup = None
         self.nonbondedforcegroup = None
         self.metaDforcegroup = None
-
-        self.var_force_group = int(keywords.get('VARIABLE_FORCE_GROUP'))
+        
+        self.var_force_group = None
+        if keywords.get('VARIABLE_FORCE_GROUP') is not None:
+            self.var_force_group = int(keywords.get('VARIABLE_FORCE_GROUP'))
 
         self.frictionCoeff = float(self.keywords.get('FRICTION_COEFF')) / picosecond
         self.MDstepsize = float(self.keywords.get('TIME_STEP')) * picosecond
@@ -262,8 +264,8 @@ class OMMSystem(object):
         if drudeForce is not None:
             self.logger.info("Using Drude Langevin integrator with a %f fs time-step." % (MDstepsize/femtosecond))
             self.drude_temperature = 1.0*kelvin if self.keywords.get('DRUDE_TEMPERATURE') is None else float(self.keywords.get('DRUDE_TEMPERATURE'))*kelvin
-            self.drude_frictionCoeff = 20.0/picosecond if self.keywords.get('DRUDE_TEMPERATURE') is None else float(self.keywords.get('DRUDE_TEMPERATURE'))*kelvin
-            self.drude_hardwall = 0.02 if self.keywords.get('DRUDE_TEMPERATURE') is None else float(self.keywords.get('DRUDE_TEMPERATURE'))
+            self.drude_frictionCoeff = 20.0/picosecond if self.keywords.get('DRUDE_FRICTIONCOEFF') is None else float(self.keywords.get('DRUDE_FRICTIONCOEFF'))*kelvin
+            self.drude_hardwall = 0.02 if self.keywords.get('DRUDE_HARDWALL') is None else float(self.keywords.get('DRUDE_HARDWALL'))
             self.integrator = DrudeLangevinIntegrator(temperature, frictionCoeff, self.drude_temperature, self.drude_frictionCoeff, MDstepsize)
             self.integrator.setMaxDrudeDistance(self.drude_hardwall) # Drude Hardwall
             self.integrator.setDrudeForce(drudeForce)

@@ -231,9 +231,9 @@ def make_system(
         pos = mollig1.conformers[0].to('angstrom').magnitude
         lig1_positions = [Vec3(pos[i][0], pos[i][1], pos[i][2]) for i in range(pos.shape[0])] * angstrom
         #assign the residue name, assumes one residue
-        resname_lig2 = "L2"
-        for residue in lig2_ommtopology.residues():
-            residue.name = resname_lig2
+        resname_lig1 = "L1"
+        for residue in lig1_ommtopology.residues():
+            residue.name = resname_lig1
     elif fileext == '.PDB':
         lig1pdb = PDBFile(lig1file)
         lig1_ommtopology = lig1pdb.topology

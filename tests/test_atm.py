@@ -141,6 +141,7 @@ def _test_make_atm_system_from_rcpt_lig(tmp_path):
         displacement=[22, 22, 22],
         xmloutfile=outxml,
         pdboutfile=pdboutfile,
+        ionicstrength=0
     )
     with open(outxml, "r") as f:
         lines = f.readlines()[2:]  # Skipping OpenMM version header
@@ -150,7 +151,7 @@ def _test_make_atm_system_from_rcpt_lig(tmp_path):
 
     os.remove(outxml)
     os.system(
-        f"make_atm_system_from_rcpt_lig --receptorinFile {pdb} --LIG1SDFinFile {sdffile} --displacement '22.0 22.0 22.0' --systemXMLoutFile {outxml} --systemPDBoutFile {pdboutfile}"
+        f"make_atm_system_from_rcpt_lig --receptorinFile {pdb} --LIG1SDFinFile {sdffile} --displacement '22.0 22.0 22.0' --systemXMLoutFile {outxml} --systemPDBoutFile {pdboutfile} --ionicStrength 0.0 "
     )
     with open(outxml, "r") as f:
         lines = f.readlines()[2:]  # Skipping OpenMM version header

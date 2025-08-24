@@ -748,33 +748,46 @@ class OMMSystemRBFE(OMMSystem):
         for i in range(self.topology.getNumAtoms()):
             self.atmforce.addParticle( )
 
-        lig1_common_atoms = [int(i) for i in self.keywords.get('LIGAND1_COMMON_ATOMS')  ]
-        lig2_common_atoms = [int(i) for i in self.keywords.get('LIGAND2_COMMON_ATOMS')  ]
-
-        if not len(lig1_common_atoms) == len(lig2_common_atoms):
-            msg = "Error: the number of commong atoms of lig1 (%d) and lig2 (%d) differ" % (len(lig1_common_atoms),len(lig2_common_atoms))
-            self._exit(msg)
-
-        for i in range(len(lig1_common_atoms)):
-            try:
-                self.atmforce.setParticleParameters(lig1_common_atoms[i], lig2_common_atoms[i], lig1_common_atoms[i], -1, -1)
-            except:
-                self._exit("Variable displacements are not supported by the OpenMM backend")
-
-        for i in range(len(lig2_common_atoms)):
-            self.atmforce.setParticleParameters(lig2_common_atoms[i], lig1_common_atoms[i], lig2_common_atoms[i], -1, -1)
-
         lig1_var_atoms = [int(i) for i in self.keywords.get('LIGAND1_VAR_ATOMS')  ]
         lig2_var_atoms = [int(i) for i in self.keywords.get('LIGAND2_VAR_ATOMS')  ]
 
         lig1_attach_atom = int(self.keywords.get('LIGAND1_ATTACH_ATOM'))
         lig2_attach_atom = int(self.keywords.get('LIGAND2_ATTACH_ATOM'))
 
-        for i in range(len(lig1_var_atoms)):
-            self.atmforce.setParticleParameters(lig1_var_atoms[i], lig2_attach_atom, lig1_attach_atom, -1, -1)
+        if self.keywords.get('LIGAND1_COMMON_ATOMS') is None:
+            lig1_common_atoms = sorted([i for i in self.lig1_atoms if i not in lig1_var_atoms ])
+            lig2_common_atoms = sorted([i for i in self.lig2_atoms if i not in lig2_var_atoms ])
+        else:
+            lig1_common_atoms = [int(i) for i in self.keywords.get('LIGAND1_COMMON_ATOMS')  ]
+            lig2_common_atoms = [int(i) for i in self.keywords.get('LIGAND2_COMMON_ATOMS')  ]
 
-        for i in range(len(lig2_var_atoms)):
-            self.atmforce.setParticleParameters(lig2_var_atoms[i], lig1_attach_atom, lig2_attach_atom, -1, -1)
+        if not len(lig1_common_atoms) == len(lig2_common_atoms):
+            msg = "Error: the number of commong atoms of lig1 (%d) and lig2 (%d) differ" % (len(lig1_common_atoms),len(lig2_common_atoms))
+            self._exit(msg)
+
+        try:
+            # try official OpenMM>=8.4 ATMForce API
+            for i in range(len(lig1_common_atoms)):
+                self.atmforce.setParticleTransformation(lig1_common_atoms[i], ParticleOffsetDisplacement(lig2_common_atoms[i], lig1_common_atoms[i]))
+            for i in range(len(lig2_common_atoms)):
+                self.atmforce.setParticleTransformation(lig2_common_atoms[i], ParticleOffsetDisplacement(lig1_common_atoms[i], lig2_common_atoms[i]))
+            for i in range(len(lig1_var_atoms)):
+                self.atmforce.setParticleTransformation(lig1_var_atoms[i], ParticleOffsetDisplacement(lig2_attach_atom, lig1_attach_atom))
+            for i in range(len(lig2_var_atoms)):
+                self.atmforce.setParticleTransformation(lig2_var_atoms[i], ParticleOffsetDisplacement(lig1_attach_atom, lig2_attach_atom))
+        except:
+            try:
+                # try unofficial Gallicchio-Lab atm-coordinate-swap branch OpenMM 8.2 ATMForce API
+                for i in range(len(lig1_common_atoms)):
+                    self.atmforce.setParticleParameters(lig1_common_atoms[i], lig2_common_atoms[i], lig1_common_atoms[i], -1, -1)
+                for i in range(len(lig2_common_atoms)):
+                    self.atmforce.setParticleParameters(lig2_common_atoms[i], lig1_common_atoms[i], lig2_common_atoms[i], -1, -1)
+                for i in range(len(lig1_var_atoms)):
+                    self.atmforce.setParticleParameters(lig1_var_atoms[i], lig2_attach_atom, lig1_attach_atom, -1, -1)
+                for i in range(len(lig2_var_atoms)):
+                    self.atmforce.setParticleParameters(lig2_var_atoms[i], lig1_attach_atom, lig2_attach_atom, -1, -1)
+            except:
+                self._exit("Variable displacements are not supported by the OpenMM backend")
 
     def set_atmforce(self):
         #these define the state and will be overriden in set_state()

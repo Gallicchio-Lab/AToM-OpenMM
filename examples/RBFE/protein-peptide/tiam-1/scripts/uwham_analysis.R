@@ -342,7 +342,7 @@ ddgb <- sqrt(ddgbind2*ddgbind2 + ddgbind1*ddgbind1)
 pnltyint <- intpenalty(dgbind1, dgbind2, 40.0, 0.05)
 ddgb <- ddgb + pnltyint
 maxsamples <- min(maxtimeid, samplesperreplica)
-result <- sprintf("DDGb = %f +- %f range %d %d maxDGint %f penaltyoverlap %f penaltyintermediate %f", dgb, min(5.0,ddgb), mintimeid, maxsamples, max(dgbind1, dgbind2), max(pnltygap1,pnltygap2), pnltyint)
+result <- sprintf("DDGb = %f +- %f kcal/mol   [ range %d %d maxDGint %f penaltyoverlap %f penaltyintermediate %f ]", dgb, min(5.0,ddgb), mintimeid, maxsamples, max(dgbind1, dgbind2), max(pnltygap1,pnltygap2), pnltyint)
 write(result, "")
 #noquote(result)
 

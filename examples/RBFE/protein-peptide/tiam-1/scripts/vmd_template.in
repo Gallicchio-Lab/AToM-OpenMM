@@ -1,0 +1,36 @@
+menu graphics on
+
+mol modselect 0 0 chain B and protein and noh
+mol color Name
+mol representation Lines 1.000000
+mol selection chain B and protein and noh
+mol material Opaque
+
+mol addrep 0
+mol modselect 1 0 chain L and noh
+mol modstyle 1 0 Licorice 0.300000 12.000000 12.000000
+
+mol addrep 0
+mol modselect 2 0 chain M and noh
+mol modstyle 2 0 Licorice 0.300000 12.000000 12.000000
+mol modcolor 2 0 Type
+color Type C green
+
+#pbc wrap -center com -centersel "index <LIG1ATTACHATOM>" -compound res -all
+
+for {set i 0} {$i < [molinfo top get numframes]} {incr i} {
+  set selB [atomselect top "index <LIG1ATTACHATOM>" frame $i]
+  set selC [atomselect top "index <LIG2ATTACHATOM>" frame $i]
+  set coordB [lindex [$selB get {x y z}] 0]
+  set coordC [lindex [$selC get {x y z}] 0]
+  set offset [vecsub $coordB $coordC]
+  puts $offset
+  set sel [atomselect top "chain M" frame $i ]
+  $sel moveby $offset
+}
+
+
+
+#same residue as water within 8 of index 371
+#chain E and resid 42 and noh
+#chain G and resid 42 and noh

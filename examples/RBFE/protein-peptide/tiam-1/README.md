@@ -60,7 +60,7 @@ After the jobs collected a reasonable amount of data, run the analysis script in
 ```
 cd complexes
 bash ./free_energies.sh
-``
+```
 
 
 

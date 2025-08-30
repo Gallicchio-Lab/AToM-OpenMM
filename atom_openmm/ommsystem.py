@@ -299,7 +299,6 @@ class OMMSystem(object):
             self.drude_hardwall = 0.02 if self.keywords.get('DRUDE_HARDWALL') is None else float(self.keywords.get('DRUDE_HARDWALL'))
             self.integrator = DrudeLangevinIntegrator(temperature, frictionCoeff, self.drude_temperature, self.drude_frictionCoeff, MDstepsize)
             self.integrator.setMaxDrudeDistance(self.drude_hardwall) # Drude Hardwall
-            self.integrator.setDrudeForce(drudeForce)
         else:
             self._exit(f"Invalid integrator: {integrator}")
         

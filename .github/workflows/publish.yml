@@ -7,7 +7,6 @@ on:
 jobs:
   publish:
     runs-on: ${{ matrix.os }}
-    container: ${{ matrix.container }}
 
     strategy:
       fail-fast: false
@@ -21,7 +20,7 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: ${{ matrix.python-version }}
-          channels: acellera,conda-forge
+          channels: conda-forge
           activate-environment: ../deploy-env
 
       - name: Build PyPI 📦
@@ -32,5 +31,5 @@ jobs:
       - name: Publish distribution 📦 to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          password: ${{ secrets.PUBLIC_PYPI_API_TOKEN }}
           skip_existing: true

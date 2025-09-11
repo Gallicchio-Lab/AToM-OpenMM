@@ -1,5 +1,5 @@
 [project]
-name = "atom-openmm"
+name = "atom-openmm-unofficial"
 description = "Asynchronous Replica Exchange with OpenMM"
 authors = [{ name = "Emilio Gallicchio", email = "emilio.gallicchio@gmail.com" }]
 readme = "README.md"

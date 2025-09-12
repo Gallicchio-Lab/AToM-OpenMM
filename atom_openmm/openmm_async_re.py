@@ -59,9 +59,9 @@ class openmm_job(JobManager):
         nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
         nprnt = int(self.keywords.get('PRNT_FREQUENCY'))
         ntrj = int(self.keywords.get('TRJ_FREQUENCY'))
-        if nprnt % nsteps != 0:
+        if nsteps % nprnt != 0:
             self._exit("PRNT_FREQUENCY must be an integer multiple of PRODUCTION_STEPS.")
-        if ntrj % nsteps != 0:
+        if nsteps % ntrj != 0:
             self._exit("TRJ_FREQUENCY must be an integer multiple of PRODUCTION_STEPS.")
 
         job_info = {

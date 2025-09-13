@@ -467,17 +467,17 @@ class JobManager(object):
                     status = self._launchReplica(k,self.status[k]['cycle_current'])
                     if status != None:
                         self.status[k]['running_status'] = 'R'
-            elif self.re_mode == 'sync':
-                # In sync mode launch all replicas at once and they will be executed sequentially
-                for k in range(self.nreplicas):
-                    self.logger.info('Launching replica %d cycle %d', k, self.status[k]['cycle_current'])
-                    # the _launchReplica function is implemented by
-                    # MD engine modules
-                    status = self._launchReplica(k,self.status[k]['cycle_current'])
-                    if status is not None:
-                        self.status[k]['running_status'] = 'R'
-            else:
-                self._exit('Unknown RE_MODE %s', self.re_mode)
+        elif self.re_mode == 'sync':
+            # In sync mode launch all replicas at once and they will be executed sequentially
+            for k in range(self.nreplicas):
+                self.logger.info('Launching replica %d cycle %d', k, self.status[k]['cycle_current'])
+                # the _launchReplica function is implemented by
+                # MD engine modules
+                status = self._launchReplica(k,self.status[k]['cycle_current'])
+                if status is not None:
+                    self.status[k]['running_status'] = 'R'
+        else:
+            self._exit('Unknown RE_MODE %s', self.re_mode)
 
     def doExchanges(self):
         """Perform exchanges among waiting replicas using Gibbs sampling."""

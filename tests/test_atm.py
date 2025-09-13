@@ -178,14 +178,13 @@ def _test_input_parser():
             config_cntl[key]
         ), f"{key} {type(config_yaml[key])} {type(config_cntl[key])}"
 
-
 def _test_sync_production_ats(tmp_path):
     from atom_openmm.rbfe_production import rbfe_production
 
     run_dir = os.path.join(tmp_path, "QB_A08_A07_equil_sync_ats")
     shutil.copytree(os.path.join(curr_dir, "QB_A08_A07_equil_sync_ats"), run_dir)
 
-    rbfe_production(os.path.join(run_dir, "QB_A08_A07_asyncre.yaml"))
+    rbfe_production(os.path.join(run_dir, "QB_A08_A07.yaml"))
 
     for i in range(4):
         assert os.path.exists(os.path.join(run_dir, f"r{i}", "QB_A08_A07.xtc"))
@@ -199,7 +198,7 @@ def _test_sync_production_incremental(tmp_path):
     run_dir = os.path.join(tmp_path, "QB_A08_A07_equil_sync")
     shutil.copytree(os.path.join(curr_dir, "QB_A08_A07_equil_sync"), run_dir)
 
-    configfile = os.path.join(run_dir, "QB_A08_A07_asyncre.yaml")
+    configfile = os.path.join(run_dir, "QB_A08_A07.yaml")
     with open(configfile, "r") as f:
         config = yaml.safe_load(f)
     config["MAX_SAMPLES"] = "+1"

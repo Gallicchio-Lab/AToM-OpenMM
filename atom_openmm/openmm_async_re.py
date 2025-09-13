@@ -411,9 +411,15 @@ class openmm_job_RBFE(openmm_job_ATM):
     def __init__(self, command_file, options):
         super().__init__(command_file, options)
 
-        self.async_mode = self.keywords.get('ASYNC_MODE', True)
-        ommworkercls = OMMWorkerATM if self.async_mode else OMMWorkerATMSync
-        
+        self.re_mode = self.keywords.get('RE_MODE', 'async')
+        ommworkercls = None
+        if self.re_mode == 'async':
+            ommworkercls = OMMWorkerATM
+        elif self.re_mode == 'sync':
+            ommworkercls = OMMWorkerATMSync
+        else:
+            self._exit('Unknown RE_MODE %s', self.re_mode)
+
         pdbtopfile = self.basename + ".pdb"
         systemfile = self.basename + "_sys.xml"
 

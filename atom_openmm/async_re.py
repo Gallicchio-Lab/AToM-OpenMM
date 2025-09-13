@@ -56,10 +56,10 @@ class JobManager(object):
         #set to False to run without exchanges
         self.exchange = True
 
-        # Set the async mode to True by default
-        self.async_mode = self.keywords.get('ASYNC_MODE', True)
+        # replica exchange mode ('sync' or 'async') set the async mode by default
+        self.re_mode = self.keywords.get('RE_MODE', 'async')
 
-        if self.async_mode:
+        if self.re_mode == 'async':
             #catch ctrl-C and SIGTERM to terminate threads gracefully
             signal.signal(signal.SIGINT, self._signal_handler)
             signal.signal(signal.SIGTERM, self._signal_handler)
@@ -70,7 +70,7 @@ class JobManager(object):
         self._cleanup()
         self.logger.info(message)
         sys.stdout.flush()
-        if not self.async_mode:
+        if self.re_mode != 'async':
             sys.exit(1)
 
         self.logger.info('Waiting for children to complete ...')
@@ -453,7 +453,7 @@ class JobManager(object):
         """
         Scans the replicas in wait state and randomly launches them
         """
-        if self.async_mode:
+        if self.re_mode == 'async':
             jobs_to_launch = self._njobs_to_run()
             if jobs_to_launch > 0:
                 #prioritize replicas that are most behind
@@ -467,15 +467,17 @@ class JobManager(object):
                     status = self._launchReplica(k,self.status[k]['cycle_current'])
                     if status != None:
                         self.status[k]['running_status'] = 'R'
-        else:
-            # In sync mode launch all replicas at once and they will be executed sequentially
-            for k in range(self.nreplicas):
-                self.logger.info('Launching replica %d cycle %d', k, self.status[k]['cycle_current'])
-                # the _launchReplica function is implemented by
-                # MD engine modules
-                status = self._launchReplica(k,self.status[k]['cycle_current'])
-                if status is not None:
-                    self.status[k]['running_status'] = 'R'
+            elif self.re_mode == 'sync':
+                # In sync mode launch all replicas at once and they will be executed sequentially
+                for k in range(self.nreplicas):
+                    self.logger.info('Launching replica %d cycle %d', k, self.status[k]['cycle_current'])
+                    # the _launchReplica function is implemented by
+                    # MD engine modules
+                    status = self._launchReplica(k,self.status[k]['cycle_current'])
+                    if status is not None:
+                        self.status[k]['running_status'] = 'R'
+            else:
+                self._exit('Unknown RE_MODE %s', self.re_mode)
 
     def doExchanges(self):
         """Perform exchanges among waiting replicas using Gibbs sampling."""

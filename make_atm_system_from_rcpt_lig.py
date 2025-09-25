@@ -408,7 +408,7 @@ if not rbfe:
 else:
     bbox = boundingBoxSizes(rcpt_positions + lig1_positions + lig2_positions)
 bboxsizes = [ bbox[i][1]-bbox[i][0] for i in range(3) ]
-padding = 5. * 1.0*nanometer
+padding = 2. * 1.0*nanometer
 xBoxvec = Vec3((bboxsizes[0]+padding)/nanometer, 0., 0.)*nanometer
 yBoxvec = Vec3(0.0, (bboxsizes[1]+padding)/nanometer, 0.)*nanometer
 zBoxvec = Vec3(0.0, 0.0, (bboxsizes[2]+padding)/nanometer)*nanometer

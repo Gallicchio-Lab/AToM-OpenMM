@@ -89,7 +89,7 @@ class OMMReplica(object):
             self.update_context_from_state()
             self.worker.simulation.saveState(ckptfile)
         else:
-           self.logger.warning("Refused attempt to save checkpoint file %s in unsafe mode. Remove file %s prior to writing checkpoints and restore it when done." % (ckptfile, self.safeckpt_file) )
+            self.logger.warning("Refused attempt to save checkpoint file %s in unsafe mode. Remove file %s prior to writing checkpoints and restore it when done." % (ckptfile, self.safeckpt_file) )
 
     def open_xtc(self):
         xtcfilename =  'r%d/%s.xtc' % (self._id,self.basename)

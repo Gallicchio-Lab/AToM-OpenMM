@@ -83,9 +83,9 @@ class OMMReplica(object):
                 raise ValueError('Bad checkpoints')
 
     def save_checkpoint(self):
+        ckptname = self.keywords.get('CHECKPOINT_FILE', f'{self.basename}_ckpt.xml')
+        ckptfile = 'r%d/%s' % (self._id,ckptname)
         if not os.path.isfile(self.safeckpt_file):#refuse to write checkpoint in unsafe mode
-            ckptname = self.keywords.get('CHECKPOINT_FILE', f'{self.basename}_ckpt.xml')
-            ckptfile = 'r%d/%s' % (self._id,ckptname)
             self.update_context_from_state()
             self.worker.simulation.saveState(ckptfile)
         else:

@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ["ubuntu-latest"] #, "macos-latest", "macos-13", "windows-2019"]
-        python-version: ["3.10"] #, "3.9", "3.11", "3.12"]
+        python-version: ["3.11"] #, "3.9", "3.11", "3.12"]
 
     defaults: # Needed for conda
       run:
@@ -40,8 +40,10 @@ jobs:
 
       - name: Install conda deps
         run: |
-          conda install mamba
-          mamba install -y -q python=${{ matrix.python-version }} openmm pyyaml numpy pandas openff-toolkit openmmforcefields
+          pip install pyyaml numpy pandas openmm-unofficial-cpu scipy
+          pip install git+https://github.com/openforcefield/openff-toolkit
+          pip install git+https://github.com/openforcefield/openff-units
+          pip install git+https://github.com/openmm/openmmforcefields
 
       - name: Install package
         run: |

@@ -40,7 +40,8 @@ jobs:
 
       - name: Install pip deps
         run: |
-          pip install pyyaml numpy pandas openmm-unofficial-cpu scipy cachetools xmltodict rdkit python-constraint validators networkx
+          conda install ambertools -c conda-forge
+          pip install pyyaml numpy pandas openmm-unofficial-cpu scipy cachetools xmltodict rdkit python-constraint validators networkx pydantic
           pip install git+https://github.com/openforcefield/openff-utilities
           pip install git+https://github.com/openforcefield/openff-toolkit
           pip install git+https://github.com/openforcefield/openff-units

@@ -40,7 +40,7 @@ jobs:
 
       - name: Install pip deps
         run: |
-          pip install pyyaml numpy pandas openmm-unofficial-cpu scipy
+          pip install pyyaml numpy pandas openmm-unofficial-cpu scipy cachetools
           pip install git+https://github.com/openforcefield/openff-utilities
           pip install git+https://github.com/openforcefield/openff-toolkit
           pip install git+https://github.com/openforcefield/openff-units

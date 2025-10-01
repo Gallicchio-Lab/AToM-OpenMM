@@ -44,7 +44,7 @@ jobs:
           pip install git+https://github.com/openforcefield/openff-utilities
           pip install git+https://github.com/openforcefield/openff-toolkit
           pip install git+https://github.com/openforcefield/openff-units
-          pip install git+https://github.com/openmm/openmmforcefields
+          pip install git+https://github.com/openforcefield/openff-forcefields
 
       - name: Install package
         run: |

@@ -368,12 +368,6 @@ class JobManager(object):
                     self.update_state_of_replica(i)
                     self.openmm_replicas[i].save_checkpoint()
                     self.logger.info("done.")
-                # If we want to write the trajectory every N cycles. TRJ_FREQUENCY must be a multiple of PRODUCTION_STEPS
-                trj_frequency = int(self.keywords.get('TRJ_FREQUENCY')) // int(self.keywords.get('PRODUCTION_STEPS'))
-                if trj_frequency > 1 and self.openmm_replicas[i].get_cycle() % trj_frequency == 0:
-                    self.logger.info(f"Saving trajectory for replica {i} with {new_samples[i]} samples...")
-                    self.openmm_replicas[i].save_xtc()
-                    self.logger.info("done.")
 
     def waitJob(self):
         # wait until all jobs are complete

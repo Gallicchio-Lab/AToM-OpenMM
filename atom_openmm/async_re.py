@@ -328,14 +328,9 @@ class JobManager(object):
             self.print_status()
             self.transport.fixnodes()
 
-            new_samples = get_current_samples()
-            if checkpoint_frequency != 0:
-                for i in range(self.nreplicas):
-                    if new_samples[i] != current_samples[i] and new_samples[i] % checkpoint_frequency == 0:
-                        self.logger.info(f"Checkpointing replica {i} with {new_samples[i]} samples...")
-                        self.update_state_of_replica(i)
-                        self.openmm_replicas[i].save_checkpoint()
-                        self.logger.info("done.")
+            if self.re_mode == 'sync':
+                new_samples = get_current_samples()
+                self._sync_checkpointing(checkpoint_frequency, current_samples, new_samples)
 
             if current_time - last_checkpoint_time > checkpoint_time:
                 self.logger.info("Checkpointing ...")
@@ -363,6 +358,22 @@ class JobManager(object):
         self.waitJob()
         self.checkpointJob()
         self.cleanJob()
+
+    def _sync_checkpointing(self, checkpoint_frequency, current_samples, new_samples):
+        for i in range(self.nreplicas):
+            if new_samples[i] != current_samples[i]:
+                # If the CHECKPOINT_FREQUENCY is reached, save the checkpoint
+                if checkpoint_frequency != 0 and new_samples[i] % checkpoint_frequency == 0:
+                    self.logger.info(f"Checkpointing replica {i} with {new_samples[i]} samples...")
+                    self.update_state_of_replica(i)
+                    self.openmm_replicas[i].save_checkpoint()
+                    self.logger.info("done.")
+                # If we want to write the trajectory every N cycles. TRJ_FREQUENCY must be a multiple of PRODUCTION_STEPS
+                trj_frequency = int(self.keywords.get('TRJ_FREQUENCY')) // int(self.keywords.get('PRODUCTION_STEPS'))
+                if trj_frequency > 1 and self.openmm_replicas[i].get_cycle() % trj_frequency == 0:
+                    self.logger.info(f"Saving trajectory for replica {i} with {new_samples[i]} samples...")
+                    self.openmm_replicas[i].save_xtc()
+                    self.logger.info("done.")
 
     def waitJob(self):
         # wait until all jobs are complete

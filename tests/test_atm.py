@@ -141,7 +141,7 @@ def _test_make_atm_system_from_rcpt_lig(tmp_path):
         displacement=[22, 22, 22],
         xmloutfile=outxml,
         pdboutfile=pdboutfile,
-        ionicstrength=0
+        ionicstrength=0,
     )
     with open(outxml, "r") as f:
         lines = f.readlines()[2:]  # Skipping OpenMM version header
@@ -177,6 +177,7 @@ def _test_input_parser():
         assert type(config_yaml[key]) is type(
             config_cntl[key]
         ), f"{key} {type(config_yaml[key])} {type(config_cntl[key])}"
+
 
 def _test_sync_production_ats(tmp_path):
     from atom_openmm.rbfe_production import rbfe_production
@@ -238,7 +239,9 @@ def _test_sync_production_incremental(tmp_path):
 
     with open(startsampl_file, "r") as f:
         starting_sample = int(f.read().strip())
-        assert starting_sample == 0  # The starting_sample file existed so was not overwritten
+        assert (
+            starting_sample == 0
+        )  # The starting_sample file existed so was not overwritten
     with open(prog_file, "r") as f:
         progress = float(f.read().strip())
         assert progress == 0.5
@@ -260,7 +263,36 @@ def _test_sync_production_incremental(tmp_path):
 
     with open(startsampl_file, "r") as f:
         starting_sample = int(f.read().strip())
-        assert starting_sample == 2  # We removed the starting_sample file so it was written from the checkpoint
+        assert (
+            starting_sample == 2
+        )  # We removed the starting_sample file so it was written from the checkpoint
     with open(prog_file, "r") as f:
         progress = float(f.read().strip())
         assert progress == 0.5
+
+
+def _test_xtc_writing_every_n_cycles(tmp_path):
+    from atom_openmm.rbfe_production import rbfe_production
+    from openmm.app.internal.xtc_utils import read_xtc
+    import yaml
+
+    run_dir = os.path.join(tmp_path, "QB_A08_A07_equil_sync")
+    shutil.copytree(os.path.join(curr_dir, "QB_A08_A07_equil_sync"), run_dir)
+
+    configfile = os.path.join(run_dir, "QB_A08_A07.yaml")
+    with open(configfile, "r") as f:
+        config = yaml.safe_load(f)
+    config["MAX_SAMPLES"] = "3"
+    config["PRODUCTION_STEPS"] = "10"
+    config["TRJ_FREQUENCY"] = "20"
+    with open(configfile, "w") as f:
+        yaml.dump(config, f)
+
+    rbfe_production(configfile)
+    for i in range(4):
+        xtcf = os.path.join(run_dir, f"r{i}", "QB_A08_A07.xtc")
+        coords_read, box_read, time, step = read_xtc(xtcf.encode("utf-8"))
+        assert coords_read.shape == (46380, 3, 1)
+        assert box_read.shape == (3, 3, 1)
+        assert len(time) == 1
+        assert len(step) == 1

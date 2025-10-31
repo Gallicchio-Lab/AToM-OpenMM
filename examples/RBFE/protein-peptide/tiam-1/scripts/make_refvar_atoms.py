@@ -40,7 +40,7 @@ def varatoms(top, mut):
     matches = pattern.search(mut)
     resnum = int(matches[1])
     var = []
-    backbone = """["N","CA","C","O", "OXT", "H","H2", "H3","HA", "DN", "DCA", "DC", "DO", "LPOA", "LPOB",  "DOT1", "DOT2", "LPT1", "LPT2", "LPT3", "LPT4"]"""
+    backbone = ["N","CA","C","O", "OXT", "H","H2", "H3","HA", "DN", "DCA", "DC", "DO", "LPOA", "LPOB",  "DOT1", "DOT2", "LPT1", "LPT2", "LPT3", "LPT4"]
     for atom in top.atoms():
         if int(atom.residue.id) == resnum:
             if not atom.name in backbone:

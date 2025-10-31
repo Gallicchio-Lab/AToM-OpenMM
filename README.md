@@ -1,11 +1,11 @@
-AToM-OpenMM v8.2
+AToM-OpenMM v8.4
 ====================
 
 ![AToM logo](AToM-logo.png)
 
 The Alchemical Transfer Method for OpenMM (AToM-OpenMM) is an extensible Python package for the estimation of absolute and relative binding free energies of molecular complexes. It implements the [Alchemical Transfer Method (ATM)](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129) with  asynchronous parallel replica exchange molecular dynamics with the [OpenMM](https://github.com/openmm) library. The AToM software can be deployed on workstations or cluster nodes with one or more GPUs.
 
-This version of AToM uses [ATMForce](https://github.com/openmm/openmm/pull/4110) in the 8.2.0 or later versions of [OpenMM](https://github.com/openmm/openmm). 
+This version of AToM uses [ATMForce](https://github.com/openmm/openmm/pull/4110) in the 8.4.0 or later versions of [OpenMM](https://github.com/openmm/openmm). 
 
 Credits
 -------
@@ -46,8 +46,8 @@ It is recommended that the installation is performed in a personal python enviro
 
 This version of AToM-OpenMM requires OpenMM 8.2.0 or later. This conda command installs the necessary requirements:
 ```
-mamba create -n atm8.2.0 -c conda-forge python=3.11 openmm=8.2.0 ambertools openmmforcefields configobj setproctitle r-base espaloma=0.3.2 
-mamba activate atm8.2.0
+mamba create -n atm8.4.0 -c conda-forge 'openmm>=8.4' ambertools openmmforcefields configobj setproctitle r-base espaloma
+mamba activate atm8.4.0
 ```
 `setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools`, `openmmforcefields`, and `espaloma` packages are not actual dependencies; they are used to setup the molecular systems. `openmmforcefields`, in particular, is used to assign force field parameters using OpenFF, GAFF, or `espaloma`. [`espaloma`](https://github.com/choderalab/espaloma) is a machine-learning system by the Chodera lab to assign force field parameters.  `r-base` with the `UWHAM R package` (see below) is required for free energy estimation. See [examples](examples/) for examples and tutorials.
 
@@ -62,9 +62,9 @@ pip install .
 
 - From the latest release:
 ```
-wget https://github.com/Gallicchio-Lab/AToM-OpenMM/archive/refs/tags/v8.2.1.tar.gz
-tar zxvf v8.2.1.tar.gz
-cd AToM-OpenMM-8.2.1
+wget https://github.com/Gallicchio-Lab/AToM-OpenMM/archive/refs/tags/v8.4.0.tar.gz
+tar zxvf v8.4.0.tar.gz
+cd AToM-OpenMM-8.4.0
 pip install .
 ```
 

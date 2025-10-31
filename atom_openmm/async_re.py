@@ -26,7 +26,7 @@ from atom_openmm.utils.config import parse_config
 
 import multiprocessing as mp
 
-__version__ = '8.2.1'
+__version__ = '8.4.0'
 
 class JobManager(object):
     """

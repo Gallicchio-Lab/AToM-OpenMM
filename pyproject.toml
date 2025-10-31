@@ -4,7 +4,8 @@ description = "Asynchronous Replica Exchange with OpenMM"
 authors = [{ name = "Emilio Gallicchio", email = "emilio.gallicchio@gmail.com" }]
 readme = "README.md"
 requires-python = ">=3.8"
-dynamic = ["version"]
+#dynamic = ["version"]
+version = "8.4.0"
 classifiers = [
   "Programming Language :: Python :: 3",
   "Operating System :: POSIX :: Linux",

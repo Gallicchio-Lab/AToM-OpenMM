@@ -70,9 +70,9 @@ def make_system(
         lig1sdffile=None,
         lig2sdffile=None,
         cofsdffile=None,
-        proteinforcefield='amber14-all.xml',
-        solventforcefield='amber14/tip3p.xml',
-        ligandforcefield='openff-2.0.0',
+        proteinforcefield=None,
+        solventforcefield=None,
+        ligandforcefield=None,
         ffcachefile=None,
         implsolv=None,
         hmass=1.0,
@@ -93,6 +93,15 @@ def make_system(
         print('Warning: LIG2SDFinFile id deprecated. Use LIG2inFile')
         if lig2file is None:
             lig2file = lig2sdffile
+
+    if proteinforcefield is None:
+        proteinforcefield=['amber14-all.xml']
+
+    if solventforcefield is None:
+        solventforcefield=['amber14/tip3p.xml']
+
+    if ligandforcefield is None:
+        ligandforcefield='openff-2.0.0'
             
     #catch abfe or rbfe
     rbfe = False
@@ -130,7 +139,7 @@ def make_system(
 
 
     print('Call ForceField for protein and water')
-    forcefield = ForceField(proteinforcefield,solventforcefield)
+    forcefield = ForceField(*proteinforcefield,*solventforcefield)
     if implsolv is not None:
         if implsolv == "OBC2":
             forcefield.loadFile('implicit/obc2.xml')
@@ -410,15 +419,13 @@ def main():
     parser.add_argument('--cofactorsSDFFile',  required=False,  type=str, default=None, dest='cofsdffile',
                         help='SDF file with receptor cofactors')
 
-    parser.add_argument('--proteinForceField', required=False, type=str, dest='proteinforcefield',
-                        default='amber14-all.xml',
-                        help='Force field for protein` amber14-all.xml ')
-    parser.add_argument('--solventForceField', required=False, type=str, dest='solventforcefield',
-                        default='amber14/tip3p.xml',
-                        help='Force field for solvent/ions` amber14/tip3p.xml ')
+    parser.add_argument('--proteinForceField', required=False, action="append", dest='proteinforcefield',
+                        help='Force field for protein: default amber14-all.xml ')
+    parser.add_argument('--solventForceField', required=False, action="append", dest='solventforcefield',
+                        help='Force field for solvent/ions: default amber14/tip3p.xml ')
     parser.add_argument('--ligandForceField', required=False, type=str, dest='ligandforcefield',
                         default='openff-2.0.0',
-                        help='Force field for ligand:  openff-2.0.0, gaff, or espaloma-0.3.2')
+                        help='Force field for ligand:  openff-2.0.0 (default), gaff, or espaloma-0.3.2')
     parser.add_argument('--implicitSolvent', required=False, type=str, dest='implsolv',
                         default=None,
                         help='Implicit solvent to use: HCT OBC2 GBn2, vacuum.')

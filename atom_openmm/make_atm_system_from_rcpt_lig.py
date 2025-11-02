@@ -243,6 +243,9 @@ def make_system(
         resname_lig1 = "L1"
         for residue in lig1_ommtopology.residues():
             residue.name = resname_lig1
+        chainname_lig1 = "L"
+        for chain in lig1_ommtopology.chains():
+            chain.id = chainname_lig1
     elif fileext == '.PDB':
         lig1pdb = PDBFile(lig1file)
         lig1_ommtopology = lig1pdb.topology
@@ -280,6 +283,9 @@ def make_system(
             resname_lig2 = "L2"
             for residue in lig2_ommtopology.residues():
                 residue.name = resname_lig2
+            chainname_lig2 = "M"
+            for chain in lig2_ommtopology.chains():
+                chain.id = chainname_lig2
         elif fileext == '.PDB':
             lig2pdb = PDBFile(lig2file)
             lig2_ommtopology = lig2pdb.topology
@@ -290,7 +296,7 @@ def make_system(
         else:
             print("Error: unrecognized file: %s" % lig2file)
             sys.exit(1)
-        
+
         nlig2 = lig2_ommtopology.getNumAtoms()
         print('Number of atoms in ligand 2:', nlig2)
         for i in range(nlig2):

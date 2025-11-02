@@ -83,7 +83,7 @@ def make_system(
     today = datetime.today()
     print('\nDate and time at start: ', today.strftime('%c'))
     program_start_timer = time()
-
+    
     if lig1sdffile is not None:
         print('Warning: LIG1SDFinFile id deprecated. Use LIG1inFile')
         if lig1file is None:
@@ -231,7 +231,8 @@ def make_system(
         modeller.add(molcof_ommtopology, molcof_positions)
 
 
-    print('Read ligand 1:')
+    print('Read ligand 1 from %s:' % lig1file)
+    
     fileext = (os.path.splitext(lig1file)[1]).upper()
     if fileext == '.SDF':
         mollig1 = Molecule.from_file(lig1file, file_format='SDF', allow_undefined_stereo=True)
@@ -270,11 +271,10 @@ def make_system(
     else:
         # RBFE mode:
         # read ligand 2 and place it in the solvent
-        print('Read ligand 2:')
+        print('Read ligand 2 from %s:' % lig2file)
         fileext = (os.path.splitext(lig2file)[1]).upper()
         if fileext == '.SDF':
-            mollig2 = Molecule.from_file(lig2sdffile, file_format='SDF',
-                                         allow_undefined_stereo=True)
+            mollig2 = Molecule.from_file(lig2file, file_format='SDF', allow_undefined_stereo=True)
             ligandmolecules.append(mollig2)
             lig2_ommtopology = mollig2.to_topology().to_openmm(ensure_unique_atom_names=True)
             pos = mollig2.conformers[0].to('angstrom').magnitude

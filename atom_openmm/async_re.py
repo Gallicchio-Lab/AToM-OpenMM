@@ -139,32 +139,8 @@ class JobManager(object):
         for k,v in self.keywords.items():
             self.logger.info("%s: %s", k, v)
 
-    def _checkInput(self):
-        """
-        Check that required parameters are specified. Parse these and other
-        optional settings.
-        """
-        # Required Options
-        #
-        # basename for the job
-        self.basename = self.keywords.get('BASENAME')
-        if self.basename is None:
-            self._exit('BASENAME needs to be specified')
-
-        #job transport mechanism
-        self.transport_mechanism = self.keywords.get('JOB_TRANSPORT')
-        if self.transport_mechanism is None:
-            self._exit('JOB_TRANSPORT needs to be specified')
-        #only LOCAL_OPENMM is supported for now
-        if self.transport_mechanism != "LOCAL_OPENMM" :
-            self._exit("unknown JOB_TRANSPORT %s" % self.transport_mechanism)
-        # reset job transport
-        self.transport = None
-
-        if self.transport_mechanism == "LOCAL_OPENMM":
-            if self.keywords.get('NODEFILE') is None:
-                self._exit("NODEFILE needs to be specified")
-            nodefile = self.keywords.get('NODEFILE')
+    def set_node_info(self, nodefile):
+        if nodefile is not None:
             """
             check the information in the nodefile. there should be six columns in the  
             nodefile. They are 'node name', 'slot number', 'number of threads', 
@@ -190,15 +166,57 @@ class JobManager(object):
                     nodeid += 1
                     line = f.readline()
                 f.close()
+                return node_info
             except:
                 self._exit("Unable to process nodefile %s" % nodefile)
                 # reset job transport
                 self.transport = None
-            #set the nodes information
-            self.num_nodes = len(node_info)
-            self.compute_nodes=node_info
-            #Can print out here to check the node information
-            self.logger.info("compute nodes: %s", ', '.join([n['node_name'] for n in node_info]))
+                return []
+        else:
+            #automatic selection of compute nodes
+            from atom_openmm.utils.AtomUtils import available_computing_devices
+            node_info = []
+            nodeid = 0
+            devices = available_computing_devices()
+            for platf in devices:
+                if platf["name"] in ["CUDA", "HIP", "OpenCL"]:
+                    for deviceid in range(platf['count']+1):
+                        node_info.append({})
+                        node_info[nodeid]["node_name"] = "localhost"
+                        node_info[nodeid]["slot_number"] = "%d:%d" % (platf["id"], deviceid)
+                        node_info[nodeid]["threads_number"] = 1
+                        node_info[nodeid]["arch"] = platf["name"]
+                        node_info[nodeid]["user_name"] = ""
+                        node_info[nodeid]["tmp_folder"] = "/tmp"
+                        nodeid += 1
+            return node_info
+
+    def _checkInput(self):
+        """
+        Check that required parameters are specified. Parse these and other
+        optional settings.
+        """
+        # Required Options
+        #
+        # basename for the job
+        self.basename = self.keywords.get('BASENAME')
+        if self.basename is None:
+            self._exit('BASENAME needs to be specified')
+
+        #job transport mechanism
+        self.transport_mechanism = self.keywords.get('JOB_TRANSPORT')
+        if self.transport_mechanism is None:
+            self._exit('JOB_TRANSPORT needs to be specified')
+        #only LOCAL_OPENMM is supported for now
+        if self.transport_mechanism != "LOCAL_OPENMM" :
+            self._exit("unknown JOB_TRANSPORT %s" % self.transport_mechanism)
+        # reset job transport
+        self.transport = None
+
+        #compute nodes
+        self.compute_nodes = set_node_info(self, self.keywords.get('NODEFILE'))
+        self.num_nodes = len(self.compute_nodes)
+        self.logger.info("compute nodes: %s", ', '.join([n['node_name'] for n in self.compute_nodes]))
 
         # execution time in minutes
         self.walltime = float(self.keywords.get('WALL_TIME'))

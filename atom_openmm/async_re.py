@@ -57,6 +57,7 @@ class JobManager(object):
         self.exchange = True
 
         # replica exchange mode ('sync' or 'async') set the async mode by default
+        self.nreplicas = None
         self.re_mode = self.keywords.get('RE_MODE', 'async')
 
         if self.re_mode == 'async':
@@ -128,7 +129,10 @@ class JobManager(object):
         elif name == 'running':
             return len(self.replicas_running)
         else:
-            return object.__getattribute__(self,name)
+            try:
+                return object.__getattribute__(self,name)
+            except:
+                return None
 
     def _printStatus(self):
         """Print a report of the input parameters."""
@@ -138,6 +142,16 @@ class JobManager(object):
         self.logger.info("Keywords:")
         for k,v in self.keywords.items():
             self.logger.info("%s: %s", k, v)
+
+    def make_node(self, node_name, platform_id, device_id, nthreads, arch, user_name, tmp_folder):
+        node = {}
+        node["node_name"] = node_name
+        node["slot_number"] = "%d:%d" % (platform_id, device_id)
+        node["threads_number"] = nthreads
+        node["arch"] = arch
+        node["user_name"] = user_name
+        node["tmp_folder"] = tmp_folder
+        return node
 
     def set_node_info(self, nodefile):
         if nodefile is not None:
@@ -178,17 +192,27 @@ class JobManager(object):
             node_info = []
             nodeid = 0
             devices = available_computing_devices()
-            for platf in devices:
-                if platf["name"] in ["CUDA", "HIP", "OpenCL"]:
-                    for deviceid in range(platf['count']+1):
-                        node_info.append({})
-                        node_info[nodeid]["node_name"] = "localhost"
-                        node_info[nodeid]["slot_number"] = "%d:%d" % (platf["id"], deviceid)
-                        node_info[nodeid]["threads_number"] = 1
-                        node_info[nodeid]["arch"] = platf["name"]
-                        node_info[nodeid]["user_name"] = ""
-                        node_info[nodeid]["tmp_folder"] = "/tmp"
-                        nodeid += 1
+            for platf in devices: 
+                if platf["name"] in ["CUDA", "HIP"]:
+                    for deviceid in range(platf['count']):
+                        node = self.make_node("localhost", platf["id"], deviceid, 1, platf["name"], "", "/tmp")
+                        if node:
+                            node_info.append(node)
+            if len(node_info) == 0: #try OpenCL as a backup
+                for platf in devices:
+                    if platf["name"] in ["OpenCL"]:
+                        for deviceid in range(platf['count']):
+                            node = self.make_node("localhost", 0, deviceid, 1, platf["name"], "", "/tmp")
+                            if node:
+                                node_info.append(node)
+            if len(node_info) == 0: #finally try CPU as a backup               
+                for platf in devices:
+                    if platf["name"] in ["CPU"]:
+                        for deviceid in range(platf['count']):
+                            nthreads = int(os.getenv('OMP_NUM_THREADS', '1'))
+                            node = self.make_node("localhost", platf["id"], deviceid, nthreads, platf["name"], "", "/tmp")
+                            if node:
+                                node_info.append(node)
             return node_info
 
     def _checkInput(self):
@@ -214,9 +238,11 @@ class JobManager(object):
         self.transport = None
 
         #compute nodes
-        self.compute_nodes = set_node_info(self, self.keywords.get('NODEFILE'))
+        self.compute_nodes = self.set_node_info(self.keywords.get('NODEFILE'))
         self.num_nodes = len(self.compute_nodes)
-        self.logger.info("compute nodes: %s", ', '.join([n['node_name'] for n in self.compute_nodes]))
+        if self.num_nodes < 1:
+            self._exit("Could not find computing devices")
+        self.logger.info("compute nodes: %s ", ', '.join([n['node_name'] + " " + n['arch'] for n in self.compute_nodes]))
 
         # execution time in minutes
         self.walltime = float(self.keywords.get('WALL_TIME'))

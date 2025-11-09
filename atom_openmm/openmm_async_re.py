@@ -44,17 +44,19 @@ class openmm_job(JobManager):
             pass
             
         # update replica objects of waiting replicas with the current state assignments
-        for repl in range(self.nreplicas):
-            self.update_state_of_replica(repl)
-        for replica in self.openmm_replicas:
-            replica.save_checkpoint()
+        if self.openmm_replicas:
+            for repl in range(len(self.openmm_replicas)):
+                self.update_state_of_replica(repl)
+            for replica in self.openmm_replicas:
+                replica.save_checkpoint()
 
         #re-enable ctrl-c
         signal.signal(signal.SIGINT, s)
 
         #restore safeckpt_file
-        with open(self.safeckpt_file, "w") as f:
-            f.write("Checkpoint files are valid")
+        if self.openmm_replicas:
+            with open(self.safeckpt_file, "w") as f:
+                f.write("Checkpoint files are valid")
 
     def _launchReplica(self,replica,cycle):
         nsteps = int(self.keywords.get('PRODUCTION_STEPS'))
@@ -203,12 +205,12 @@ class openmm_job_TRE(openmm_job):
 
     def _checkInput(self):
         super()._checkInput()
-
+        
         if self.keywords.get('TEMPERATURES') is None:
             self._exit("TEMPERATURES needs to be specified")
         self.temperatures = self.keywords.get('TEMPERATURES')
         self.nreplicas = self._buildStates()
-
+        
     def print_status(self):
         """
         Writes to BASENAME_stat.txt a text version of the status of the RE job
@@ -263,7 +265,7 @@ class openmm_job_ATM(openmm_job):
 
     def _checkInput(self):
         super()._checkInput()
-
+        
         if self.keywords.get('LAMBDAS') is None:
             self._exit("LAMBDAS needs to be specified")
         self.lambdas = self.keywords.get('LAMBDAS')
@@ -377,11 +379,20 @@ class openmm_job_ABFE(openmm_job_ATM):
     def __init__(self, command_file, options):
         super().__init__(command_file, options)
 
+        self.re_mode = self.keywords.get('RE_MODE', 'async')
+        ommworkercls = None
+        if self.re_mode == 'async':
+            ommworkercls = OMMWorkerATM
+        elif self.re_mode == 'sync':
+            ommworkercls = OMMWorkerATMSync
+        else:
+            self._exit('Unknown RE_MODE %s', self.re_mode)
+        
         pdbtopfile = self.basename + ".pdb"
         systemfile = self.basename + "_sys.xml"
 
         if self.stateparams is None:
-            self._buildStates()
+            self.nreplicas = self._buildStates()
 
         #builds service worker for replicas use
         service_ommsys = OMMSystemABFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger)
@@ -420,7 +431,7 @@ class openmm_job_RBFE(openmm_job_ATM):
         systemfile = self.basename + "_sys.xml"
 
         if self.stateparams is None:
-            self._buildStates()
+            self.nreplicas = self._buildStates()
 
         #builds service worker for replicas use
         service_ommsys = OMMSystemRBFE(self.basename, self.keywords, pdbtopfile, systemfile, self.logger)

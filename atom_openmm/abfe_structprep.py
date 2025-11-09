@@ -21,7 +21,7 @@ from datetime import datetime
 
 import logging
 from atom_openmm.ommsystem import *
-from atom_openmm.utils.AtomUtils import AtomUtils, residue_is_solvent
+from atom_openmm.utils.AtomUtils import AtomUtils, residue_is_solvent, available_computing_devices
 
 class OMMSystemABFEnoATM(OMMSystemABFE):
     def create_system(self):
@@ -73,7 +73,25 @@ def set_platform(keywords):
     platform_properties = {}
     platform_name = keywords.get("OPENMM_PLATFORM")
     if platform_name == None:
-        platform_name = "CUDA"
+        devices = available_computing_devices()
+        #first CUDA or HIP device
+        for platf in devices:
+            if platf['count'] > 0 and platf["name"] in ["CUDA", "HIP"]:
+                platform_name = platf["name"]
+                break
+        if platform_name == None:
+            #fall back to OpenCL
+            for platf in devices:
+                if platf['count'] > 0 and platf["name"] in ["OpenCL"]:
+                    platform_name = platf["name"]
+                    break
+        if platform_name == None:
+            #fall back to CPU
+            for platf in devices:
+                if platf['count'] > 0 and platf["name"] in ["CPU"]:
+                    platform_name = platf["name"]
+                    break
+        assert not platform_name == None, "Could not find computing device"
     if platform_name == "CUDA" or platform_name == "OpenCL" or platform_name == "HIP":
         platform_properties["Precision"] = "mixed"
     if platform_name == "CPU":

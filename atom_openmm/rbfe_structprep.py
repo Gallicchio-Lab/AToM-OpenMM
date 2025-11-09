@@ -22,6 +22,7 @@ import logging
 
 from atom_openmm.ommsystem import *
 from atom_openmm.utils.AtomUtils import AtomUtils, residue_is_solvent
+from atom_openmm.abfe_structprep import set_platform
 
 class OMMSystemRBFEnoATM(OMMSystemRBFE):
     def populate_atmforcegroup(self):
@@ -93,22 +94,6 @@ class OMMSystemRBFEnoATM(OMMSystemRBFE):
         self.set_barostat(self.temperature,pressure,25)
 
         self.set_integrator(self.temperature, self.frictionCoeff, self.MDstepsize)
-
-def set_platform(keywords):
-    platform_properties = {}
-    platform_name = keywords.get("OPENMM_PLATFORM")
-    if platform_name == None:
-        platform_name = "CUDA"
-    if platform_name == "CUDA" or platform_name == "OpenCL" or platform_name == "HIP":
-        platform_properties["Precision"] = "mixed"
-    if platform_name == "CPU":
-        try:
-            nthreads = os.environ['OMP_NUM_THREADS']
-        except:
-            nthreads = 1
-        platform_properties["Threads"] = str(nthreads)
-    platform = Platform.getPlatformByName(platform_name)
-    return (platform, platform_properties)
 
 def do_mintherm(keywords, logger):
     basename = keywords.get('BASENAME')

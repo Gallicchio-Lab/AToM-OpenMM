@@ -825,44 +825,33 @@ def residue_is_solvent(res): # called in abfe/rbfe_structprep.py
         return True
     return False
 
-def numDevices(platform, max = 16):
+def numDevices(platform, nmax = 16):
+    if platform.getName() in ["Reference","CPU"]:
+        return 1
     system = mm.System()
     system.addParticle(1.0)
-    for id in range(max,-1,-1):
+    for ndevs in range(nmax,-1,-1):
         try:
-            properties = { 'DeviceIndex' : str(id) }
+            properties = { 'DeviceIndex' : str(ndevs-1) }
             integrator = mm.VerletIntegrator(0.001)
             context = mm.Context(system, integrator, platform, properties)
             del context, integrator
-            return id
+            return ndevs
         except:
             pass
-    return None
+    return 0
 
 def available_computing_devices():
-    platforms = [mm.Platform.getPlatform(i) for i in range(mm.Platform.getNumPlatforms())]  
-    #assuming CUDA and OpenCL refer to the same devices if they are both present with the same number of devices
-    CUDAid = -1
-    OpenCLid = -1
-    pid = 0
-    for p in platforms:
-        if p.getName() == "CUDA":
-            CUDAid = pid
-        elif p.getName() == "OpenCL":
-            OpenCLid = pid
-    add_opencl = True
-    if CUDAid >= 0 and OpenCLid >= 0:
-        if numDevices(platforms[CUDAid]) == numDevices(platforms[OpenCLid]):
-            add_opencl = False
     devices = []
+    platforms = [mm.Platform.getPlatform(i) for i in range(mm.Platform.getNumPlatforms())]
+    ndevices = [numDevices(p) for p in platforms]
     for pid in range(len(platforms)):
         p = platforms[pid]
-        if (not p.getName() == "OpenCL") or (p.getName() == "OpenCL" and add_opencl):
-            res = {}
-            res["name"] = p.getName()
-            res["count"] = numDevices(p)
-            res["id"] = pid
-            devices.append(res)
+        res = {}
+        res["name"] = p.getName()
+        res["count"] = ndevices[pid]
+        res["id"] = pid
+        devices.append(res)
     return devices
 
     

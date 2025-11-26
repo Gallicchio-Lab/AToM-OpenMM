@@ -53,18 +53,15 @@ mamba activate atm8.4.0
 
 Finally, install AToM-OpenMM:
 
+- From the latest release:
+```
+pip install atom-openmm
+```
+
 - From the latest sources:
 ```
 git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
 cd AToM-OpenMM
-pip install .
-```
-
-- From the latest release:
-```
-wget https://github.com/Gallicchio-Lab/AToM-OpenMM/archive/refs/tags/v8.4.0.tar.gz
-tar zxvf v8.4.0.tar.gz
-cd AToM-OpenMM-8.4.0
 pip install .
 ```
 

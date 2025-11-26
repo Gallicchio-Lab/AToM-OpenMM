@@ -44,7 +44,7 @@ Installation & Usage
 
 It is recommended that the installation is performed in a personal python environment (`miniforge`, `miniconda`, `conda`, or similar). AToM-OpenMM requires the `openmm`, `configobj` and `numpy` python modules. 
 
-This version of AToM-OpenMM requires OpenMM 8.2.0 or later. This conda command installs the necessary requirements:
+This version of AToM-OpenMM requires OpenMM 8.4.0 or later. This conda command installs the necessary requirements:
 ```
 mamba create -n atm8.4.0 -c conda-forge 'openmm>=8.4' ambertools openmmforcefields configobj setproctitle r-base espaloma
 mamba activate atm8.4.0

@@ -44,7 +44,7 @@ Installation & Usage
 
 It is recommended that the installation is performed in a personal python environment (`miniforge`, `miniconda`, `conda`, or similar). AToM-OpenMM requires the `openmm`, `configobj` and `numpy` python modules. 
 
-This version of AToM-OpenMM requires OpenMM 8.2.0 or later. This conda command installs the necessary requirements:
+This version of AToM-OpenMM requires OpenMM 8.4.0 or later. This conda command installs the necessary requirements:
 ```
 mamba create -n atm8.4.0 -c conda-forge 'openmm>=8.4' ambertools openmmforcefields configobj setproctitle r-base espaloma
 mamba activate atm8.4.0
@@ -53,18 +53,15 @@ mamba activate atm8.4.0
 
 Finally, install AToM-OpenMM:
 
+- From the latest release:
+```
+pip install atom-openmm
+```
+
 - From the latest sources:
 ```
 git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
 cd AToM-OpenMM
-pip install .
-```
-
-- From the latest release:
-```
-wget https://github.com/Gallicchio-Lab/AToM-OpenMM/archive/refs/tags/v8.4.0.tar.gz
-tar zxvf v8.4.0.tar.gz
-cd AToM-OpenMM-8.4.0
 pip install .
 ```
 
@@ -85,4 +82,4 @@ See [examples](examples/) for examples and tutorials.
 Licensing
 ---------
 
- This software is licensed under the terms of the [GNU Lesser General Public License](https://opensource.org/license/lgpl-3-0). See [LICENSE](LICENSE)
+ This software is licensed under the terms of the [GNU Lesser General Public License](https://opensource.org/license/lgpl-3-0). See [LICENSE](LICENSE). The AToM logo &copy; 2023 Solmaz Azimi. 

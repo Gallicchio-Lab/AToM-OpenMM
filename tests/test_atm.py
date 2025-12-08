@@ -1,6 +1,6 @@
 import shutil
 import os
-
+import yaml
 
 curr_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -56,6 +56,43 @@ def _test_rbfe_structprep(tmp_path):
     rbfe_structprep(os.path.join(run_dir, "QB_A08_A07_asyncre.yaml"))
 
 
+def _test_rbfe_structprep_from_keywords(tmp_path):
+    from atom_openmm.rbfe_structprep import rbfe_structprep
+    from openmm import unit
+    from openmm import app
+    from openmm.app.amberprmtopfile import AmberPrmtopFile
+    from openmm import XmlSerializer
+    import numpy as np
+
+    run_dir = os.path.join(tmp_path, "QB_A08_A07")
+    shutil.copytree(os.path.join(curr_dir, "QB_A08_A07"), run_dir)
+
+    box_vectors = np.array([[80.1356, 0, 0], [0, 86.0443, 0], [0, 0, 81.4926]])
+    a = unit.Quantity(box_vectors[0] * unit.angstrom)
+    b = unit.Quantity(box_vectors[1] * unit.angstrom)
+    c = unit.Quantity(box_vectors[2] * unit.angstrom)
+    box_vectors = (a, b, c)
+    omm_structure = AmberPrmtopFile(
+        os.path.join(run_dir, "QB_A08_A07.prmtop"), periodicBoxVectors=box_vectors
+    )
+    system = omm_structure.createSystem(
+        nonbondedMethod=app.PME,
+        nonbondedCutoff=9 * unit.angstrom,
+        constraints=app.HBonds,
+        hydrogenMass=1.5 * unit.amu,
+        rigidWater=True,
+        switchDistance=7 * unit.angstrom,
+    )
+    with open(os.path.join(run_dir, "QB_A08_A07_sys.xml"), "w") as f:
+        f.write(XmlSerializer.serialize(system))
+
+    keywords = None
+    with open("QB_A08_A07_asyncre.yaml") as f:
+        keywords = yaml.safe_load(f)
+        keywords['WORKDIR'] = run_dir
+    wdir = rbfe_structprep(config_file = None, options = keywords)
+    assert wdir == run_dir
+
 def _test_rbfe_production(tmp_path):
     from atom_openmm.rbfe_production import rbfe_production
 
@@ -64,6 +101,17 @@ def _test_rbfe_production(tmp_path):
 
     rbfe_production(os.path.join(run_dir, "QB_A08_A07_asyncre.yaml"))
 
+def _test_rbfe_production_from_keywords(tmp_path):
+    from atom_openmm.rbfe_production import rbfe_production
+
+    run_dir = os.path.join(tmp_path, "QB_A08_A07_equil")
+    shutil.copytree(os.path.join(curr_dir, "QB_A08_A07_equil"), run_dir)
+    keywords = None
+    with open("QB_A08_A07_asyncre.yaml") as f:
+        keywords = yaml.safe_load(f)
+        keywords['WORKDIR'] = run_dir
+    wdir = rbfe_production(config_file = None, options = keywords)
+    assert wdir == run_dir
 
 def _test_make_atm_system_from_amber(tmp_path):
     from atom_openmm.make_atm_system_from_amber import make_system

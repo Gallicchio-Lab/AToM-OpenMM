@@ -11,6 +11,7 @@ import signal
 import shutil
 import random
 from sys import stdout
+from pathlib import Path
 
 import openmm as mm
 from openmm.app import *
@@ -409,13 +410,15 @@ def massage_keywords(keywords, restrain_solutes = True):
         keywords['POS_RESTRAINED_ATOMS'] = non_ion_wat_atoms
 
 
-def rbfe_structprep(config_file=None):
+def rbfe_structprep(config_file=None, options=None):
     from atom_openmm.utils.AtomUtils import set_directory
     from atom_openmm.utils.config import parse_config
     from pathlib import Path
 
-    if config_file is None:
+    if config_file is None and options is None:
         config_file = sys.argv[1]
+
+    assert config_file or options, "Invalid input. Specify a configuration file or options."
 
     print("")
     print("========================================")
@@ -423,31 +426,45 @@ def rbfe_structprep(config_file=None):
     print("========================================")
     print("")
     print("Started at: " + str(time.asctime()))
-    print("Input file:", config_file)
+    if config_file:
+        print("Input file:", config_file)
+    elif options:
+        print("Options:", options)
     print("")
     sys.stdout.flush()
 
-    keywords = parse_config(config_file)
+    keywords = None
+    if config_file:
+        keywords = parse_config(config_file)
+    elif options:
+        keywords = options
+
     logger = logging.getLogger("rbfe_structprep")
 
-    with set_directory(Path(config_file).parent):
-        restrain_solutes = True
-        if keywords.get('MINTHERM_RESTRAIN_SOLUTES'):
-            restrain_solutes = keywords.get('MINTHERM_RESTRAIN_SOLUTES').upper() == "YES"
-        if not restrain_solutes:
-            logger.info("Solutes are not restrained during mintherm.")
-        old_keywords = keywords.copy()
-        massage_keywords(keywords, restrain_solutes)
+    work_dir = None
+    if config_file:
+        os.chdir(Path(config_file).parent)
+        work_dir = os.getcwd()
+    elif options:
+        if "WORKDIR" in options.keys():
+            os.chdir(options["WORKDIR"])
+            work_dir = os.getcwd()
 
-        do_mintherm(keywords, logger)
-        do_lambda_annealing(keywords, logger)
+    restrain_solutes = keywords.get('MINTHERM_RESTRAIN_SOLUTES', 'YES').upper() == "YES"
 
-        # reestablish the restrained atoms
-        if restrain_solutes:
-            keywords["POS_RESTRAINED_ATOMS"] = old_keywords.get("POS_RESTRAINED_ATOMS")
+    old_keywords = keywords.copy()
+    massage_keywords(keywords, restrain_solutes)
 
-        do_equil(keywords, logger)
+    do_mintherm(keywords, logger)
+    do_lambda_annealing(keywords, logger)
 
+    # reestablish the restrained atoms
+    if restrain_solutes:
+        keywords["POS_RESTRAINED_ATOMS"] = old_keywords.get("POS_RESTRAINED_ATOMS")
+
+    do_equil(keywords, logger)
+
+    return work_dir
 
 if __name__ == "__main__":
     assert len(sys.argv) == 2, "Specify ONE input file"

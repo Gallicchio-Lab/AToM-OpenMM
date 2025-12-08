@@ -26,7 +26,7 @@ from atom_openmm.utils.config import parse_config
 
 import multiprocessing as mp
 
-__version__ = '8.4.0'
+__version__ = '8.4.1'
 
 class JobManager(object):
     """
@@ -43,12 +43,19 @@ class JobManager(object):
 
         self._setLogger()
 
+        assert command_file or options, "Invalid input. Specify control file or options."
+        
         self.command_file = command_file
-        if not os.path.exists(self.command_file):
-           self._exit('No such file: %s'%self.command_file)
+        if self.command_file:
+            if not os.path.exists(self.command_file):
+                self._exit('No such file: %s'%self.command_file)
 
-        self.jobname = os.path.splitext(os.path.basename(command_file))[0]
-        self.keywords = parse_config(self.command_file)
+            self.jobname = os.path.splitext(os.path.basename(command_file))[0]
+            self.keywords = parse_config(self.command_file)
+        elif options:
+            self.keywords = options
+            self.jobname = self.keywords.get('BASENAME', None)
+            assert self.jobname, "Specify BASENAME"
 
         self._checkInput()
         self._printStatus()

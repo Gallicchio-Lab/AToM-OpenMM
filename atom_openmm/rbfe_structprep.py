@@ -441,14 +441,11 @@ def rbfe_structprep(config_file=None, options=None):
 
     logger = logging.getLogger("rbfe_structprep")
 
-    work_dir = None
     if config_file:
         os.chdir(Path(config_file).parent)
-        work_dir = os.getcwd()
     elif options:
         if "WORKDIR" in options.keys():
             os.chdir(options["WORKDIR"])
-            work_dir = os.getcwd()
 
     restrain_solutes = keywords.get('MINTHERM_RESTRAIN_SOLUTES', 'YES').upper() == "YES"
 
@@ -463,8 +460,6 @@ def rbfe_structprep(config_file=None, options=None):
         keywords["POS_RESTRAINED_ATOMS"] = old_keywords.get("POS_RESTRAINED_ATOMS")
 
     do_equil(keywords, logger)
-
-    return work_dir
 
 if __name__ == "__main__":
     assert len(sys.argv) == 2, "Specify ONE input file"

@@ -62,6 +62,9 @@ class OMMSystem(object):
 
         self.doMetaD = False
 
+        self.do_excl_pot = False
+        self.lig_exclusion_force = None
+
         self.major_ommversion = None
         self.minor_ommversion = None
         self.patch_ommversion = None
@@ -125,7 +128,7 @@ class OMMSystem(object):
             self._exit('Cannot find a free force group. '
                        'The maximum number (32) of the force groups is already used.')
         return max(freeGroups)
-        
+
     def set_positional_restraints(self):
         #indexes of the atoms whose position is restrained near the initial positions
         #by a flat-bottom harmonic potential. 
@@ -135,6 +138,38 @@ class OMMSystem(object):
             fc = float(self.keywords.get('POSRE_FORCE_CONSTANT')) * (kilocalorie_per_mole/angstrom**2)
             tol = float(self.keywords.get('POSRE_TOLERANCE')) * angstrom
             self.posrestrForce = self.atm_utils.addPosRestraints(posrestr_atoms, self.positions, fc, tol)
+
+    def set_ligand_receptor_exclusion_potentials(self):
+        #adds a potential that keeps a ligand away from the receptor
+        self.lig_exclusion_force = None
+        mol1_indexes = self.keywords.get('EXCLUSION_POT_MOL1_INDEXES')
+        mol2_indexes = self.keywords.get('EXCLUSION_POT_MOL2_INDEXES')
+        if mol1_indexes:
+            if not mol2_indexes:
+                self._exit("Error: EXCLUSION_POT_MOL2_INDEXES is required when EXCLUSION_POT_MOL1_INDEXES is set.")
+            sigma = float(self.keywords.get('EXCLUSION_POT_SIGMA', 6.0)) * angstrom
+            epsi = float(self.keywords.get('EXCLUSION_POT_EPSILON', 1.0)) * kilocalorie_per_mole
+            cutoff = float(self.keywords.get('EXCLUSION_POT_CUTOFF', 10.0)) * angstrom
+            switch_cutoff = float(self.keywords.get('EXCLUSION_POT_SWITCH_CUTOFF', 8.0)) * angstrom
+            assert(sigma > 0.0*angstrom and epsi >= 0.0*kilocalorie_per_mole and cutoff > 0.0*angstrom and switch_cutoff > 0.0*angstrom)
+            assert(cutoff > switch_cutoff)
+            n_mol1 = len(mol1_indexes)
+            n_mol2 = len(mol2_indexes)
+            self.logger.info(f"Creating receptor/ligand exclusion potential with {n_mol1} atoms for MOL1 and {n_mol2} atoms for MOL2.")
+            force = mm.CustomNonbondedForce("4*epsilonexcl*(sigmaexcl/r)^12")
+            force.setName("ExclusionForce")
+            force.addGlobalParameter("epsilonexcl", epsi)
+            force.addGlobalParameter("sigmaexcl", sigma)
+            force.setNonbondedMethod(force.CutoffPeriodic)
+            force.setCutoffDistance(cutoff)
+            force.setUseSwitchingFunction(True)
+            force.setSwitchingDistance(switch_cutoff)
+            for atom in self.topology.atoms():
+                force.addParticle([])
+            force.addInteractionGroup(mol1_indexes, mol2_indexes)
+            self.lig_exclusion_force = force
+            self.system.addForce(self.lig_exclusion_force)
+            self.do_excl_pot = True
 
     def set_torsion_metaDbias(self,temperature):
         from atom_openmm.utils.config import parse_config
@@ -608,6 +643,12 @@ class OMMSystemRBFE(OMMSystem):
 
         cmrestraints_present = (rcpt_atom_restr is not None) and (lig1_atom_restr is not None) and (lig2_atom_restr is not None)
 
+        rcpt_frame_cm = self.keywords.get('RCPT_FRAME_ATOMS_O')
+        rcpt_frame_z  = self.keywords.get('RCPT_FRAME_ATOMS_Z')
+        rcpt_frame_y  = self.keywords.get('RCPT_FRAME_ATOMS_Y')
+        internal_frame_present = rcpt_frame_cm and rcpt_frame_z and rcpt_frame_y
+        self.logger.info("Using VSite restraints based on the internal receptor frame.")
+
         self.vsiterestraintForce1 = None
         self.vsiterestraintForce2 = None
         if cmrestraints_present:
@@ -616,17 +657,45 @@ class OMMSystemRBFE(OMMSystem):
             cmtol = float(self.keywords.get('CM_TOL'))
             r0 = cmtol * angstrom #radius of Vsite sphere
 
-            #Vsite restraints for ligands 1 and 2
-            self.vsiterestraintForce1 = self.atm_utils.addVsiteRestraintForceCMCM(lig_cm_particles = lig1_atom_restr,
-                                        rcpt_cm_particles = rcpt_atom_restr,
-                                        kfcm = kf,
-                                        tolcm = r0,
-                                        offset = self.lig1offset)
-            self.vsiterestraintForce2 = self.atm_utils.addVsiteRestraintForceCMCM(lig_cm_particles = lig2_atom_restr,
-                                        rcpt_cm_particles = rcpt_atom_restr,
-                                        kfcm = kf,
-                                        tolcm = r0,
-                                        offset = self.lig2offset)
+            #Vsite restraints for ligand 1
+            if internal_frame_present:
+                self.vsiterestraintForce1 = self.atm_utils.addVsiteRestraintForceCMCMInternal(
+                    lig_cm_particles = lig1_atom_restr,
+                    rcpt_cm_particles_origin = rcpt_frame_cm,
+                    rcpt_cm_particles_z = rcpt_frame_z,
+                    rcpt_cm_particles_yz = rcpt_frame_y,
+                    kfcm = kf,
+                    tolcm = r0,
+                    offset = self.lig1offset)
+                self.vsiterestraintForce1.setName("VsiteRestraintForceCMCMInternal")
+            else:
+                self.vsiterestraintForce1 = self.atm_utils.addVsiteRestraintForceCMCM(
+                    lig_cm_particles = lig1_atom_restr,
+                    rcpt_cm_particles = rcpt_atom_restr,
+                    kfcm = kf,
+                    tolcm = r0,
+                    offset = self.lig1offset)
+                self.vsiterestraintForce1.setName("VsiteRestraintForceCMCM")
+            #with the exclusion potential, the unbound ligand is not restrained
+            if not self.do_excl_pot:
+                if internal_frame_present:
+                    self.vsiterestraintForce2 = self.atm_utils.addVsiteRestraintForceCMCMInternal(
+                        lig_cm_particles = lig2_atom_restr,
+                        rcpt_cm_particles_origin = rcpt_frame_cm,
+                        rcpt_cm_particles_z = rcpt_frame_z,
+                        rcpt_cm_particles_yz = rcpt_frame_y,
+                        kfcm = kf,
+                        tolcm = r0,
+                        offset = self.lig2offset)
+                    self.vsiterestraintForce2.setName("VsiteRestraintForceCMCMInternal")
+                else:
+                    self.vsiterestraintForce2 = self.atm_utils.addVsiteRestraintForceCMCM(
+                        lig_cm_particles = lig2_atom_restr,
+                        rcpt_cm_particles = rcpt_atom_restr,
+                        kfcm = kf,
+                        tolcm = r0,
+                        offset = self.lig2offset)
+                    self.vsiterestraintForce2.setName("VsiteRestraintForceCMCM")
 
     def set_orientation_restraints(self):
         #orientational VSite restraints
@@ -747,44 +816,58 @@ class OMMSystemRBFE(OMMSystem):
         for i in range(self.topology.getNumAtoms()):
             self.atmforce.addParticle( )
 
-        lig1_var_atoms = [int(i) for i in self.keywords.get('LIGAND1_VAR_ATOMS')  ]
-        lig2_var_atoms = [int(i) for i in self.keywords.get('LIGAND2_VAR_ATOMS')  ]
-
         lig1_attach_atom = int(self.keywords.get('LIGAND1_ATTACH_ATOM'))
         lig2_attach_atom = int(self.keywords.get('LIGAND2_ATTACH_ATOM'))
+        if [lig1_attach_atom, lig2_attach_atom].count(None) == 2:
+            return
+        if [lig1_attach_atom, lig2_attach_atom].count(None) == 1:
+            self._exit("Two attachment atoms are required.")
 
-        if self.keywords.get('LIGAND1_COMMON_ATOMS') is None:
+        lig1_var_atoms = self.keywords.get('LIGAND1_VAR_ATOMS')
+        lig2_var_atoms = self.keywords.get('LIGAND2_VAR_ATOMS')
+
+        lig1_common_atoms = self.keywords.get('LIGAND1_COMMON_ATOMS')
+        lig2_common_atoms = self.keywords.get('LIGAND2_COMMON_ATOMS')
+
+        if not lig1_common_atoms:
             lig1_common_atoms = sorted([i for i in self.lig1_atoms if i not in lig1_var_atoms ])
+        if not lig2_common_atoms:
             lig2_common_atoms = sorted([i for i in self.lig2_atoms if i not in lig2_var_atoms ])
-        else:
-            lig1_common_atoms = [int(i) for i in self.keywords.get('LIGAND1_COMMON_ATOMS')  ]
-            lig2_common_atoms = [int(i) for i in self.keywords.get('LIGAND2_COMMON_ATOMS')  ]
 
-        if not len(lig1_common_atoms) == len(lig2_common_atoms):
-            msg = "Error: the number of common atoms of lig1 (%d) and lig2 (%d) differ" % (len(lig1_common_atoms),len(lig2_common_atoms))
-            self._exit(msg)
+        if lig1_common_atoms and lig2_common_atoms:
+            if not len(lig1_common_atoms) == len(lig2_common_atoms):
+                msg = "Error: the number of common atoms of lig1 (%d) and lig2 (%d) differ" % (len(lig1_common_atoms),len(lig2_common_atoms))
+                self._exit(msg)
 
         try:
             # try official OpenMM>=8.4 ATMForce API
-            for i in range(len(lig1_common_atoms)):
-                self.atmforce.setParticleTransformation(lig1_common_atoms[i], ParticleOffsetDisplacement(lig2_common_atoms[i], lig1_common_atoms[i]))
-            for i in range(len(lig2_common_atoms)):
-                self.atmforce.setParticleTransformation(lig2_common_atoms[i], ParticleOffsetDisplacement(lig1_common_atoms[i], lig2_common_atoms[i]))
-            for i in range(len(lig1_var_atoms)):
-                self.atmforce.setParticleTransformation(lig1_var_atoms[i], ParticleOffsetDisplacement(lig2_attach_atom, lig1_attach_atom))
-            for i in range(len(lig2_var_atoms)):
-                self.atmforce.setParticleTransformation(lig2_var_atoms[i], ParticleOffsetDisplacement(lig1_attach_atom, lig2_attach_atom))
+            if lig1_common_atoms:
+                for i in range(len(lig1_common_atoms)):
+                    self.atmforce.setParticleTransformation(lig1_common_atoms[i], ParticleOffsetDisplacement(lig2_common_atoms[i], lig1_common_atoms[i]))
+            if lig2_common_atoms:
+                for i in range(len(lig2_common_atoms)):
+                    self.atmforce.setParticleTransformation(lig2_common_atoms[i], ParticleOffsetDisplacement(lig1_common_atoms[i], lig2_common_atoms[i]))
+            if lig1_var_atoms:
+                for i in range(len(lig1_var_atoms)):
+                    self.atmforce.setParticleTransformation(lig1_var_atoms[i], ParticleOffsetDisplacement(lig2_attach_atom, lig1_attach_atom))
+            if lig2_var_atoms:
+                for i in range(len(lig2_var_atoms)):
+                    self.atmforce.setParticleTransformation(lig2_var_atoms[i], ParticleOffsetDisplacement(lig1_attach_atom, lig2_attach_atom))
         except:
             try:
                 # try unofficial Gallicchio-Lab atm-coordinate-swap branch OpenMM 8.2 ATMForce API
-                for i in range(len(lig1_common_atoms)):
-                    self.atmforce.setParticleParameters(lig1_common_atoms[i], lig2_common_atoms[i], lig1_common_atoms[i], -1, -1)
-                for i in range(len(lig2_common_atoms)):
-                    self.atmforce.setParticleParameters(lig2_common_atoms[i], lig1_common_atoms[i], lig2_common_atoms[i], -1, -1)
-                for i in range(len(lig1_var_atoms)):
-                    self.atmforce.setParticleParameters(lig1_var_atoms[i], lig2_attach_atom, lig1_attach_atom, -1, -1)
-                for i in range(len(lig2_var_atoms)):
-                    self.atmforce.setParticleParameters(lig2_var_atoms[i], lig1_attach_atom, lig2_attach_atom, -1, -1)
+                if lig1_common_atoms:
+                    for i in range(len(lig1_common_atoms)):
+                        self.atmforce.setParticleParameters(lig1_common_atoms[i], lig2_common_atoms[i], lig1_common_atoms[i], -1, -1)
+                if lig2_common_atoms:
+                    for i in range(len(lig2_common_atoms)):
+                        self.atmforce.setParticleParameters(lig2_common_atoms[i], lig1_common_atoms[i], lig2_common_atoms[i], -1, -1)
+                if lig1_var_atoms:
+                    for i in range(len(lig1_var_atoms)):
+                        self.atmforce.setParticleParameters(lig1_var_atoms[i], lig2_attach_atom, lig1_attach_atom, -1, -1)
+                if lig2_var_atoms:
+                    for i in range(len(lig2_var_atoms)):
+                        self.atmforce.setParticleParameters(lig2_var_atoms[i], lig1_attach_atom, lig2_attach_atom, -1, -1)
             except:
                 self._exit("Variable displacements are not supported by the OpenMM backend")
 
@@ -873,13 +956,17 @@ class OMMSystemRBFE(OMMSystem):
         self.atm_utils = AtomUtils(self.system)
         self.set_ligand_atoms()
         self.set_displacement()
+        #a repulsion potential between receptor and unbound ligand
+        #must be called before set_vsite_restraints() to turn Vsite restraints for
+        #the unbound ligand
+        self.set_ligand_receptor_exclusion_potentials()
+        #flat-bottom harmonic potentials to define the binding site region
         self.set_vsite_restraints()
         #set orientation restraints
         self.set_orientation_restraints()
         #set reference atoms for alignment force
         self.set_alignmentForce()
-        #indexes of the atoms whose position is restrained near the initial positions
-        #by a flat-bottom harmonic potential.
+        #a flat-bottom harmonic positional restraining potential
         self.set_positional_restraints()
         #temperature is part of the state and is maybe overriden in set_state()
         temperature = 300 * kelvin

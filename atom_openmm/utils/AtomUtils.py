@@ -5,11 +5,10 @@ from contextlib import contextmanager
 from pathlib import Path
 import os
 from openmm import version as ommversion
-from simtk import openmm as mm
-from simtk.openmm.app import *
-from simtk.openmm import *
-from simtk.unit import *
-
+import openmm as mm
+from openmm import *
+from openmm.unit import *
+from openmm.app import *
 
 @contextmanager
 def set_directory(path: Path):
@@ -29,6 +28,143 @@ def set_directory(path: Path):
     finally:
         os.chdir(origin)
 
+def separate14(nbforce):
+    ONE_4PI_EPS0 = 138.93545764438198
+    expr = "4*epsilon*((sigma/r)^12 - (sigma/r)^6) + ONE_4PI_EPS0*chargeprod/r;" + \
+        "ONE_4PI_EPS0 = {:f};".format(ONE_4PI_EPS0)
+    force14 = mm.CustomBondForce(expr)
+    force14.addPerBondParameter('chargeprod')
+    force14.addPerBondParameter('sigma')
+    force14.addPerBondParameter('epsilon')
+    for i in range(nbforce.getNumExceptions()):
+        p1, p2, chargeprod, sigma, epsilon = nbforce.getExceptionParameters(i)
+        if(math.fabs(chargeprod._value) > 1.e-8 or math.fabs(epsilon._value) > 1.e-8):
+            force14.addBond(p1, p2, [chargeprod, sigma, epsilon])
+            nbforce.setExceptionParameters(i, p1, p2, 0.0, 0.1, 0.0)#turn off 1-4 term
+    return force14
+
+def residue_is_solvent(res): # called in abfe/rbfe_structprep.py
+    ion_resnames = ['POT','SOD','CLA','NA+','K+','CL-','F-','CA','MG','CL','NA','K','F']
+    wat_resnames = ['HOH','TIP3','WAT','TIP4','OPC','TIP5'] # sometimes we have 'TIP3V'
+    if res.name.upper() in (ion_resnames + wat_resnames):
+        return True
+    return False
+
+def numDevices(platform, nmax = 16):
+    if platform.getName() in ["Reference","CPU"]:
+        return 1
+    system = mm.System()
+    system.addParticle(1.0)
+    for ndevs in range(nmax,-1,-1):
+        try:
+            properties = { 'DeviceIndex' : str(ndevs-1) }
+            integrator = mm.VerletIntegrator(0.001)
+            context = mm.Context(system, integrator, platform, properties)
+            del context, integrator
+            return ndevs
+        except:
+            pass
+    return 0
+
+def available_computing_devices():
+    devices = []
+    platforms = [mm.Platform.getPlatform(i) for i in range(mm.Platform.getNumPlatforms())]
+    ndevices = [numDevices(p) for p in platforms]
+    for pid in range(len(platforms)):
+        p = platforms[pid]
+        res = {}
+        res["name"] = p.getName()
+        res["count"] = ndevices[pid]
+        res["id"] = pid
+        if res["count"] > 0:
+            devices.append(res)
+    return devices
+
+def get_indexes_from_query(topology, query):
+    indexes = []
+    if query:
+        for atom in topology.atoms():
+            if eval(query):
+                indexes.append(atom.index)
+        indexes.sort()
+    return indexes
+
+def get_selected_principal_groups(topology, positions, atom_indices, cutoff= 30.0 * angstrom):
+    """
+    Calculates principal axes and returns the global topology indices
+    for the particles in the Origin, Z-axis, and X-axis groups.
+    """
+
+    #atoms used to build the internal frame
+    selected_indices = np.array( atom_indices, dtype=int)
+
+    # Extract Data
+    full_pos = np.array(positions.value_in_unit(nanometer))
+    cut = cutoff.value_in_unit(nanometers)
+    pos_array = full_pos[selected_indices]
+
+    all_atoms = list(topology.atoms())
+    masses = np.array([
+        all_atoms[i].element.mass.value_in_unit(dalton)
+        for i in selected_indices
+    ])
+
+    # Center of Mass and Inertia Tensor
+    total_mass = np.sum(masses)
+    if not total_mass > 0.0:
+        masses = np.ones(len(masses))
+        total_mass = np.sum(masses)
+    com_total = np.sum(pos_array * masses[:, np.newaxis], axis=0) / total_mass
+    centered_pos = pos_array - com_total
+
+    x, y, z = centered_pos.T
+    Ixx, Iyy, Izz = np.sum(masses * (y**2 + z**2)), np.sum(masses * (x**2 + z**2)), np.sum(masses * (x**2 + y**2))
+    Ixy, Ixz, Iyz = -np.sum(masses * x * y), -np.sum(masses * x * z), -np.sum(masses * y * z)
+
+    inertia_tensor = np.array([[Ixx, Ixy, Ixz], [Ixy, Iyy, Iyz], [Ixz, Iyz, Izz]])
+    evals, evecs = np.linalg.eigh(inertia_tensor)
+    principal_axes = evecs[:, evals.argsort()]
+
+    projections = centered_pos @ principal_axes #internal coordinates of the atoms
+
+    #reduce the cutoff until the z-group has no more than one third of the particles
+    #and y-group is filled
+    n = len(selected_indices)
+    one_third = int(n/3)
+    o_mask = np.ones(n, dtype=bool)
+    z_mask = np.ones(n, dtype=bool)
+    y_mask = np.zeros(n, dtype=bool)
+    while np.sum(z_mask) > one_third  or not np.any(y_mask):
+        #the anchor atoms--z_tip etc.--are the most distant from the CM
+        z_tip_pos = projections[np.argmax(np.abs(projections[:, 0]))]
+        dist_to_ztip = np.linalg.norm(projections - z_tip_pos, axis=1)
+        #closest atoms to the anchor atoms
+        z_mask = (dist_to_ztip <= cut)
+
+        y_tip_pos = projections[np.argmax(np.abs(projections[:, 1]))]
+        dist_to_ytip = np.linalg.norm(projections - y_tip_pos, axis=1)
+        y_mask = (dist_to_ytip <= cut) & (~z_mask)
+
+        cut = cut / 1.5 #reduce cutoff by 50%
+
+    # 6. Extract Global Indices and COMs
+    def get_group_data(mask):
+        if not np.any(mask):
+            return [], None
+        idx = selected_indices[mask].tolist()
+        com = np.average(pos_array[mask], axis=0, weights=masses[mask])
+        return idx, com
+
+    origin_indices, origin_com = get_group_data(o_mask)
+    z_indices, z_com = get_group_data(z_mask)
+    y_indices, y_com = get_group_data(y_mask)
+
+    return {
+        "origin": {"indices": origin_indices, "com": origin_com},
+        "z_axis": {"indices": z_indices, "com": z_com},
+        "y_axis": {"indices": y_indices, "com": y_com},
+        "axes": principal_axes
+    }
 
 class AtomUtils(object):
     """
@@ -145,6 +281,90 @@ class AtomUtils(object):
         groups = [numgroups + 0, numgroups + 1]
         params = [kfc, tolc, offx, offy, offz]
         force.addBond(groups, np.array(params, dtype=np.double))
+        return force
+
+    #
+    # Similar to addVsiteRestraintForceCMCM() above but the offset is with respect to
+    # an internal reference frame of the receptor defined by the centers of mass of
+    # atom groups 0, 1, and 2 of the receptor that specify the origin, the direction of the z-axis,
+    # and the placement of the zy-plane, respectively
+    #
+    def addVsiteRestraintForceCMCMInternal(self,
+                                           lig_cm_particles = None,
+                                           rcpt_cm_particles_origin = None,
+                                           rcpt_cm_particles_z = None,
+                                           rcpt_cm_particles_yz = None,
+                                           kfcm = 0.0 * kilocalorie_per_mole/angstrom**2,
+                                           tolcm = 0.0 * angstrom,
+                                           offset = [0., 0., 0.] * angstrom):
+
+        """
+        Groups Mapping in OpenMM variables:
+        x1, y1, z1: Ligand (lig_cm_particles)
+        x2, y2, z2: Origin (rcpt_cm_particles_origin)
+        x3, y3, z3: Z-axis point (rcpt_cm_particles_z)
+        x4, y4, z4: XZ-plane point (rcpt_cm_particles_yz)
+        """
+
+        if not (lig_cm_particles and rcpt_cm_particles_origin and rcpt_cm_particles_z and rcpt_cm_particles_yz):
+            return None
+
+        # Restraint Energy
+        expr = "(kfcm/2) * step(dist-tolcm) * (dist-tolcm)^2; "
+
+        # Distance minus offset in the internal frame
+        expr += "dist = sqrt((lx-ox)^2 + (ly-oy)^2 + (lz-oz)^2); "
+
+        # Project of offset vector onto basis vectors
+        expr += "ox = offx*ux_x + offy*ux_y + offz*ux_z; "
+        expr += "oy = offx*uy_x + offy*uy_y + offz*uy_z; "
+        expr += "oz = offx*uz_x + offy*uz_y + offz*uz_z; "
+
+        # Projection of displacement vector onto basis vectors
+        expr += "lx = dx*ux_x + dy*ux_y + dz*ux_z; "
+        expr += "ly = dx*uy_x + dy*uy_y + dz*uy_z; "
+        expr += "lz = dx*uz_x + dy*uz_y + dz*uz_z; "
+
+        # Relative displacement vector in lab frame
+        expr += "dx = x1 - x2; dy = y1 - y2; dz = z1 - z2; "
+
+        # X-axis (Cross product of Y and Z)
+        expr += "ux_x = uy_y*uz_z - uy_z*uz_y; ux_y = uy_z*uz_x - uy_x*uz_z; ux_z = uy_x*uz_y - uy_y*uz_x; "
+
+        # Y-axis (Cross product of Z and V_plane)
+        expr += "uy_x = (uz_y*vP_z - uz_z*vP_y)/LY; uy_y = (uz_z*vP_x - uz_x*vP_z)/LY; uy_z = (uz_x*vP_y - uz_y*vP_x)/LY; "
+        expr += "LY = sqrt((uz_y*vP_z - uz_z*vP_y)^2 + (uz_z*vP_x - uz_x*vP_z)^2 + (uz_x*vP_y - uz_y*vP_x)^2); "
+        expr += "vP_x = x4 - x2; vP_y = y4 - y2; vP_z = z4 - z2; "
+
+        # Z-axis (Vector from Origin to Z-point)
+        expr += "uz_x = vZ_x/LZ; uz_y = vZ_y/LZ; uz_z = vZ_z/LZ; "
+        expr += "LZ = sqrt(vZ_x^2 + vZ_y^2 + vZ_z^2); "
+        expr += "vZ_x = x3 - x2; vZ_y = y3 - y2; vZ_z = z3 - z2 "
+
+        # Create the force object
+        force = mm.CustomCentroidBondForce(4, expr)
+        force.addPerBondParameter("kfcm")
+        force.addPerBondParameter("tolcm")
+        force.addPerBondParameter("offx")
+        force.addPerBondParameter("offy")
+        force.addPerBondParameter("offz")
+
+        # Mapping: Index determines which x_i variable is used
+        idx_lig    = force.addGroup(lig_cm_particles)         # Group 1 -> x1
+        idx_origin = force.addGroup(rcpt_cm_particles_origin) # Group 2 -> x2
+        idx_z      = force.addGroup(rcpt_cm_particles_z)      # Group 3 -> x3
+        idx_xz     = force.addGroup(rcpt_cm_particles_yz)     # Group 4 -> x4
+
+        # Units handling
+        kfc = kfcm / (kilojoule_per_mole/nanometer**2)
+        tolc = tolcm / nanometer
+        offv = offset / nanometer
+
+        # Add the bond with parameters
+        force.addBond([idx_lig, idx_origin, idx_z, idx_xz],
+                      [kfc, tolc, offv[0], offv[1], offv[2]])
+
+        self.system.addForce(force)
         return force
 
     def _roundExpression(self, n, x):
@@ -802,57 +1022,4 @@ class AtomUtils(object):
             zetap = np.power( zeta , a)
             usc = (umax-ub)*(zetap - 1.)/(zetap + 1.) + ub
         return usc
-
-def separate14(nbforce):
-    ONE_4PI_EPS0 = 138.93545764438198
-    expr = "4*epsilon*((sigma/r)^12 - (sigma/r)^6) + ONE_4PI_EPS0*chargeprod/r;" + \
-        "ONE_4PI_EPS0 = {:f};".format(ONE_4PI_EPS0)
-    force14 = mm.CustomBondForce(expr)
-    force14.addPerBondParameter('chargeprod')
-    force14.addPerBondParameter('sigma')
-    force14.addPerBondParameter('epsilon')
-    for i in range(nbforce.getNumExceptions()):
-        p1, p2, chargeprod, sigma, epsilon = nbforce.getExceptionParameters(i)
-        if(math.fabs(chargeprod._value) > 1.e-8 or math.fabs(epsilon._value) > 1.e-8):
-            force14.addBond(p1, p2, [chargeprod, sigma, epsilon])
-            nbforce.setExceptionParameters(i, p1, p2, 0.0, 0.1, 0.0)#turn off 1-4 term
-    return force14
-
-def residue_is_solvent(res): # called in abfe/rbfe_structprep.py
-    ion_resnames = ['POT','SOD','CLA','NA+','K+','CL-','F-','CA','MG','CL','NA','K','F']
-    wat_resnames = ['HOH','TIP3','WAT','TIP4','OPC','TIP5'] # sometimes we have 'TIP3V'      
-    if res.name.upper() in (ion_resnames + wat_resnames):
-        return True
-    return False
-
-def numDevices(platform, nmax = 16):
-    if platform.getName() in ["Reference","CPU"]:
-        return 1
-    system = mm.System()
-    system.addParticle(1.0)
-    for ndevs in range(nmax,-1,-1):
-        try:
-            properties = { 'DeviceIndex' : str(ndevs-1) }
-            integrator = mm.VerletIntegrator(0.001)
-            context = mm.Context(system, integrator, platform, properties)
-            del context, integrator
-            return ndevs
-        except:
-            pass
-    return 0
-
-def available_computing_devices():
-    devices = []
-    platforms = [mm.Platform.getPlatform(i) for i in range(mm.Platform.getNumPlatforms())]
-    ndevices = [numDevices(p) for p in platforms]
-    for pid in range(len(platforms)):
-        p = platforms[pid]
-        res = {}
-        res["name"] = p.getName()
-        res["count"] = ndevices[pid]
-        res["id"] = pid
-        devices.append(res)
-    return devices
-
-    
 

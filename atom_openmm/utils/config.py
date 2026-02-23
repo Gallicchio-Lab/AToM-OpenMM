@@ -40,6 +40,12 @@ def parse_config(config_file):
             "REST_LIGAND_CMREC_ATOMS",
             "ALIGN_LIGAND1_REF_ATOMS",
             "ALIGN_LIGAND2_REF_ATOMS",
+            "LIGAND1_VAR_ATOMS",
+            "LIGAND2_VAR_ATOMS",
+            "LIGAND1_COMMON_ATOMS",
+            "LIGAND2_COMMON_ATOMS",
+            "EXCLUSION_POT_MOL1_INDEXES",
+            "EXCLUSION_POT_MOL2_INDEXES"
         ):
             if keywords.get(key, None) is not None:
                 keywords[key] = [int(x) for x in keywords[key]]

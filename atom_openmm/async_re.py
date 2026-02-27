@@ -235,7 +235,7 @@ class JobManager(object):
             self._exit('BASENAME needs to be specified')
 
         #job transport mechanism
-        self.transport_mechanism = self.keywords.get('JOB_TRANSPORT')
+        self.transport_mechanism = self.keywords.get('JOB_TRANSPORT', 'LOCAL_OPENMM')
         if self.transport_mechanism is None:
             self._exit('JOB_TRANSPORT needs to be specified')
         #only LOCAL_OPENMM is supported for now

@@ -13,10 +13,10 @@ import shutil
 import random
 from sys import stdout
 
-from simtk import openmm as mm
-from simtk.openmm.app import *
-from simtk.openmm import *
-from simtk.unit import *
+import openmm as mm
+from openmm import *
+from openmm.app import *
+from openmm.unit import *
 from datetime import datetime
 
 import logging

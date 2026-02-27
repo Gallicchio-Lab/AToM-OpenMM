@@ -10,6 +10,7 @@
 ############################################
 
 import os, sys
+import string
 from datetime import datetime
 from time import time
 
@@ -59,6 +60,34 @@ def boundingBoxSizes(positions):
             zmin = z
     return [ (xmin,xmax), (ymin,ymax), (zmin,zmax) ] 
 
+def assign_chain_ids(topology):
+    """
+    Assigns 'A', 'B', 'C', etc., to chains in an OpenMM topology 
+    that currently have no ID assigned.
+    """
+    # Create a generator for letters A-Z, then AA, AB, etc. if needed
+    # string.ascii_uppercase provides 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    potential_names = list(string.ascii_uppercase)
+    
+    name_index = 0
+    
+    for chain in topology.chains():
+        # Check if ID is None, empty, or just whitespace
+        if not chain.id or chain.id.strip() == "":
+            if name_index < len(potential_names):
+                new_id = potential_names[name_index]
+                chain.id = new_id
+                print(f"Assigned ID '{new_id}' to chain {chain.index}")
+                name_index += 1
+            else:
+                print(f"Warning: Ran out of unique letters for chain {chain.index}")
+        else:
+            print(f"Chain {chain.index} already has ID: '{chain.id}'")
+
+# Example Usage:
+# from openmm.app import PDBFile
+# pdb = PDBFile('input.pdb')
+# assign_chain_ids(pdb.topology)
 
 def make_system(
         receptorfile,
@@ -70,9 +99,9 @@ def make_system(
         lig1sdffile=None,
         lig2sdffile=None,
         cofsdffile=None,
-        proteinforcefield=None,
-        solventforcefield=None,
-        ligandforcefield=None,
+        proteinforcefield=['amber14-all.xml'],
+        solventforcefield=['amber14/tip3p.xml'],
+        ligandforcefield='openff-2.0.0',
         ffcachefile=None,
         implsolv=None,
         hmass=1.0,
@@ -93,15 +122,6 @@ def make_system(
         print('Warning: LIG2SDFinFile id deprecated. Use LIG2inFile')
         if lig2file is None:
             lig2file = lig2sdffile
-
-    if proteinforcefield is None:
-        proteinforcefield=['amber14-all.xml']
-
-    if solventforcefield is None:
-        solventforcefield=['amber14/tip3p.xml']
-
-    if ligandforcefield is None:
-        ligandforcefield='openff-2.0.0'
             
     #catch abfe or rbfe
     rbfe = False
@@ -129,9 +149,9 @@ def make_system(
     print('Protein force field:                ', proteinforcefield)
     print('Solvent/ion force field             ', solventforcefield )
     print('Ligand force field:                 ', ligandforcefield)
-    print('Ligand 1 file name:                 ', lig1sdffile)
+    print('Ligand 1 file name:                 ', lig1file)
     if rbfe:
-        print('Ligand 2 file name:                 ', lig2sdffile)
+        print('Ligand 2 file name:                 ', lig2file)
         print('Displacement                        ', displacement)
     print('Topology PDB output file:           ', pdboutfile)
     print('System XML output file:             ', xmloutfile)
@@ -189,6 +209,7 @@ def make_system(
     print('Number of atoms in receptor:', nrcpt)
 
     print('Call Modeller: include receptor')
+    assign_chain_ids(rcpt_ommtopology)
     modeller = Modeller(rcpt_ommtopology, rcpt_positions)
 
     print("Calculating receptor bounding box:")

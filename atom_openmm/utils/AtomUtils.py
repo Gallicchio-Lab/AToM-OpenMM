@@ -50,21 +50,27 @@ def residue_is_solvent(res): # called in abfe/rbfe_structprep.py
         return True
     return False
 
-def numDevices(platform, nmax = 16):
+
+def numDevices(platform, max_to_test=8):
     if platform.getName() in ["Reference","CPU"]:
         return 1
     system = mm.System()
     system.addParticle(1.0)
-    for ndevs in range(nmax,-1,-1):
+    
+    found_devices = 0
+    for i in range(max_to_test):
         try:
-            properties = { 'DeviceIndex' : str(ndevs-1) }
+            # We try to force a context onto a specific device index
             integrator = mm.VerletIntegrator(0.001)
+            properties = {'DeviceIndex': str(i)}
             context = mm.Context(system, integrator, platform, properties)
-            del context, integrator
-            return ndevs
+            found_devices += 1
+            # Clean up the context immediately
+            del context
         except:
-            pass
-    return 0
+            # If it fails, we've hit the end of the available physical devices
+            break
+    return found_devices
 
 def available_computing_devices():
     devices = []

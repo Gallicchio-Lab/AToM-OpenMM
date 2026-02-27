@@ -6,7 +6,7 @@ scripts_dir=${work_dir}/scripts
 . ${scripts_dir}/setup-settings.sh || exit 1
 
 #get the alignment atoms
-#generates alignments.pkl file in the ligands folder
+#generates alignments.yaml file in the ligands folder
 cd ${work_dir}/ligands || exit 1
 python ${scripts_dir}/find_alignment_atoms.py --refligFile ${ref_ligand}.sdf --LIG1refatoms "${ref_ligand_alignment_atoms}" --alignmentsYAMLoutFile alignments.yaml  || exit 1
 

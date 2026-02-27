@@ -3,7 +3,7 @@ Relative Binding Free Energies of a set of ligands of the CDK2 Kinase
 
 In this tutorial, we will use an automated workflow to calculate the relative binding free energies between six congeneric ligands binding to the CDK2 receptor from the paper: [Wang et al. (2013) Modeling Local Structural Rearrangements Using FEP/REST: Application to Relative Binding Affinity Predictions of CDK2 Inhibitors](https://pubs.acs.org/doi/10.1021/ct300911a).
 
-The workflow is set to prepare and run eight relative binding free energy calculations between a selection of pairs of the six CDK2 complexes using a dual-coordinate/dual-topology alchemical algorithm. For more information, refer to [Azimi, Khuttan, Wu, Pal, Gallicchio]. Relative Binding Free Energy Calculations for Ligands with Diverse Scaffolds with the Alchemical Transfer Method.](https://pubs.acs.org/doi/full/10.1021/acs.jcim.1c01129) and [ E. Gallicchio. Relative Binding Free Energy Estimation of Congeneric Ligands and Macromolecular Mutants with the Alchemical Transfer with Coordinate Swapping Method ](https://doi.org/10.1021/acs.jcim.5c00207).
+The workflow is set up to prepare and run eight relative binding free energy calculations between pairs of the six CDK2 complexes using a dual-coordinate/dual-topology alchemical algorithm. For more information, refer to [Azimi, Khuttan, Wu, Pal, Gallicchio. Relative Binding Free Energy Calculations for Ligands with Diverse Scaffolds with the Alchemical Transfer Method.](https://pubs.acs.org/doi/full/10.1021/acs.jcim.1c01129) and [ E. Gallicchio. Relative Binding Free Energy Estimation of Congeneric Ligands and Macromolecular Mutants with the Alchemical Transfer with Coordinate Swapping Method ](https://doi.org/10.1021/acs.jcim.5c00207).
 
 We assume that the latest release of OpenMM and the latest AToM-OpenMM packages and their dependencies are available in a `conda` environment (see the [README](../../../README.md), and that the `examples` folder is available under `$HOME/AToM-OpenMM/examples`. Adjust this pathname as needed.
 
@@ -36,11 +36,11 @@ for i in cdk2-* ; do ( echo $i && tail -2 ${i}.log ) ; done
 
 This automated workflow assumes that the `sdf` files of the ligand are stored in the `ligands/` subdirectory and the PDB file of the receptor is stored in the `receptor/` subdirectory. It is assumed that the receptor structure is fully prepared, including hydrogen atoms, etc. The congeneric ligands are assumed to be properly docked to the receptor binding site, and their common rigid substructures are aligned.
 
-The workflow's behavior is primarily controlled by the `setup-settings.sh` file in the `scripts/` folder. This file specifies:
+The workflow's behavior is primarily controlled by the [`setup-settings.sh`](scripts/setup-settings.sh) file in the `scripts/` folder. This file specifies:
 
 - The basename of the receptor PDB file (`cdk2`, in this case, corresponding to the `cdk2.pdb` file of the receptor in the `receptor/` folder).
 - The basename of the reference ligand SDF file (`H1Q`, in this case, corresponding to the `H1Q.sdf` file in the `ligands/` folder).
-- The indices (starting from 1) of the three alignment atoms of the reference ligand according to the order in the SDF file above. The alignment atoms are used to keep the orientation of the unbound ligand in approximate alignment with the bound ligand during the alchemial transfer calculation (see [The Ligand Alignment Restraints](https://www.compmolbiophysbc.org/atom-openmm/atom-system-setup#h.vndnoxipr7qs), for more information). The workflow automatically assigns the closest atoms of the other ligands to the alignment atoms of the reference ligand.
+- The indices (starting from 1) of the three alignment atoms of the reference ligand according to the order in the SDF file above. The alignment atoms are used to keep the orientation of the unbound ligand in approximate alignment with the bound ligand during the alchemical transfer calculation (see [The Ligand Alignment Restraints](https://www.compmolbiophysbc.org/atom-openmm/atom-system-setup#h.vndnoxipr7qs), for more information). The workflow automatically assigns the closest atoms of the other ligands to the alignment atoms of the reference ligand.
 - The list of ligand pairs to process.
 
 ### System preparation
@@ -57,7 +57,7 @@ The `setup-atm.sh` script performs the following actions:
 - Runs the `scripts/find_alignment_atoms.py` in the `ligands/` folder that sets the alignment atoms of the ligands.
 - Creates simulation directories for the alchemical transfer simulation for each ligand pair under the `complexes/` subdirectory. Simulations directories are named following the format `cdk2-H1Q-H1R`, where `cdk2` is the receptor name and `H1Q` and `H1R` are the ligand names.
 - Prepares a `run.sh` launch script in each simulation subdirectory using the `scripts/run_template.sh` as a template. `run.sh` is designed to work as a SLURM batch script or a regular `bash` script for interactive work. Edit `scripts/run_template.sh` to change its behavior.
-- The main function of `run.sh` is to execute the `run-atm.py` application (saved under `scripts/') described below.
+- The main function of `run.sh` is to execute the `run-atm.py` application (saved under `scripts/`) described below.
 
 ### Execution and Free Energy Analysis
 

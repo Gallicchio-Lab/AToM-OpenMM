@@ -119,8 +119,8 @@ def rbfe_setup(receptor_file, lig1_file, lig2_file, ff_json_file, options):
     if 'LIGAND_FORCE_FIELD' in options:
         setup['ligandforcefield'] = options['LIGAND_FORCE_FIELD']
     #add more later ...
-    if not Path(setup['pdboutfile']).exists():
-        make_system(**setup)
+
+    make_system(**setup)
 
 def rbfe_prepare_args(options):
     basename = options['BASENAME']
@@ -284,7 +284,8 @@ def run_atm(options,
     assert(options['DISPLACEMENT'])
 
     #sets up the system
-    rbfe_setup(receptor_file, lig1_file, lig2_file, ff_json_file, options)
+    if not Path(jobname + '.pdb').exists():
+        rbfe_setup(receptor_file, lig1_file, lig2_file, ff_json_file, options)
 
     #calculate atom indexes, distances, internal frame
     rbfe_prepare_args(options)
@@ -306,7 +307,9 @@ def run_atm(options,
     nsamples_per_replica = rbfe_production_data(options)
         
     #production
-    if not nsamples_per_replica or nsamples_per_replica < options['MAX_SAMPLES']:
+    if ( not options.get('MAX_SAMPLES', None) or 
+         not nsamples_per_replica or
+         nsamples_per_replica < options['MAX_SAMPLES'] ):
         rbfe_production(config_file = None, options = options)
 
     #assess final production if any

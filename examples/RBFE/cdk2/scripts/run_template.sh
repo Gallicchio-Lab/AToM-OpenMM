@@ -27,7 +27,9 @@ term_handler()
     sleep 200
 }
 # declare the function handling the TERM signal
-trap 'term_handler' TERM
+if [ -n "$SLURM_JOB_ID" ]; then
+    trap 'term_handler' TERM
+fi
 
 jobname=<JOBNAME>
 sdir=<SCRIPTS_DIR>
@@ -35,9 +37,20 @@ sdir=<SCRIPTS_DIR>
 . <CONDADIR>/../../bin/activate <CONDAENV>
 echo "Running on $(hostname)"
 
-python ${sdir}/run-atm.py --optionsYAMLinFile ${sdir}/defaults.yaml --jobBasename ${jobname} --receptorinFile ${sdir}/../receptor/<RCPT>.pdb --LIG1inFile ${sdir}/../ligands/<LIG1>.sdf --LIG2inFile ${sdir}/../ligands/<LIG2>.sdf --alignmentsYAMLinFile ${sdir}/../ligands/alignments.yaml &
+CMD=(
+    python ${sdir}/run-atm.py
+    --optionsYAMLinFile ${sdir}/defaults.yaml
+    --jobBasename ${jobname}
+    --receptorinFile ${sdir}/../receptor/<RCPT>.pdb
+    --LIG1inFile ${sdir}/../ligands/<LIG1>.sdf
+    --LIG2inFile ${sdir}/../ligands/<LIG2>.sdf
+    --alignmentsYAMLinFile ${sdir}/../ligands/alignments.yaml
+)
 
-ATOMPID=$!
-
-wait
-
+if [ -n "$SLURM_JOB_ID" ]; then
+    "${CMD[@]}" &
+    ATOMPID=$!   
+    wait "$ATOMPID"
+else
+    "${CMD[@]}"
+fi

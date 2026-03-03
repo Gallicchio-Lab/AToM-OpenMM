@@ -44,6 +44,6 @@ for l in `seq 0 $n` ; do
     #slurm/bash batch script
     sed "s#<JOBNAME>#${jobname}#g ; s#<WORKDIR>#${jobwdir}# ; s#<SCRIPTS_DIR>#${scripts_dir}# ; s#<CONDADIR>#${CONDA_PREFIX}# ;  s#<CONDAENV>#${CONDA_DEFAULT_ENV}# ; s#<RCPT>#${receptor}# ; s#<LIG1>#${lig1}# ; s#<LIG2>#${lig2}# " < ${scripts_dir}/run_template.sh > ${jobwdir}/run.sh
 
-    cp ${scripts_dir}/{vmd_template.in} ${jobwdir}/
+    cp ${scripts_dir}/vmd_template.in ${jobwdir}/
 
 done

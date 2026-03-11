@@ -1,7 +1,12 @@
 # Stefan Doerr, 5/2025 UWHAM python implementation based on the R implementation https://cran.r-project.org/web/packages/UWHAM/index.html
+import os
+import yaml
+import argparse
+import glob
 import numpy as np
 from scipy.optimize import minimize
-
+import pandas as pd
+import matplotlib.pyplot as plt
 
 def _insert(x, d, x0=0):
     """Insert a value x0 at d-th position of x"""
@@ -239,60 +244,238 @@ def _uwham_r(label, logQ, ufactormax, ufactormin=1):
 
     return out
 
+def get_alchemical_schedule(df):
+    # create a working copy for deduplication logic
+    temp = df.copy()
+    
+    # deduplicate
+    unique_df = temp.drop_duplicates(subset=['stateid'])
+    
+    # sort by stateid
+    unique_df = unique_df.sort_values('stateid')
+    
+    # build the alchemical schedule
+    schedule = {
+        'stateid': unique_df['stateid'].tolist(),
+        'direction': unique_df['direction'].tolist(),
+        'lambda1': unique_df['lambda1'].tolist(),
+        'lambda2': unique_df['lambda2'].tolist(),
+        'alpha':   unique_df['alpha'].tolist(),
+        'u0':      unique_df['u0'].tolist(),
+        'w0':      unique_df['w0'].tolist(),
+        'temperature': unique_df['temperature'].tolist(),
+    }
+    
+    return schedule
 
-def calculate_uwham(
+    
+def calculate_uwham_leg_from_dataframe(dataf):
+
+    schedule = get_alchemical_schedule(dataf)
+    lambda1 = schedule['lambda1']
+    lambda2 = schedule['lambda2']
+    alpha = schedule['alpha']
+    u0 = schedule['u0']
+    w0 = schedule['w0']
+    temperature = schedule['temperature']
+
+    #check that there is only one direction
+    unique_direction = list(set(schedule['direction']))
+    assert len(unique_direction) == 1, "Each leg data must have only one direction"
+    direction = unique_direction[0]
+    
+    #check that there is only one temperature
+    tol = 1.e-9
+    temperature_np = np.array(temperature)
+    assert np.all(np.abs(temperature_np - temperature_np[0]) < tol), "Multiple temperatures are not currently supported"
+    
+    mtempt = 1 #only one temperature is supported
+    mlam = len(schedule['stateid'])
+    m = mlam * mtempt
+    N = len(dataf)
+
+    # Add beta column
+    kb = 0.001986209
+    dataf["bet"] = 1.0 / (kb * dataf["temperature"])
+    bet = [ 1.0 / (kb * temperature[0] ) ]
+    
+    if direction > 0:
+        stateid = schedule['stateid']
+        lambda1 = schedule['lambda1']
+        lambda2 = schedule['lambda2']
+        alpha = schedule['alpha']
+        u0 = schedule['u0']
+        w0 = schedule['w0']
+        temperature = schedule['temperature']
+    else:
+        #list states in reverse order for leg2
+        stateid = schedule['stateid'][::-1]
+        lambda1 = schedule['lambda1'][::-1]
+        lambda2 = schedule['lambda2'][::-1]
+        alpha = schedule['alpha'][::-1]
+        u0 = schedule['u0'][::-1]
+        w0 = schedule['w0'][::-1]
+        temperature = schedule['temperature'][::-1]
+
+    # Extract U0 values as U-bias
+    e0 = dataf["potE"].values.copy()
+    for i in range(N):
+        e0[i] -= _bias_fcn(
+            dataf["pertE"].iloc[i],
+            dataf["lambda1"].iloc[i],
+            dataf["lambda2"].iloc[i],
+            dataf["alpha"].iloc[i],
+            dataf["u0"].iloc[i],
+            dataf["w0"].iloc[i],
+        )
+
+    # Calculate negative potential
+    neg_pot = np.zeros((N, m))
+    sid = 0
+    for be in range(mlam):
+        for te in range(mtempt):
+            neg_pot[:, sid] = _npot_fcn(
+                e0,
+                dataf["pertE"].values,
+                bet[te],
+                lambda1[be],
+                lambda2[be],
+                alpha[be],
+                u0[be],
+                w0[be],
+            )
+            sid += 1
+
+    # assign state labels from 1 to M, with 1 corresponding to lambda=0 or lambda=1 depending on direction
+    if direction > 0:
+        # the alchemical state indexes start with 0, UWHAM's state labels start with 1
+        statelabels = dataf["stateid"].values.astype(int) + 1
+    else:
+        base = int(np.max(dataf["stateid"].values.astype(int)))
+        statelabels = (base - dataf["stateid"].values.astype(int)) + 1
+        
+    # Run UWHAM (placeholder - needs implementation)
+    out = _uwham_r(label=statelabels, logQ=neg_pot, ufactormax=1, ufactormin=1)
+
+    # Reshape results
+    ze = np.array(out["ze"]).reshape(mtempt, mlam)
+    ve = np.array(out["ve"]).reshape(mtempt, mlam)
+
+    # Calculate binding free energies
+    dg = (-ze[:, -1] / bet) - (-ze[:, 0] / bet)
+    ddg = np.sqrt(ve[:, -1] + ve[:, 0]) / bet
+
+    return dg[0], ddg[0], out
+
+def get_pertE_leg_distributions(dataf, nbins = 100):
+    # A dictionary to hold your results
+    densities = {}
+
+    for sid in dataf['stateid'].unique():
+        # Filter data for this state
+        data = dataf.loc[dataf['stateid'] == sid, 'pertE'].to_numpy()
+    
+        # Calculate density directly
+        # density=True automatically handles the (count / (total_count * bin_width)) calculation
+        hist, bin_edges = np.histogram(data, bins=nbins, density=True)
+    
+        # Calculate bin centers for easier plotting or integration later
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    
+        densities[sid] = {'centers': bin_centers, 'density': hist}
+
+    return densities
+
+def get_lnp0u_lambdaf_leg(dataf, h = None, n_grid = 100):
+    u_grid = np.linspace(dataf['pertE'].min(), dataf['pertE'].max(), n_grid)
+    du = u_grid[1] - u_grid[0] 
+    
+    if h is None:
+        h = du
+
+    u_samples = dataf['pertE'].to_numpy()
+    weights = dataf['W'].to_numpy()
+    #assumes one temperature
+    temperature = dataf.iloc[0]['temperature']
+    kb = 0.001986209
+    bet = 1.0 / (kb * temperature )
+    
+    # Broadcast subtraction: (len(u_grid), len(u_samples))
+    diff = u_grid[:, np.newaxis] - u_samples[np.newaxis, :]
+    
+    # Gaussian kernel K(x)
+    k = (1.0 / np.sqrt(2 * np.pi * h**2)) * np.exp(-0.5 * (diff / h)**2)
+    
+    # Probability density p(u)
+    p = np.sum(weights * k, axis=1) / np.sum(weights)
+    
+    # Derivative of density p'(u)
+    # p'(u) = sum(W_i * K'(x) * (1/h)) where K'(x) = -x * K(x)
+    p_prime = np.sum(weights * k * (-diff / h**2), axis=1) / np.sum(weights)
+    
+    # Log-derivative (lambda function)
+    dlnp_du = p_prime / (bet*p)
+    
+    return u_grid, np.log(p), dlnp_du
+
+def create_quality_assessment_plot(df1, df2):
+    fig, axs = plt.subplots(2, 2, figsize=(10, 8))
+    prop_cycle = plt.rcParams['axes.prop_cycle']
+    default_colors = prop_cycle.by_key()['color']
+    nc = len(default_colors)
+
+    plu1 = get_pertE_leg_distributions(df1, nbins = 20)
+    plu2 = get_pertE_leg_distributions(df2, nbins = 20)
+        
+    axs[0, 0].set_title("Leg1 Plambda(u) densities")
+    axs[0, 0].set_ylabel("Prob. density (1/(kcal/mol))")
+    for i, sid in enumerate(sorted(plu1.keys())):
+        axs[0, 0].plot(plu1[sid]['centers'], plu1[sid]['density'], color=default_colors[i % nc], label=f"l{sid}")
+    axs[0, 1].set_title("Leg2 Plambda(u) densities")
+    for i, sid in enumerate(sorted(plu2.keys(), reverse=True)):
+        axs[0, 1].plot(plu2[sid]['centers'], plu2[sid]['density'], color=default_colors[i % nc], label=f"l{sid}")
+        
+    u_grid_leg1, logp0u_leg1, lambdaf_leg1 = get_lnp0u_lambdaf_leg(df1)
+    u_grid_leg2, logp0u_leg2, lambdaf_leg2 = get_lnp0u_lambdaf_leg(df2)
+
+    schedule1 = get_alchemical_schedule(df1)
+    schedule2 = get_alchemical_schedule(df2)
+        
+    axs[1, 0].set_title("Leg1 Lambda function")
+    axs[1, 0].set_ylim(-0.1, 1.0)
+    axs[1, 0].set_ylabel("kBT*dln[p0(u)]/du")
+    axs[1, 0].set_xlabel("u (kcal/mol)")
+    axs[1, 0].plot(u_grid_leg1, lambdaf_leg1, color='black')
+    stateid = schedule1['stateid']
+    lambda1 = schedule1['lambda1']
+    lambda2 = schedule1['lambda2']
+    alpha = schedule1['alpha']
+    u0 = schedule1['u0']
+    w0 = schedule1['w0']
+    for i in range(len(stateid)):
+        axs[1, 0].plot(u_grid_leg1, _dbias_fcn(u_grid_leg1, lambda1[i], lambda2[i], alpha[i], u0[i], w0[i]), color=default_colors[i % nc])
+
+    axs[1, 1].set_title("Leg2 Lambda function")
+    axs[1, 1].set_ylim(-0.1, 1.0)
+    axs[1, 1].set_xlabel("u (kcal/mol)")
+    axs[1, 1].plot(u_grid_leg2, lambdaf_leg2, color='black')
+    stateid = schedule2['stateid'][::-1]
+    lambda1 = schedule2['lambda1'][::-1]
+    lambda2 = schedule2['lambda2'][::-1]
+    alpha = schedule2['alpha'][::-1]
+    u0 = schedule2['u0'][::-1]
+    w0 = schedule2['w0'][::-1]
+    for i in range(len(stateid)):
+        axs[1, 1].plot(u_grid_leg2, _dbias_fcn(u_grid_leg2, lambda1[i], lambda2[i], alpha[i], u0[i], w0[i]), color=default_colors[i % nc])
+
+    return fig
+        
+def calculate_uwham_from_rundir(
     rundir,
     jobname,
     mintimeid=None,
     maxtimeid=None,
-    intermd=None,
-    lambda1=None,
-    lambda2=None,
-    alpha=None,
-    u0=None,
-    w0=None,
 ):
-    import pandas as pd
-    import os
-
-    # Define states
-    tempt = np.array([300])
-    bet = 1.0 / (0.001986209 * tempt)
-    # fmt: off
-    # directn = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1])
-    if intermd is None:
-        intermd = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-    else:
-        intermd = np.array(intermd)
-    nstates = len(intermd)
-    if lambda1 is None:
-        lambda1 = np.array([0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.50, 
-                            0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.00])
-    else:
-        lambda1 = np.array(lambda1)
-    if lambda2 is None:
-        lambda2 = np.array([0.00, 0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.50, 
-                            0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10, 0.05, 0.00])
-    else:
-        lambda2 = np.array(lambda2)
-    if alpha is None:
-        alpha = np.full(nstates, 0.10)
-    else:
-        alpha = np.array(alpha)
-    if u0 is None:
-        u0 = np.full(nstates, 110.0)
-    else:
-        u0 = np.array(u0)
-    if w0 is None:
-        w0 = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-    else:
-        w0 = np.array(w0)
-    # fmt: on
-
-    # Calculate states
-    # np.where returns a tuple, we want the first element, then take the first occurrence
-    leg1istate = np.where(intermd == 1)[0][0]
-    leg2istate = np.where(intermd == 1)[0][1]
 
     # Define column names
     columns = [
@@ -306,9 +489,15 @@ def calculate_uwham(
         "w0",
         "potE",
         "pertE",
-        "trash",
+        "biasE",
     ]
 
+    #count number of replicas = number of states looking for folders named r0, r1, etc.
+    pattern = os.path.join(rundir, 'r[0-9]*')
+    matches = glob.glob(pattern)
+    directories = [d for d in matches if os.path.isdir(d)]
+    nstates = len(directories)
+    
     # Create list of data files
     datafiles = [
         os.path.join(rundir, f"r{i}", f"{jobname}.out") for i in range(nstates)
@@ -326,9 +515,22 @@ def calculate_uwham(
     # Combine all dataframes
     data = pd.concat(dfs, ignore_index=True)
 
-    # Add beta column
-    data["bet"] = 1.0 / (0.001986209 * data["temperature"])
+    #extract alchemical schedule
+    schedule = get_alchemical_schedule(data)
 
+    # find the stateid's corresponding to the alchemical intermediates
+    leg1istate = leg2istate = None 
+    ltol = 1.e-6
+    lval = 0.5
+    inter1 = [ sid for sid in schedule['stateid'] if abs(schedule['lambda1'][sid] - lval) < ltol and abs(schedule['lambda2'][sid] - lval) < ltol and schedule['direction'][sid] == 1 ]
+    assert len(inter1) > 0, "Could not find the leg1 alchemical intermediate" 
+    assert len(inter1) == 1, "Found multiple leg1 alchemical intermediates"
+    leg1istate = inter1[0]
+    inter2 = [ sid for sid in schedule['stateid'] if abs(schedule['lambda1'][sid] - lval) < ltol and abs(schedule['lambda2'][sid] - lval) < ltol and schedule['direction'][sid] == -1 ]
+    assert len(inter2) > 0, "Could not find the leg2 alchemical intermediate" 
+    assert len(inter2) == 1, "Found multiple leg2 alchemical intermediates"
+    leg2istate = inter2[0]
+    
     # Calculate time masks
     timemask = np.ones(len(data), dtype=bool)
     if mintimeid is not None:
@@ -348,111 +550,101 @@ def calculate_uwham(
     samplesperreplica = nsamples // nstates
 
     # Filter data for leg1
-    data1 = data[timemask & (data["stateid"] <= leg1istate)]
+    data1 = data[timemask & (data["stateid"] <= leg1istate)].copy()
 
-    mtempt = len(bet)
-    leg1stateids = np.arange(leg1istate + 1)
-    mlam = len(leg1stateids)
-    m = mlam * mtempt
-    N = len(data1)
-
-    # Extract U0 values as U-bias
-    e0 = data1["potE"].values.copy()
-    for i in range(N):
-        e0[i] -= _bias_fcn(
-            data1["pertE"].iloc[i],
-            data1["lambda1"].iloc[i],
-            data1["lambda2"].iloc[i],
-            data1["alpha"].iloc[i],
-            data1["u0"].iloc[i],
-            data1["w0"].iloc[i],
-        )
-
-    # Calculate negative potential
-    neg_pot = np.zeros((N, m))
-    sid = 0
-    for be in leg1stateids:
-        for te in range(mtempt):
-            neg_pot[:, sid] = _npot_fcn(
-                e0,
-                data1["pertE"].values,
-                bet[te],
-                lambda1[be],
-                lambda2[be],
-                alpha[be],
-                u0[be],
-                w0[be],
-            )
-            sid += 1
-
-    # the alchemical state indexes start with 0, UWHAM's state labels start with 1
-    statelabels = data1["stateid"].values.astype(int) + 1
-
-    # Run UWHAM (placeholder - needs implementation)
-    out = _uwham_r(label=statelabels, logQ=neg_pot, ufactormax=1, ufactormin=1)
-
-    # Reshape results
-    ze = np.array(out["ze"]).reshape(mtempt, mlam)
-    ve = np.array(out["ve"]).reshape(mtempt, mlam)
-
-    # Calculate binding free energies
-    dgbind1 = (-ze[:, -1] / bet) - (-ze[:, 0] / bet)
-    ddgbind1 = np.sqrt(ve[:, -1] + ve[:, 0]) / bet
+    #free energy for leg1
+    dg1, ddg1, uwham_out1 = calculate_uwham_leg_from_dataframe(data1)
 
     # Filter data for leg 2
-    data1 = data[timemask & (data["stateid"] >= leg2istate)]
+    data2 = data[timemask & (data["stateid"] >= leg2istate)].copy()
 
-    # Create reversed sequence for leg2 states
-    leg2stateids = np.arange(leg2istate, nstates)[::-1]
+    #free energy for leg2
+    dg2, ddg2, uwham_out2 = calculate_uwham_leg_from_dataframe(data2)
 
-    mlam = len(leg2stateids)
-    m = mlam * mtempt
-    N = len(data1)
+    dgb = dg1 - dg2
+    ddgb = np.sqrt(ddg1 * ddg1 + ddg2 * ddg2)
 
-    # Extract U0 values as U-bias
-    e0 = data1["potE"].copy()
-    for i in range(N):
-        e0.iloc[i] -= _bias_fcn(
-            data1["pertE"].iloc[i],
-            data1["lambda1"].iloc[i],
-            data1["lambda2"].iloc[i],
-            data1["alpha"].iloc[i],
-            data1["u0"].iloc[i],
-            data1["w0"].iloc[i],
-        )
+    data = {
+        'dg_leg1': dg1,
+        'dg_stderr_leg1': ddg1,
+        'dg_leg2': dg2,
+        'dg_stderr_leg2': ddg2,
+        'nsamples': samplesperreplica,
+        'df_leg1': data1,
+        'uwham_out_leg1': uwham_out1,
+        'df_leg2': data2,
+        'uwham_out_leg2': uwham_out2,
+        'schedule': schedule
+    }
 
-    # Calculate negative potential matrix
-    neg_pot = np.zeros((N, m))
-    sid = 0
-    for be in leg2stateids:
-        for te in range(mtempt):
-            neg_pot[:, sid] = _npot_fcn(
-                e0=e0,
-                epert=data1["pertE"],
-                bet=bet[te],
-                lam1=lambda1[be],
-                lam2=lambda2[be],
-                alpha=alpha[be],
-                u0=u0[be],
-                w0=w0[be],
-            )
-            sid += 1
+    return dgb, ddgb, data
 
-    # Calculate state labels (reversed for leg2)
-    statelabels = nstates - data1["stateid"]
+def main():
+    parser = argparse.ArgumentParser()
 
-    # Run UWHAM
-    out = _uwham_r(label=statelabels, logQ=neg_pot, ufactormax=1, ufactormin=1)
+    # required input
+    parser.add_argument('--jobname', type=str,
+                        help='The basename of the job to analyze.', required = True)
 
-    # Reshape results
-    ze = out["ze"].reshape(mtempt, mlam)
-    ve = out["ve"].reshape(mtempt, mlam)
+    # optional input
+    parser.add_argument('--rundir', type=str,
+                        help='Processes the data files in the specified directory')
+    parser.add_argument('--mintimeid', type=int,
+                        help='Process only data obtained after this time id')
+    parser.add_argument('--maxtimeid', type=int,
+                        help='Process only data obtained before this time id')
+    parser.add_argument('--leg1DataCSVoutFile', type=str,
+                        help='Saves the samples for leg1 that were processed in a CSV file, includes the WHAM weights')
+    parser.add_argument('--leg2DataCSVoutFile', type=str,
+                        help='Saves the samples for leg2 that were processed in a CSV file, includes the WHAM weights')
+    parser.add_argument('--plotOutFile', type=str,
+                        help='A png file where to save the plot for simulation quality assessment')
+    args = vars(parser.parse_args())
 
-    # Calculate binding free energies
-    dgbind2 = (-ze[:, -1] / bet) - (-ze[:, 0] / bet)
-    ddgbind2 = np.sqrt(ve[:, -1] + ve[:, 0]) / bet
+    jobname = args['jobname']
+    
+    if args['rundir']:
+        rundir = args['rundir']
+    else:
+        rundir = os.environ.get('PWD')
 
-    dgb = dgbind1 - dgbind2
-    ddgb = np.sqrt(ddgbind2 * ddgbind2 + ddgbind1 * ddgbind1)
+    discard = None
+    if not args['mintimeid']:
+        #guess the amount do discard as 1/3 of the data
+        outfile0 = os.path.join(rundir, f"r0", f"{jobname}.out")
+        with open(outfile0, 'r') as f:
+            count = len(f.readlines())
+        discard = int(count / 3)
+    else:
+        discard = args['mintimeid']
 
-    return dgb[0], ddgb[0], dgbind1[0], dgbind2[0], samplesperreplica
+    dg, dg_stderr, uwham_data = \
+        calculate_uwham_from_rundir(rundir, jobname,
+                                    mintimeid=discard, maxtimeid = args['maxtimeid'])
+    #save perturbation energy data
+    df1 = uwham_data['df_leg1']
+    N = len(uwham_data['uwham_out_leg1']['W'][:,0])
+    df1['W'] = uwham_data['uwham_out_leg1']['W'][:,0]/float(N)
+    if args['leg1DataCSVoutFile']:
+        df1.to_csv(args['leg1DataCSVoutFile'], index=False)
+
+    df2 = uwham_data['df_leg2']
+    N = len(uwham_data['uwham_out_leg1']['W'][:,0])
+    df2['W'] = uwham_data['uwham_out_leg2']['W'][:,0]/float(N)
+    if args['leg2DataCSVoutFile']:
+        df2.to_csv(args['leg2DataCSVoutFile'], index=False)
+
+    #produces a plot for simulation quality assessment
+    if args['plotOutFile']:
+        fig = create_quality_assessment_plot(df1, df2)
+        fig.savefig(args['plotOutFile'])
+
+    dg1 = uwham_data['dg_leg1']
+    dg1_stderr = uwham_data['dg_stderr_leg1']
+    dg2 = uwham_data['dg_leg2']
+    dg2_stderr = uwham_data['dg_stderr_leg2']
+    samplesperreplica = uwham_data['nsamples']
+    print(f"{jobname}: DG = {dg:8.3f} +/- {dg_stderr:8.3f}  DG(leg1) = {dg1:8.3f} +/- {dg1_stderr:8.3f}   DG(leg2) = {dg2:8.3f} +/- {dg2_stderr:8.3f} kcal/mol, n_samples: {samplesperreplica}")
+    
+if __name__ == "__main__":
+    main()

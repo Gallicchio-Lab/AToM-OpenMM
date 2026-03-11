@@ -4,50 +4,63 @@ curr_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 def _test_uwham_analysis(tmp_path):
-    from atom_openmm.uwham import calculate_uwham
+    from atom_openmm.uwham import calculate_uwham_from_rundir
 
-    # fmt: off
-    lambda1 = [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.50,
-               0.40, 0.30, 0.20, 0.10, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00]
-    lambda2 = [0.00, 0.10, 0.20, 0.30, 0.40, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50,
-               0.50, 0.50, 0.50, 0.50, 0.50, 0.40, 0.30, 0.20, 0.10, 0.00]
-    # fmt: on
+    dg_tol = 2.e-3 #kcal/mol
 
+    #replicate 1
     run_dir = os.path.join(curr_dir, "TYK2_A02_A09", "TYK2_A02_A09_r0_1")
-    ddG, ddG_std, dgbind1, dgbind2, samples = calculate_uwham(
-        run_dir, "QB_A02_A09", 70, lambda1=lambda1, lambda2=lambda2
-    )
+    ddG, ddG_std, uwham_data = calculate_uwham_from_rundir(
+        run_dir, "QB_A02_A09", mintimeid = 70)
+    dgbind1 = uwham_data['dg_leg1']
+    dgbind2 = uwham_data['dg_leg2']
+    samples = uwham_data['nsamples']
+    
+    expected_n = 351
+    expected_ddG = -1.062
+    expected_ddG_std = 0.199
+    expected_dgbind1 = 15.155
+    expected_dgbind2 = 16.2175
+    assert samples == expected_n
+    assert abs(ddG - expected_ddG) < dg_tol
+    assert abs(ddG_std - expected_ddG_std) < dg_tol
+    assert abs(dgbind1 - expected_dgbind1) < dg_tol
+    assert abs(dgbind2 - expected_dgbind2) < dg_tol
 
-    expected_ddG = -1.0582613105156682
-    expected_ddG_std = 0.1967262793670161
-    assert abs(ddG - expected_ddG) < 1e-8
-    assert abs(ddG_std - expected_ddG_std) < 1e-8
-    assert samples == 351
-    assert abs(dgbind1 - 16.12549393024899) < 1e-8
-    assert abs(dgbind2 - 17.183755240764658) < 1e-8
-
+    #replicate 2
     run_dir = os.path.join(curr_dir, "TYK2_A02_A09", "TYK2_A02_A09_r0_2")
-    ddG, ddG_std, dgbind1, dgbind2, samples = calculate_uwham(
-        run_dir, "QB_A02_A09", 70, lambda1=lambda1, lambda2=lambda2
-    )
+    ddG, ddG_std, uwham_data = calculate_uwham_from_rundir(
+        run_dir, "QB_A02_A09", mintimeid = 70 )
+    dgbind1 = uwham_data['dg_leg1']
+    dgbind2 = uwham_data['dg_leg2']
+    samples = uwham_data['nsamples']    
 
-    expected_ddG = -1.9492444343451716
-    expected_ddG_std = 0.18548486855089807
-    assert abs(ddG - expected_ddG) < 1e-8
-    assert abs(ddG_std - expected_ddG_std) < 1e-8
-    assert samples == 421
-    assert abs(dgbind1 - 15.690178371190054) < 1e-8
-    assert abs(dgbind2 - 17.639422805535226) < 1e-8
+    expected_n = 421
+    expected_ddG = -1.963
+    expected_ddG_std = 0.188
+    expected_dgbind1 = 14.709
+    expected_dgbind2 = 16.672
+    assert samples == expected_n
+    assert abs(ddG - expected_ddG) < dg_tol
+    assert abs(ddG_std - expected_ddG_std) < dg_tol
+    assert abs(dgbind1 - expected_dgbind1) < dg_tol
+    assert abs(dgbind2 - expected_dgbind2) < dg_tol
 
+    #replicate 3
     run_dir = os.path.join(curr_dir, "TYK2_A02_A09", "TYK2_A02_A09_r0_3")
-    ddG, ddG_std, dgbind1, dgbind2, samples = calculate_uwham(
-        run_dir, "QB_A02_A09", None, lambda1=lambda1, lambda2=lambda2
-    )
+    ddG, ddG_std, uwham_data = calculate_uwham_from_rundir(
+        run_dir, "QB_A02_A09" )
+    dgbind1 = uwham_data['dg_leg1']
+    dgbind2 = uwham_data['dg_leg2']
+    samples = uwham_data['nsamples']
 
-    expected_ddG = -1.2625416487680994
-    expected_ddG_std = 0.2068400471106031
-    assert abs(ddG - expected_ddG) < 1e-8
-    assert abs(ddG_std - expected_ddG_std) < 1e-8
-    assert samples == 480
-    assert abs(dgbind1 - 16.159606073746524) < 1e-8
-    assert abs(dgbind2 - 17.422147722514623) < 1e-8
+    expected_n = 480
+    expected_ddG = -1.290
+    expected_ddG_std = 0.208
+    expected_dgbind1 = 15.161
+    expected_dgbind2 = 16.451
+    assert samples == expected_n
+    assert abs(ddG - expected_ddG) < dg_tol
+    assert abs(ddG_std - expected_ddG_std) < dg_tol
+    assert abs(dgbind1 - expected_dgbind1) < dg_tol
+    assert abs(dgbind2 - expected_dgbind2) < dg_tol

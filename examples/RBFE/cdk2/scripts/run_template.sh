@@ -45,6 +45,7 @@ CMD=(
     --LIG1inFile ${sdir}/../ligands/<LIG1>.sdf
     --LIG2inFile ${sdir}/../ligands/<LIG2>.sdf
     --alignmentsYAMLinFile ${sdir}/../ligands/alignments.yaml
+    --plotOutFile ${jobname}.png
 )
 
 if [ -n "$SLURM_JOB_ID" ]; then

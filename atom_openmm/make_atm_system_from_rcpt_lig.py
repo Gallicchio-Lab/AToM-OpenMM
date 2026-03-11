@@ -447,9 +447,9 @@ def main():
                         help='SDF file with receptor cofactors')
 
     parser.add_argument('--proteinForceField', required=False, action="append", dest='proteinforcefield',
-                        help='Force field for protein: default amber14-all.xml ')
+                        help='Force field for protein: default amber14-all.xml ', default=['amber14-all.xml'])
     parser.add_argument('--solventForceField', required=False, action="append", dest='solventforcefield',
-                        help='Force field for solvent/ions: default amber14/tip3p.xml ')
+                        help='Force field for solvent/ions: default amber14/tip3p.xml ', default=['amber14/tip3p.xml'])
     parser.add_argument('--ligandForceField', required=False, type=str, dest='ligandforcefield',
                         default='openff-2.0.0',
                         help='Force field for ligand:  openff-2.0.0 (default), gaff, or espaloma-0.3.2')

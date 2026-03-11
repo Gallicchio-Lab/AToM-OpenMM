@@ -16,7 +16,7 @@ from atom_openmm.make_atm_system_from_rcpt_lig import make_system
 from atom_openmm.rbfe_structprep import rbfe_structprep
 from atom_openmm.rbfe_production import rbfe_production
 from atom_openmm.utils.AtomUtils import AtomUtils, get_selected_principal_groups
-from atom_openmm.uwham import calculate_uwham
+from atom_openmm.uwham import calculate_uwham_from_rundir, create_quality_assessment_plot 
 #from openmm_run import openmm_run
 
 def get_indexes_from_query(topology, query):
@@ -260,7 +260,10 @@ def run_atm(options,
             alignments = None,
             lig1_ref_atoms = None,
             lig2_ref_atoms = None,
-            ff_json_file = 'ff.json'):
+            ff_json_file = 'ff.json',
+            csv_datafileout_leg1 = None,
+            csv_datafileout_leg2 = None,
+            figfileout = None):
 
     #basename
     options['BASENAME'] = jobname
@@ -318,19 +321,32 @@ def run_atm(options,
     #free eneergy analysis
     if nsamples_per_replica:
         discard = int(nsamples_per_replica/3)
-        ddG, ddG_std, dgbind1, dgbind2, nsamples = calculate_uwham(
-            options['WORKDIR'], options['BASENAME'],
-            mintimeid = discard,
-            intermd=options['INTERMEDIATE'],
-            lambda1=options['LAMBDA1'],
-            lambda2=options['LAMBDA2'],
-            alpha=options['ALPHA'],
-            u0=options['U0'],
-            w0=options['W0COEFF']
-        )
+        ddg, ddg_std, uwham_data = calculate_uwham_from_rundir(
+            options['WORKDIR'], options['BASENAME'], mintimeid = discard)
+
+        dgbind1 = uwham_data['dg_leg1']
+        dgbind1_std = uwham_data['dg_stderr_leg1']
+        dgbind2 = uwham_data['dg_leg2']
+        dgbind2_std = uwham_data['dg_stderr_leg2']
+        nsamples = uwham_data['nsamples']
         print(f'Relative binding free energy estimate after {nsamples+discard} perturbation energy samples per replica discarding the first {discard} samples:')
-        print('DDGb=', ddG, '+/-', ddG_std, 'kcal/mol')
-        
+        print(f"{jobname}: DG = {ddg:8.3f} +/- {ddg_std:8.3f}  DG(leg1) = {dgbind1:8.3f} +/- {dgbind1_std:8.3f}   DG(leg2) = {dgbind2:8.3f} +/- {dgbind2_std:8.3f} kcal/mol, n_samples: {nsamples}")
+
+        #creates a plot for quality assessment
+        df1 = uwham_data['df_leg1']
+        N = len(uwham_data['uwham_out_leg1']['W'][:,0])
+        df1['W'] = uwham_data['uwham_out_leg1']['W'][:,0]/float(N)
+        df2 = uwham_data['df_leg2']
+        N = len(uwham_data['uwham_out_leg2']['W'][:,0])
+        df2['W'] = uwham_data['uwham_out_leg2']['W'][:,0]/float(N)
+        if csv_datafileout_leg1:
+            df1.to_csv(csv_datafileout_leg1, index=False)
+        if csv_datafileout_leg2:
+            df2.to_csv(csv_datafileout_leg2, index=False)
+        if figfileout:
+            fig = create_quality_assessment_plot(df1, df2)
+            fig.savefig(figfileout)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
@@ -350,7 +366,13 @@ if __name__ == '__main__':
 
     #optional arguments
     parser.add_argument('--forcefieldJSONCachefile', help='file to store force field information', default='ff.json')
-    
+    parser.add_argument('--leg1DataCSVoutFile', type=str,
+                        help='Saves the samples for leg1 that were processed in a CSV file, includes the WHAM weights')
+    parser.add_argument('--leg2DataCSVoutFile', type=str,
+                        help='Saves the samples for leg2 that were processed in a CSV file, includes the WHAM weights')
+    parser.add_argument('--plotOutFile', type=str,
+                        help='A png file where to save the plot for simulation quality assessment')
+
     #dictionary of arguments
     args = vars(parser.parse_args())
 
@@ -383,4 +405,7 @@ if __name__ == '__main__':
     run_atm(options, jobname, receptor_file, lig1_file, lig2_file,
             alignments = alignments,
             lig1_ref_atoms = lig1_ref_atoms, lig2_ref_atoms = lig2_ref_atoms,
-            ff_json_file = ff_json_file)
+            ff_json_file = ff_json_file,
+            csv_datafileout_leg1 = args['leg1DataCSVoutFile'],
+            csv_datafileout_leg2 = args['leg2DataCSVoutFile'],
+            figfileout = args['plotOutFile'])

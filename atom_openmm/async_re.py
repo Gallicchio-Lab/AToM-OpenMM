@@ -245,12 +245,11 @@ class JobManager(object):
         self.transport = None
 
         #compute nodes
-        if self.keywords.get('NODEFILE'):
-            self.compute_nodes = self.set_node_info(self.keywords.get('NODEFILE'))
-            self.num_nodes = len(self.compute_nodes)
-            if self.num_nodes < 1:
-                self._exit("Could not find computing devices")
-            self.logger.info("compute nodes: %s ", ', '.join([n['node_name'] + " " + n['arch'] for n in self.compute_nodes]))
+        self.compute_nodes = self.set_node_info(self.keywords.get('NODEFILE'))
+        self.num_nodes = len(self.compute_nodes)
+        if self.num_nodes < 1:
+            self._exit("Could not find computing devices")
+        self.logger.info("compute nodes: %s ", ', '.join([n['node_name'] + " " + n['arch'] for n in self.compute_nodes]))
 
         # execution time in minutes
         self.walltime = float(self.keywords.get('WALL_TIME', 100000))

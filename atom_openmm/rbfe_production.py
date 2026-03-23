@@ -30,8 +30,6 @@ def rbfe_production(config_file=None, options=None):
         print("Options:", options)
     print("")
     sys.stdout.flush()
-
-    work_dir = None
     
     if config_file:
         with set_directory(Path(config_file).parent):
@@ -40,22 +38,16 @@ def rbfe_production(config_file=None, options=None):
             )
             rx.setupJob()
             rx.scheduleJobs()
-            work_dir = os.getcwd()
     elif options:
         if "WORKDIR" in options.keys():
             with set_directory(options["WORKDIR"]):
                 rx = openmm_job_RBFE(config_file, options)
                 rx.setupJob()
                 rx.scheduleJobs()
-                work_dir = os.getcwd()
         else:
             rx = openmm_job_RBFE(config_file, options)
             rx.setupJob()
             rx.scheduleJobs()
-            work_dir = os.getcwd()
-
-    return work_dir
-
 
 if __name__ == "__main__":
     freeze_support()

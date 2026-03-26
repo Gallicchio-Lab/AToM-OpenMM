@@ -17,7 +17,7 @@
  TRJ_FREQUENCY:    20000    #interval between trajectory frame records, in MD steps
  CM_KF: 25.00               #force constant of flat-bottom binding site restraint, in kcal/mol/Ang^2
  CM_TOL: 5                  #tolerance of flat-bottom binding site restraint, radius in Ang
- POSRE_FORCE_CONSTANT: 25.0 #force constant of position restraint, in kcal/mol/Ang^2
+ POSRE_FORCE_CONSTANT: 0.0  #force constant of position restraint, in kcal/mol/Ang^2; turned off in this case
  POSRE_TOLERANCE: 3.5       #tolerance of position restraint, radius in Ang
  ALIGN_KF_SEP: 0.0          #force constant of separation component of the ligand alignment restraint, in kcal/mol/Ang^2 (zero for variable displacement mode)
  ALIGN_K_THETA: 25.0        #force constant of orientation component of the ligand alignment restraint, in kcal/mol

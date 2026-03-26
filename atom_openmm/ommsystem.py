@@ -20,7 +20,10 @@ from atom_openmm.utils.AtomUtils import AtomUtils, separate14
 # OpenMM's MTSLangevinIntegrator does not have a setTemperature method
 class ATMMTSLangevinIntegrator(MTSLangevinIntegrator):
     def setTemperature(self, temperature):
+        self.temperature = temperature
         self.setGlobalVariableByName('kT', MOLAR_GAS_CONSTANT_R*temperature)
+    def getTemperature(self):
+        return self.temperature
 
 class OMMSystem(object):
     def __init__(self, basename, keywords, pdbtopfile, systemfile, logger):
@@ -150,13 +153,21 @@ class OMMSystem(object):
             sigma = float(self.keywords.get('EXCLUSION_POT_SIGMA', 6.0)) * angstrom
             epsi = float(self.keywords.get('EXCLUSION_POT_EPSILON', 1.0)) * kilocalorie_per_mole
             cutoff = float(self.keywords.get('EXCLUSION_POT_CUTOFF', 10.0)) * angstrom
+            nexponent = int(self.keywords.get('EXCLUSION_POT_EXPONENT', 6))
+            assert nexponent > 0, "EXCLUSION_POT_EXPONENT must be a positive integer"
+            assert nexponent%2 == 0, "EXCLUSION_POT_EXPONENT must be an even number"
             switch_cutoff = float(self.keywords.get('EXCLUSION_POT_SWITCH_CUTOFF', 8.0)) * angstrom
             assert(sigma > 0.0*angstrom and epsi >= 0.0*kilocalorie_per_mole and cutoff > 0.0*angstrom and switch_cutoff > 0.0*angstrom)
             assert(cutoff > switch_cutoff)
             n_mol1 = len(mol1_indexes)
             n_mol2 = len(mol2_indexes)
             self.logger.info(f"Creating receptor/ligand exclusion potential with {n_mol1} atoms for MOL1 and {n_mol2} atoms for MOL2.")
-            force = mm.CustomNonbondedForce("4*epsilonexcl*(sigmaexcl/r)^12")
+            expression = "4* epsilonexcl * srn ;"
+            for i in range(nexponent // 2 - 1):
+                expression += "srn = srn*sr2;"
+            expression += "srn = sr2;"
+            expression += "sr2 = (sigmaexcl/r)^2"
+            force = mm.CustomNonbondedForce(expression)
             force.setName("ExclusionForce")
             force.addGlobalParameter("epsilonexcl", epsi)
             force.addGlobalParameter("sigmaexcl", sigma)
@@ -319,6 +330,7 @@ class OMMSystem(object):
             self.integrator = LangevinMiddleIntegrator(
                 temperature, frictionCoeff, MDstepsize
             )
+
             self.integrator.setIntegrationForceGroups({0, self.atmforcegroup})
 
             self.logger.info(f"Temperature: {self.integrator.getTemperature()}")
@@ -336,7 +348,7 @@ class OMMSystem(object):
             self.integrator.setMaxDrudeDistance(self.drude_hardwall) # Drude Hardwall
         else:
             self._exit(f"Invalid integrator: {integrator}")
-        
+
 #Temperature RE
 class OMMSystemTRE(OMMSystem):
     def set_integrator(self, temperature, frictionCoeff, MDstepsize, defaultMDstepsize = 0.001*picosecond):

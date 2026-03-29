@@ -552,10 +552,13 @@ def calculate_uwham_from_rundir(
     directories = [d for d in matches if os.path.isdir(d)]
     nstates = len(directories)
 
-    with open(f'r0/{jobname}.out', 'r') as f:
+    #measure the width of the data
+    with open(f'{directories[0]}/{jobname}.out', 'r') as f:
         first_line = f.readline()
         ncolumns = len(first_line.split())
 
+    # 11 columns = standard softplus
+    # 13 columns = 3-linear softplus
     assert ncolumns == 11 or ncolumns == 13, f"Invalid number of columns in data file: {ncolumns}"
         
     if ncolumns == 11: #softplus

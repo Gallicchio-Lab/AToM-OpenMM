@@ -386,8 +386,12 @@ class OMMWorkerATM(OMMWorker):
         atmforce = self.ommsystem.atmforce
         self.simulation.context.setParameter(atmforce.Lambda1(), self.par['lambda1'])
         self.simulation.context.setParameter(atmforce.Lambda2(), self.par['lambda2'])
+        if self.ommsystem.multisoftplus:
+            self.simulation.context.setParameter('Lambda3', self.par['lambda3'])
         self.simulation.context.setParameter(atmforce.Alpha(), self.par['alpha']*kilojoules_per_mole)
         self.simulation.context.setParameter(atmforce.Uh(), self.par['uh'] /kilojoules_per_mole)
+        if self.ommsystem.multisoftplus:
+            self.simulation.context.setParameter('Uh1', self.par['uh1'] /kilojoules_per_mole)
         self.simulation.context.setParameter(atmforce.W0(), self.par['w0'] /kilojoules_per_mole)
         self.simulation.context.setParameter(atmforce.Direction(), self.par['atmdirection'] )
         self.simulation.context.setParameter(atmforce.Umax(), self.par[atmforce.Umax()] /kilojoules_per_mole)

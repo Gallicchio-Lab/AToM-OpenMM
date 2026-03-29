@@ -575,8 +575,8 @@ class JobManager(object):
                 sid_j = self.status[repl_j]['stateid_current']
                 self.status[repl_i]['stateid_current'] = sid_j
                 self.status[repl_j]['stateid_current'] = sid_i
-                self.logger.info("Replica %d new state %d" % (repl_i, sid_j))
-                self.logger.info("Replica %d new state %d" % (repl_j, sid_i))
+                self.logger.info("Replica %d (state %d) new state %d" % (repl_i, sid_i, sid_j))
+                self.logger.info("Replica %d (state %d) new state %d" % (repl_j, sid_j, sid_i))
 
         # Uncomment to debug Gibbs sampling:
         # Actual and observed populations of state permutations should match.

@@ -26,7 +26,7 @@ class openmm_job(JobManager):
         self.openmm_workers = None
         self.kb = 0.0019872041*kilocalories_per_mole/kelvin
         self.safeckpt_file = "ckpt_is_valid"
-        
+
     def _setLogger(self):
         self.logger = logging.getLogger("async_re.openmm_async_re")
         
@@ -239,9 +239,15 @@ class openmm_job_TRE(openmm_job):
 
         
 class openmm_job_ATM(openmm_job):
+    def __init__(self, command_file, options):
+        super().__init__(command_file, options)
+        self.multisoftplus = False
+        if self.keywords.get('LAMBDA3'):
+            self.multisoftplus = True
+
     def _buildStates(self):
         self.stateparams = []
-        for (lambd,direction,intermediate,lambda1,lambda2,alpha,uh,w0) in zip(self.lambdas,self.directions,self.intermediates,self.lambda1s,self.lambda2s,self.alphas,self.uhs,self.w0coeffs):
+        for (lambd,direction,intermediate,lambda1,lambda2,lambda3,alpha,uh,uh1,w0) in zip(self.lambdas,self.directions,self.intermediates,self.lambda1s,self.lambda2s,self.lambda3s,self.alphas,self.uhs,self.uhs1,self.w0coeffs):
             for tempt in self.temperatures:
                 par = {}
                 par['lambda'] = float(lambd)
@@ -249,8 +255,10 @@ class openmm_job_ATM(openmm_job):
                 par['atmintermediate'] = float(intermediate)
                 par['lambda1'] = float(lambda1)
                 par['lambda2'] = float(lambda2)
+                par['lambda3'] = float(lambda3)
                 par['alpha'] = float(alpha)/kilocalories_per_mole
                 par['uh'] = float(uh)*kilocalories_per_mole
+                par['uh1'] = float(uh1)*kilocalories_per_mole
                 par['w0'] = float(w0)*kilocalories_per_mole
                 par['temperature'] = float(tempt)*kelvin
                 par['Umax'] = float(self.keywords.get('UMAX')) * kilocalorie_per_mole
@@ -287,15 +295,26 @@ class openmm_job_ATM(openmm_job):
         #lambda1 = lambda2 gives the linear potential
         self.lambda1s = None
         self.lambda2s = None
+        self.lambda3s = None
         self.alphas = None
         self.uhs = None
+        self.uhs1 = None
         self.w0coeffs = None
         self.lambda1s = self.keywords.get('LAMBDA1')
         self.lambda2s = self.keywords.get('LAMBDA2')
+        self.lambda3s = self.keywords.get('LAMBDA3')
+        if not self.lambda3s:
+            self.lambda3s = self.keywords.get('LAMBDA2')
         self.alphas = self.keywords.get('ALPHA')
         self.uhs = self.keywords.get('U0')
+        self.uhs1 = self.keywords.get('U1')
+        if not self.uhs1:
+            self.uhs1 = self.keywords.get('U0')
         self.w0coeffs = self.keywords.get('W0COEFF')
 
+        n = len(self.lambdas)
+        for t in [self.lambdas,self.directions,self.intermediates,self.lambda1s,self.lambda2s,self.lambda3s,self.alphas,self.uhs,self.uhs1,self.w0coeffs]:
+            assert len(t) == n, 'Inconsistent length of alchemical schedule parameter lists'
         #build parameters for the lambda/temperatures combined states
         self.nreplicas = self._buildStates()
 
@@ -309,10 +328,17 @@ class openmm_job_ATM(openmm_job):
         """
         logfile = "%s_stat.txt" % self.basename
         ofile = open(logfile,"w")
-        log = "Replica  State  Lambda Lambda1 Lambda2 Alpha Uh W0coeff Temperature Status  Cycle \n"
-        for k in range(self.nreplicas):
-            stateid = self.status[k]['stateid_current']
-            log += "%6d   %5d  %6.3f %6.3f %6.3f %6.3f %6.2f %6.2f %6.2f %5s  %5d\n" % (k, stateid, self.stateparams[stateid]['lambda'], self.stateparams[stateid]['lambda1'], self.stateparams[stateid]['lambda2'], self.stateparams[stateid]['alpha']*kilocalories_per_mole, self.stateparams[stateid]['uh']/kilocalories_per_mole, self.stateparams[stateid]['w0']/kilocalories_per_mole, self.stateparams[stateid]['temperature']/kelvin, self.status[k]['running_status'], self.status[k]['cycle_current'])
+        if self.multisoftplus:
+            log = "Replica  State  Lambda Lambda1 Lambda2 Lambda3 Alpha Uh0 Uh1 W0 Temperature Status  Cycle \n"
+            for k in range(self.nreplicas):
+                stateid = self.status[k]['stateid_current']
+                log += "%6d   %5d  %6.3f %6.3f %6.3f %6.3f %6.3f %6.2f %6.2f %6.2f %6.2f %5s  %5d\n" % (k, stateid, self.stateparams[stateid]['lambda'], self.stateparams[stateid]['lambda1'], self.stateparams[stateid]['lambda2'], self.stateparams[stateid]['lambda3'], self.stateparams[stateid]['alpha']*kilocalories_per_mole, self.stateparams[stateid]['uh']/kilocalories_per_mole, self.stateparams[stateid]['uh1']/kilocalories_per_mole, self.stateparams[stateid]['w0']/kilocalories_per_mole, self.stateparams[stateid]['temperature']/kelvin, self.status[k]['running_status'], self.status[k]['cycle_current'])
+        else:
+            log = "Replica  State  Lambda Lambda1 Lambda2 Alpha Uh W0 Temperature Status  Cycle \n"
+            for k in range(self.nreplicas):
+                stateid = self.status[k]['stateid_current']
+                log += "%6d   %5d  %6.3f %6.3f %6.3f %6.3f %6.2f %6.2f %6.2f %5s  %5d\n" % (k, stateid, self.stateparams[stateid]['lambda'], self.stateparams[stateid]['lambda1'], self.stateparams[stateid]['lambda2'], self.stateparams[stateid]['alpha']*kilocalories_per_mole, self.stateparams[stateid]['uh']/kilocalories_per_mole, self.stateparams[stateid]['w0']/kilocalories_per_mole, self.stateparams[stateid]['temperature']/kelvin, self.status[k]['running_status'], self.status[k]['cycle_current'])
+
         log += "Running = %d\n" % self.running
         log += "Waiting = %d\n" % self.waiting
 
@@ -327,6 +353,16 @@ class openmm_job_ATM(openmm_job):
             softplusf += ((lambda2 - lambda1)/alpha) * math.log(ee)
         return softplusf
 
+    #evaluates the softplus function
+    def _multi_softplus(self, lambda1, lambda2, lambda3, alpha, uh0, uh1, w0, uf):
+        f3 = lambda3*uf + w0
+        if alpha._value > 0.:
+            f2 = lambda2*uf + w0 + (lambda3 - lambda2)*uh1
+            f1 = lambda1*uf + w0 + (lambda3 - lambda2)*uh1 + (lambda2 - lambda1)*uh0
+            return math.log( (math.exp(alpha*f1) + math.exp(alpha*f2) + math.exp(alpha*f3))/3.0)/alpha
+        else:
+            return f3
+
     #customized getPot to return the unperturbed potential energy
     #of the replica U0 = U - W_lambda(u)
     def _getPot(self, repl):
@@ -338,10 +374,15 @@ class openmm_job_ATM(openmm_job):
         direction = par['atmdirection']
         lambda1 = par['lambda1']
         lambda2 = par['lambda2']
+        lambda3 = par['lambda3']
         alpha = par['alpha']
         uh = par['uh']
+        uh1 = par['uh1']
         w0 = par['w0']
-        ebias = self._softplus(lambda1, lambda2, alpha, uh, w0, pertpot)
+        if self.multisoftplus:
+            ebias = self._multi_softplus(lambda1, lambda2, lambda3, alpha, uh, uh1, w0, pertpot)
+        else:
+            ebias = self._softplus(lambda1, lambda2, alpha, uh, w0, pertpot)
         pot['unbiased_potential_energy'] = epot - ebias
         pot['direction'] = par['atmdirection']
         pot['intermediate'] = par['atmintermediate']
@@ -353,8 +394,10 @@ class openmm_job_ATM(openmm_job):
         direction = par['atmdirection']
         lambda1 = par['lambda1']
         lambda2 = par['lambda2']
+        lambda3 = par['lambda3']
         alpha = par['alpha']
         uh = par['uh']
+        uh1 = par['uh1']
         w0 = par['w0']
         state_direction = par['atmdirection']
         state_intermediate = par['atmintermediate']
@@ -363,7 +406,10 @@ class openmm_job_ATM(openmm_job):
         replica_direction = pot['direction']
         replica_intermediate = pot['intermediate']
         if (replica_direction == state_direction) or (state_intermediate > 0 and replica_intermediate > 0):
-            ebias = self._softplus(lambda1, lambda2, alpha, uh, w0, pertpot)
+            if self.multisoftplus:
+                ebias = self._multi_softplus(lambda1, lambda2, lambda3, alpha, uh, uh1, w0, pertpot)
+            else:
+                ebias = self._softplus(lambda1, lambda2, alpha, uh, w0, pertpot)
             return beta*(epot0 + ebias)
         else:
             #prevent exchange
@@ -387,7 +433,7 @@ class openmm_job_ABFE(openmm_job_ATM):
             ommworkercls = OMMWorkerATMSync
         else:
             self._exit('Unknown RE_MODE %s', self.re_mode)
-        
+
         pdbtopfile = self.basename + ".pdb"
         systemfile = self.basename + "_sys.xml"
 
@@ -439,10 +485,10 @@ class openmm_job_RBFE(openmm_job_ATM):
         #creates openmm replica objects
         self.openmm_replicas = []
         for i in range(self.nreplicas):
-            try:
-                replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger, self.keywords)
-            except:
-                self._exit("Error when creating replica.")
+            #try:
+            replica = OMMReplicaATM(i, self.basename, self.service_worker, self.logger, self.keywords)
+            #except:
+            #    self._exit("Error when creating replica.")
             if replica.stateid == None:
                 replica.set_state(i, self.stateparams[i])#initial setting
             self.openmm_replicas.append(replica)

@@ -84,6 +84,10 @@ class OMMSystem(object):
         if (self.major_ommversion > 8) or ( (self.major_ommversion == 8) and (self.minor_ommversion > 1)):
             self.v82plus = True
 
+        self.multisoftplus = False
+        if keywords.get('LAMBDA3'):
+            self.multisoftplus = True
+
     def _exit(self, message):
         """Print and flush a message to stdout and then exit."""
         self.logger.error(message)
@@ -484,8 +488,10 @@ class OMMSystemABFE(OMMSystem):
         lmbd = 0.0
         lambda1 = lmbd
         lambda2 = lmbd
-        alpha = 0.0 / kilocalorie_per_mole
+        lambda3 = lmbd
+        alpha = 0.1 / kilocalorie_per_mole
         uh = 0.0 * kilocalorie_per_mole
+        uh1 = 0.0 * kilocalorie_per_mole
         w0coeff = 0.0 * kilocalorie_per_mole
         direction = 1.0
 
@@ -505,7 +511,13 @@ class OMMSystemABFE(OMMSystem):
 
         #create ATM Force
         referencePotExpression = "select(step(Direction), u0, u1) + "
-        alchemicalPotExpression = "select(Lambda2-Lambda1 , ((Lambda2-Lambda1)/Alpha)*log(1+exp(-Alpha*(usc-Uh))) + Lambda2*usc + W0, Lambda2*usc + W0);"
+
+        if self.multisoftplus:
+            alchemicalPotExpression = "select(Alpha , log((exp(Alpha*f1) + exp(Alpha*f2) + exp(Alpha*f3))/3.0)/Alpha, f3);" + \
+                "f3 = Lambda3*usc + W0 ; f2 = Lambda2*usc + W0 + (Lambda3 - Lambda2)*Uh1; f1 = Lambda1*usc + W0 + (Lambda3 - Lambda2)*Uh1 + (Lambda2 - Lambda1)*Uh;"
+        else:
+            alchemicalPotExpression = "select(Lambda2-Lambda1 , ((Lambda2-Lambda1)/Alpha)*log(1+exp(-Alpha*(usc-Uh))) + Lambda2*usc + W0, Lambda2*usc + W0);"
+
         softCoreExpression = "usc = select(Acore, select(step(u-Ubcore), (Umax-Ubcore)*fsc+Ubcore, u), u);" + \
             "fsc = (z^Acore-1)/(z^Acore+1);" + \
             "z = 1 + 2*(y/Acore) + 2*(y/Acore)^2;" + \
@@ -514,8 +526,12 @@ class OMMSystemABFE(OMMSystem):
         self.atmforce = ATMForce(referencePotExpression + alchemicalPotExpression + softCoreExpression)
         self.atmforce.addGlobalParameter("Lambda1", lambda1);
         self.atmforce.addGlobalParameter("Lambda2", lambda2);
+        if self.multisoftplus:
+            self.atmforce.addGlobalParameter("Lambda3", lambda3);
         self.atmforce.addGlobalParameter("Alpha", alpha * kilojoules_per_mole);
         self.atmforce.addGlobalParameter("Uh", uh/kilojoules_per_mole);
+        if self.multisoftplus:
+            self.atmforce.addGlobalParameter("Uh1", uh1/kilojoules_per_mole);
         self.atmforce.addGlobalParameter("W0", w0coeff/kilojoules_per_mole);
         self.atmforce.addGlobalParameter("Umax", umsc/kilojoules_per_mole);
         self.atmforce.addGlobalParameter("Ubcore", ubcore/kilojoules_per_mole);
@@ -889,8 +905,10 @@ class OMMSystemRBFE(OMMSystem):
         lmbd = 0.0
         lambda1 = lmbd
         lambda2 = lmbd
-        alpha = 0.0 / kilocalorie_per_mole
+        lambda3 = lmbd
+        alpha = 0.1 / kilocalorie_per_mole
         uh = 0.0 * kilocalorie_per_mole
+        uh1 = 0.0 * kilocalorie_per_mole
         w0coeff = 0.0 * kilocalorie_per_mole
         direction = 1.0
 
@@ -909,8 +927,15 @@ class OMMSystemRBFE(OMMSystem):
             uoffset = float(self.keywords.get('PERTE_OFFSET')) * kilocalorie_per_mole
 
         #create ATM Force
+                #create ATM Force
         referencePotExpression = "select(step(Direction), u0, u1) + "
-        alchemicalPotExpression = "select(Lambda2-Lambda1 , ((Lambda2-Lambda1)/Alpha)*log(1+exp(-Alpha*(usc-Uh))) + Lambda2*usc + W0, Lambda2*usc + W0);"
+
+        if self.multisoftplus:
+            alchemicalPotExpression = "select(Alpha , log((exp(Alpha*f1) + exp(Alpha*f2) + exp(Alpha*f3))/3.0)/Alpha, f3);" + \
+                "f3 = Lambda3*usc + W0 ; f2 = Lambda2*usc + W0 + (Lambda3 - Lambda2)*Uh1; f1 = Lambda1*usc + W0 + (Lambda3 - Lambda2)*Uh1 + (Lambda2 - Lambda1)*Uh;"
+        else:
+            alchemicalPotExpression = "select(Lambda2-Lambda1 , ((Lambda2-Lambda1)/Alpha)*log(1+exp(-Alpha*(usc-Uh))) + Lambda2*usc + W0, Lambda2*usc + W0);"
+
         softCoreExpression = "usc = select(Acore, select(step(u-Ubcore), (Umax-Ubcore)*fsc+Ubcore, u), u);" + \
             "fsc = (z^Acore-1)/(z^Acore+1);" + \
             "z = 1 + 2*(y/Acore) + 2*(y/Acore)^2;" + \
@@ -919,8 +944,12 @@ class OMMSystemRBFE(OMMSystem):
         self.atmforce = ATMForce(referencePotExpression + alchemicalPotExpression + softCoreExpression)
         self.atmforce.addGlobalParameter("Lambda1", lambda1);
         self.atmforce.addGlobalParameter("Lambda2", lambda2);
+        if self.multisoftplus:
+            self.atmforce.addGlobalParameter("Lambda3", lambda3);
         self.atmforce.addGlobalParameter("Alpha", alpha * kilojoules_per_mole);
         self.atmforce.addGlobalParameter("Uh", uh/kilojoules_per_mole);
+        if self.multisoftplus:
+            self.atmforce.addGlobalParameter("Uh1", uh1/kilojoules_per_mole);
         self.atmforce.addGlobalParameter("W0", w0coeff/kilojoules_per_mole);
         self.atmforce.addGlobalParameter("Umax", umsc/kilojoules_per_mole);
         self.atmforce.addGlobalParameter("Ubcore", ubcore/kilojoules_per_mole);
@@ -943,7 +972,7 @@ class OMMSystemRBFE(OMMSystem):
         self.var_regions = False
         if self.keywords.get('LIGAND1_VAR_ATOMS') is not None:
             self.var_regions = True
-
+            
         #adds Forces of the given group to ATMForce
         self.add_forces_to_atmforce()
 
@@ -961,6 +990,7 @@ class OMMSystemRBFE(OMMSystem):
         self.cparams[self.atmforce.Ubcore()] = ubcore/kilojoules_per_mole
         self.cparams[self.atmforce.Acore()] = acore
         self.cparams['UOffset'] = uoffset/kilojoules_per_mole
+
 
     def create_system(self):
 

@@ -1,71 +1,116 @@
-# AToM-OpenMM Protein-Peptide RBFE Workflow Tutorial 
+Relative Binding Free Energies of SDC1 Peptide Variants Bound to TIAM1
+-----------------------------------------------------------------------
 
-This workflow tutorial sets up and runs the relative binding free energies between the Syndecan-1 derived peptide mutants and the TIAM-1 PDZ domain described in the paper: [Relative Binding Free Energy Estimation of Congeneric Ligands and Macromolecular Mutants with the Alchemical Transfer Method with Coordinate Swapping](https://pubs.acs.org/doi/10.1021/acs.jcim.5c00207).
+In this tutorial, we will use an automated workflow to calculate the relative binding free energies between single-point mutants of the SDC1 peptide binding to the TIAM1 protein. This system is used as a benchmark for the Alchemical Transfer with Coordinate Swapping (ATS) method in [E. Gallicchio. Relative Binding Free Energy Estimation of Congeneric Ligands and Macromolecular Mutants with the Alchemical Transfer with Coordinate Swapping Method. J. Chem. Inf. Model., 2025.](https://doi.org/10.1021/acs.jcim.5c00207).
 
-The setup used here is sligtly different than in the paper. Here the binding site region is defined in terms of the distance between the centroid of the C-alpha atoms of the first three residues of the peptides (0, 1, and 2 following the numbering in the paper) and the centroid of the C-alpha atoms of the binding site residues of the TIAM-1 PDZ receptor (see below). 
+The workflow prepares and runs relative binding free energy calculations between pairs of SDC1 mutant variants using a dual-coordinate/dual-topology alchemical algorithm. For general background on the Alchemical Transfer Method (ATM), refer to [Azimi, Khuttan, Wu, Pal, Gallicchio. Relative Binding Free Energy Calculations for Ligands with Diverse Scaffolds with the Alchemical Transfer Method.](https://pubs.acs.org/doi/full/10.1021/acs.jcim.1c01129).
 
+This example uses the `protein_mutation` workflow mode, which is designed for pairwise calculations between macromolecular sequence variants represented as PDB files. For small-molecule ligand RBFE calculations, see the [CDK2 example](../cdk2/README.md) instead.
 
-## OpenMM/AToM-OpenMM Requirements
+We assume that the latest release of OpenMM and the latest AToM-OpenMM packages and their dependencies are available in a `conda` environment (see the [README](../../../README.md)), and that the `examples` folder is available under `$HOME/AToM-OpenMM/examples`. Adjust this pathname as needed.
 
-This tutorial requires OpenMM 8.4 or newer. More specifically a version of OpenMM built after the commit 3645e1e ([Variable distance-based displacements for ATMForce](https://github.com/openmm/openmm/commit/3645e1eeb7cea37bc7af1291e0fd672a85d49db9)). It also requires the latest version of the AToM-OpenMM package.
+## For the Impatient
 
-Follow the installation instructions in the main [README](https://github.com/Gallicchio-Lab/AToM-OpenMM/blob/master/README.md). Here we assume that all required packages are installed under a miniforge3 environment activated using: 
+Run the workflow:
+
 ```
-. ${HOME}/miniforge3/bin/activate
-```
-Modify the command to suit your specific environment.
-
-## Setup
-
-### Short story
-
-Assuming the AToM-OpenMM repo is available under your home directory, do:
-```
-cd ${HOME}/AToM-OpenMM/examples/RBFE/protein-peptide/tiam-1
-. ${HOME}/miniforge3/bin/activate
-bash scripts/setup-atm.sh
-```
-This creates a `complexes` folder with subdirectories each corresponding to the RBFE simulation for a pair of mutants. See below for execution and analysis.
-
-### Longer story
-
-The PDB of the TIAM-1 PDZ receptor is stored under the `receptor/` directory and PDBs of the peptide mutants are stored under the `ligands/` directory. We created these files using Maestro starting with the structure of the wild-type complex (4GVD) and applying the mutations.
-
-The `scripts` folder hold the necessary scripts and template input files. In particular, The `setup-atm.sh` script above is a bash script that orchestrates the setup of each RBFE simulation with the help of a couple of python scripts.
-
-The first, called `make_refvar_atoms.py`, analyzes the peptides to find the atom indexes of the sidechain being mutated. For example:
-```
-python ${scripts_dir}/make_refvar_atoms.py --mutations "sdc1wt sdc1A0F A8F, sdc1A0F sdc1wt F8A"
-```
-generates settings for the mutation of alanine 8 (0 in the paper) to phenylalanine and of the reverse mutations, where `sdc1wt.pdb` and `sdc1A0F.pdb` are the corresponding PDB files of the variants with alanine and phenylalanine, respectively.
-
-The script calls AToM-OpenMM's `make_atm_system_from_rcpt_lig` utility to create the simulation system for each mutation by displacing the second peptide by the prescribed displacement vector (the `displacement` setting in the `setup-atm.sh` script) and solvating with water and ions.
-
-Next, The `scripts/create_cntlfile_from_template_rbfe.py` script generates AToM-OpenMM's control file (ending in `.cntl`) for each simulation. It adds restrains for the C-alpha atoms of the receptor with a tolerance of 5.0 Angstroms and it determines the atom indexes of the set of atoms that define the centroids for the binding site definition among other things.
-
-## Execution
-
-The setup generates `slurm` runfiles for each prepared simulations under `complexes/`. Do:
-```
+cd $HOME/AToM-OpenMM/examples/RBFE/tiam1
+bash ./scripts/setup-atm.sh
 cd complexes
-for i in $(/bin/ls -d */) ; do ( dir=${i%%/} && cd $dir && sbatch run.sh ) ; done
-```
-to launch the simulations. Replace `run.sh` with `run4.sh` to use 4 GPUs for each job.
 
-Each job is set to run for 16.6 hours (1,000 minutes). Use `squeue` to monitor the jobs. When the jobs have completed, the command above can be used to relaunch them to obtain more data.
+#run the jobs on a SLURM cluster
+for i in tiam1-* ; do ( cd $i && sbatch ./run.sh ) ; done
 
-### Get the Relative Free Energies
-
-After the jobs collected a reasonable amount of data, run the analysis script in the complexes directory to obtain the relative free energies:
-```
-cd complexes
-bash ./free_energies.sh
+#without a SLURM cluster
+#for i in tiam1-* ; do ( cd $i && bash ./run.sh > ${i}.log 2>&1 ) ; done
 ```
 
+Collect the results once the simulations have completed:
 
+```
+cd $HOME/AToM-OpenMM/examples/RBFE/tiam1/complexes
+for i in tiam1-* ; do ( echo $i && tail -2 ${i}.log ) ; done
+```
 
+## Tell me More: I Want to Adapt This to My System
 
+### Input Files
 
+This workflow uses PDB files for both the receptor and the alchemical partner structures. The receptor PDB file is stored in the `receptor/` subdirectory, and the PDB files for each partner (wild-type and mutants) are stored in the `ligands/` subdirectory. All input structures are assumed to be fully prepared, including hydrogen atoms.
 
+The workflow's behavior is primarily controlled by the [`setup-settings.sh`](scripts/setup-settings.sh) file in the `scripts/` folder. In `protein_mutation` mode, this file specifies:
 
+- `workflow_mode=protein_mutation`
+- The basename of the receptor PDB file (`tiam1`, corresponding to `receptor/tiam1.pdb`).
+- The list of transformations in the form `"MUT1 MUT2 RESID"`, where `MUT1` and `MUT2` are the basenames of the partner PDB files in `ligands/`, and `RESID` is the residue number of the mutation site.
 
+For example, the entry `"sdc1wt sdc1Q3E 3"` in `protein_mutation_transformations` pairs `ligands/sdc1wt.pdb` with `ligands/sdc1Q3E.pdb`, using residue 3 to define the alignment atoms.
+
+### System Preparation
+
+This step sets up the alchemical transfer simulations. Run the automated setup script from the example root directory:
+
+```
+cd $HOME/AToM-OpenMM/examples/RBFE/tiam1
+bash ./scripts/setup-atm.sh
+```
+
+In `protein_mutation` mode, the `setup-atm.sh` script performs the following actions:
+
+- Runs `scripts/find_pair_alignment_atoms.py` on the partner PDB files to generate the pair-specific alignment atom file `ligands/pair_alignments.yaml`.
+- Creates simulation directories under `complexes/` for each transformation pair, named following the format `tiam1-sdc1wt-sdc1Q3E`.
+- Prepares a `run.sh` launch script in each simulation subdirectory using `scripts/run_template.sh` as a template. `run.sh` works as a SLURM batch script or a regular bash script for interactive use.
+
+### The find_pair_alignment_atoms.py Script
+
+The `scripts/find_pair_alignment_atoms.py` script is the key addition for `protein_mutation` mode. For each transformation pair, it reads the specified residue from both partner PDB files and extracts the 1-based ATOM/HETATM record indices of the backbone atoms in the order CA, N, C. These three atoms define the alignment restraint frame used to keep the orientation of the unbound partner in approximate alignment with the bound partner during the alchemical transfer (see [The Ligand Alignment Restraints](https://www.compmolbiophysbc.org/atom-openmm/atom-system-setup#h.vndnoxipr7qs) for more information).
+
+The results are written to `ligands/pair_alignments.yaml`. Each entry maps the job name (e.g. `tiam1-sdc1wt-sdc1Q3E`) to the alignment atom indices for both partners. This file is generated automatically during setup and does not need to be prepared by hand.
+
+If the specified RESID matches backbone atoms in more than one chain within a partner PDB, the script stops with an error rather than guessing. In that case, use a PDB where the mutation-site residue number is unique across chains.
+
+### Execution and Free Energy Analysis
+
+Submit the alchemical Hamiltonian Replica Exchange simulations to a SLURM cluster, or run them sequentially on a local machine:
+
+```
+#run the jobs on a SLURM cluster
+for i in tiam1-* ; do ( cd $i && sbatch ./run.sh ) ; done
+
+#without a SLURM cluster
+#for i in tiam1-* ; do ( cd $i && bash ./run.sh > ${i}.log 2>&1 ) ; done
+```
+
+The `run.sh` launch script calls `scripts/run-atm.py` for each pair. The `run-atm.py` application performs the following tasks:
+
+- It loads default settings from `scripts/defaults.yaml`. This file contains settings common to all pairs, such as the alchemical schedule, the maximum runtime (`WALL_TIME`), and the number of perturbation energy samples to collect (`MAX_SAMPLES`). To keep runtime short for this tutorial, `MAX_SAMPLES` is set to 10 per replica. Set `MAX_SAMPLES` to at least 100 for quantitative work and increase `WALL_TIME` and the SLURM job time limit in `run_template.sh` accordingly. See [The AToM Control File Reference](https://www.compmolbiophysbc.org/atom-openmm/atom-control-file) for a full description of the settings.
+- It loads the pair-specific alignment atoms from `ligands/pair_alignments.yaml`.
+- It finds an optimal initial position for the unbound partner in the solvent bulk to minimize the simulation box size.
+- It builds the simulation system, adding solvent and assigning force field parameters (`amber-14` for the receptor, solvent, and protein partners).
+- It runs `rbfe_structprep` to equilibrate and anneal the system.
+- It runs `rbfe_production` to collect perturbation energy data using the variable-displacement alchemical Hamiltonian Replica Exchange algorithm.
+- It calls `calculate_uwham` to estimate the relative binding free energy using UWHAM thermodynamic reweighting.
+
+After or while production is underway, view the alchemical trajectories with VMD using the provided script. For example:
+
+```
+cd $HOME/AToM-OpenMM/examples/RBFE/tiam1/complexes/tiam1-sdc1wt-sdc1Q3E
+vmd -f tiam1-sdc1wt-sdc1Q3E_0.pdb `/bin/ls -v r*/*xtc` -e vmd.in
+```
+
+### Key Differences from the Ligand RBFE Workflow
+
+Compared to the small-molecule CDK2 example:
+
+- Partner structures are PDB files in `ligands/`, not SDF files.
+- Alignment atoms are specific to each transformation pair and are defined by the backbone CA, N, C atoms of the mutation-site residue, rather than being shared across all ligands from a common reference.
+- The alchemical variable atoms are the side-chain atoms at the mutation site, not a complete small molecule.
+- The `RCPT_CHAIN_NAME` setting in `scripts/defaults.yaml` must match the chain ID of the receptor in your prepared PDB. For this TIAM1 system it is set to `B`. Most standard preparations use chain `A`.
+
+## Credits
+
+Adapted from:  Emilio Gallicchio <emilio.gallicchio@gmail.com>
+
+The algorithms to find the alignment atoms and the optimal displacements are adapted from the [ATM](https://github.com/EricChen521/atm) package by Eric Chen @EricChen521.
+
+The `protein_mutation` workflow mode and the `find_pair_alignment_atoms.py` script were developed to extend the workflow to macromolecular mutant systems.

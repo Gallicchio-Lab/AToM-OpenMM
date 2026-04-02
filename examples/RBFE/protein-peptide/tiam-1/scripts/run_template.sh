@@ -1,22 +1,57 @@
 #!/bin/bash
 #
 #SBATCH -J <JOBNAME>
-#SBATCH --partition=any
+#SBATCH --output=<JOBNAME>.log
+#SBATCH --error=<JOBNAME>.log
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=3
-#SBATCH --no-requeue
-#SBATCH -t 24:00:00
+#SBATCH --cpus-per-task=2
+#SBATCH --chdir=<WORKDIR>
+#SBATCH -t 10:00:00
 
-jobname=<JOBNAME>
+# term handler
+# the function is executed once the job gets the SIGTERM signal
+# because of preemption (or scancel, do scancel -s 9 jobid to
+# force hard termination)
+term_handler()
+{
+    #send sigterm to AToM to have it checkpoint
+    echo "executing term_handler at $(date)"
+    if [ -n "$ATOMPID" ] ; then
+	echo "Sending SIGTERM signal to process $ATOMPID "
+	kill -SIGTERM $ATOMPID
+    fi
 
-. ${HOME}/miniforge3/bin/activate <CONDAENV>
-echo "Running on $(hostname)"
-
-if [ ! -f ${jobname}_0.xml ]; then
-   rbfe_structprep ${jobname}_asyncre.cntl || exit 1
+    echo "Waiting 200 secs for the signal to take effect"
+    sleep 200
+}
+# declare the function handling the TERM signal
+if [ -n "$SLURM_JOB_ID" ]; then
+    trap 'term_handler' TERM
 fi
 
-echo "localhost,0:0,1,CUDA,,/tmp" > nodefile
-rbfe_production ${jobname}_asyncre.cntl
+jobname=<JOBNAME>
+sdir=<SCRIPTS_DIR>
+
+. <CONDADIR>/../../bin/activate <CONDAENV>
+echo "Running on $(hostname)"
+
+CMD=(
+    python ${sdir}/run-atm.py
+    --workflowMode <WORKFLOW_MODE>
+    --optionsYAMLinFile ${sdir}/defaults.yaml
+    --jobBasename ${jobname}
+    --receptorinFile ${sdir}/../receptor/<RCPT>.pdb
+    --LIG1inFile ${sdir}/../ligands/<LIG1>.<LIGFILEEXT>
+    --LIG2inFile ${sdir}/../ligands/<LIG2>.<LIGFILEEXT>
+    <ALIGNMENT_CLI>
+)
+
+if [ -n "$SLURM_JOB_ID" ]; then
+    "${CMD[@]}" &
+    ATOMPID=$!   
+    wait "$ATOMPID"
+else
+    "${CMD[@]}"
+fi

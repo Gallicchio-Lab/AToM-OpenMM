@@ -5,6 +5,8 @@ import numpy as np
 from contextlib import contextmanager
 from pathlib import Path
 from rdkit import Chem
+from scipy.spatial import distance_matrix
+from scipy.spatial.distance import cdist
 from openmm import version as ommversion
 import openmm as mm
 from openmm import *
@@ -134,6 +136,49 @@ def calc_displ_vec(receptor_file, ligand2_file):
     print(f"Automatic displacement vector: {displ_vec}")
     return displ_vec
 
+#return a dictionary of alignment atoms of a set of ligands given the
+#alignment atoms of a reference ligand.
+def get_alignment_atoms(ref_lig_file, ref_lig_alignment_atoms, lig_files):
+    """
+    Return Dict with key = 'ligand_name`,
+        value= dict {'aligned_atom_ids': [id-1,id_2,id_3], 'N_atoms': N}
+    """
+    lig_paths = [Path(f) for f in lig_files]
+    ligand_names = [path.stem for path in lig_paths]
+
+    result = {}
+
+    #dictionary of ligand coordinates
+    ligands_coords = { p.stem: _get_solute_coords(p) for p in lig_paths }
+    
+    ref_lig_path = Path(ref_lig_file)
+    ref_lig_coords = _get_solute_coords(ref_lig_path)
+    ref_lig_N_atoms = ref_lig_coords.shape[0]
+    ref_lig_name = ref_lig_path.stem
+
+    result.update(
+        {
+            ref_lig_name: {
+                "align_atom_ids": ref_lig_alignment_atoms,
+                "N_atoms": ref_lig_N_atoms,
+            }
+        }
+    )
+
+    for lig_name, lig_coords in ligands_coords.items():
+        dist_matrix = cdist(ref_lig_coords, lig_coords)
+        nearest_ids = np.argmin(dist_matrix, axis=1)
+        # the ref_align_idx starts from 1, be careful about the index
+        lig_aligment_ids = [nearest_ids[i - 1] + 1 for i in ref_lig_alignment_atoms]
+        result.update(
+            {
+                lig_name: {
+                    "align_atom_ids": [int(i) for i in lig_aligment_ids],
+                    "N_atoms": lig_coords.shape[0],
+                }
+            }
+        )
+    return result
 
 def numDevices(platform, max_to_test=8):
     if platform.getName() in ["Reference","CPU"]:

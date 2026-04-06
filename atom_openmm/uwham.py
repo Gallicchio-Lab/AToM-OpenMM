@@ -492,11 +492,6 @@ def create_quality_assessment_plot(df1, df2):
     do_multi = False
     if 'lambda3' in schedule1.keys():
         do_multi = True
-
-    print(do_multi)
-    print(schedule1)
-    print(schedule2)
-
         
     axs[1, 0].set_title("Leg1 Lambda function")
     axs[1, 0].set_ylim(-0.1, 1.0)

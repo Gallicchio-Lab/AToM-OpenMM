@@ -10,7 +10,7 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "Operating System :: POSIX :: Linux",
 ]
-dependencies = ["configobj", "numpy", "six"]
+dependencies = ["configobj", "numpy", "six", "scipy", "pyyaml", "rdkit"]
 
 [project.urls]
 "Homepage" = "https://github.com/Gallicchio-Lab/AToM-OpenMM"

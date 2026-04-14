@@ -39,13 +39,13 @@ echo "Running on $(hostname)"
 
 CMD=(
     python ${sdir}/run-atm.py
-    --workflowMode <WORKFLOW_MODE>
     --optionsYAMLinFile ${sdir}/defaults.yaml
     --jobBasename ${jobname}
     --receptorinFile ${sdir}/../receptor/<RCPT>.pdb
-    --LIG1inFile ${sdir}/../ligands/<LIG1>.<LIGFILEEXT>
-    --LIG2inFile ${sdir}/../ligands/<LIG2>.<LIGFILEEXT>
-    <ALIGNMENT_CLI>
+    --LIG1inFile ${sdir}/../ligands/<LIG1>.pdb
+    --LIG2inFile ${sdir}/../ligands/<LIG2>.pdb
+    --mutationResid <MUTRES>
+    --plotOutFile ${jobname}.png
 )
 
 if [ -n "$SLURM_JOB_ID" ]; then

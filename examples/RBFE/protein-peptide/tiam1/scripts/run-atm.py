@@ -1,9 +1,12 @@
 import os
 import argparse
 import yaml
+import string
+import pickle
 import numpy as np
 from pathlib import Path
 import pandas as pd
+from rdkit import Chem
 import openmm as mm
 from openmm import *
 from openmm.app import *
@@ -13,15 +16,9 @@ from atom_openmm.make_atm_system_from_rcpt_lig import make_system
 from atom_openmm.rbfe_structprep import rbfe_structprep
 from atom_openmm.rbfe_production import rbfe_production
 from atom_openmm.utils.AtomUtils import AtomUtils, get_selected_principal_groups
-from atom_openmm.uwham import calculate_uwham_from_rundir
+from atom_openmm.uwham import calculate_uwham_from_rundir, create_quality_assessment_plot 
+from make_pp_indexes import make_pp_indexes
 #from openmm_run import openmm_run
-
-PROTEIN_BACKBONE_ATOM_NAMES = {
-    "N", "NT", "CA", "CAY", "CAT", "C", "CY", "O", "OY", "OXT",
-    "H", "H2", "H3", "HY1", "HY2", "HY3", "HA",
-    "DN", "DCA", "DC", "DO",
-    "LPOA", "LPOB", "DOT1", "DOT2", "LPT1", "LPT2", "LPT3", "LPT4",
-}
 
 def get_indexes_from_query(topology, query):
     indexes = [ atom.index for atom in topology.atoms() if eval(query, {"atom": atom}) ]
@@ -30,49 +27,9 @@ def get_indexes_from_query(topology, query):
 
 #get the indexes of the atoms of a residue. Optionally, filter them by a query
 def get_indexes_from_residue(residue, query = 'True'):
-    indexes = [
-        atom.index
-        for atom in residue.atoms()
-        if eval(query, {"atom": atom, "PROTEIN_BACKBONE_ATOM_NAMES": PROTEIN_BACKBONE_ATOM_NAMES})
-    ]
+    indexes = [ atom.index for atom in residue.atoms() if eval(query, {"atom": atom}) ]
     indexes.sort()
     return indexes
-
-def get_indexes_from_residues(residues, query='True'):
-    indexes = []
-    for residue in residues:
-        indexes.extend(
-            atom.index
-            for atom in residue.atoms()
-            if eval(query, {"atom": atom, "PROTEIN_BACKBONE_ATOM_NAMES": PROTEIN_BACKBONE_ATOM_NAMES})
-        )
-    indexes.sort()
-    return indexes
-
-def get_residues_by_name(topology, residue_name):
-    residues = []
-    for chain in topology.chains():
-        for residue in chain.residues():
-            if residue.name == residue_name:
-                residues.append(residue)
-    return residues
-
-def get_residues_by_chain_id(topology, chain_id):
-    residues = []
-    for chain in topology.chains():
-        if chain.id == chain_id:
-            residues.extend(list(chain.residues()))
-    return residues
-
-def get_residue_by_id(residues, residue_id):
-    matches = [residue for residue in residues if residue.id == str(residue_id)]
-    if not matches:
-        return None
-    if len(matches) > 1:
-        raise ValueError(
-            f"Found multiple residues with id {residue_id} in the selected alchemical partner."
-        )
-    return matches[0]
 
 #calculates the center of a set of atoms
 def cm_from_indexes(topology, positions, indexes):
@@ -85,33 +42,36 @@ def cm_from_indexes(topology, positions, indexes):
     cm = cm/float(n)
     return cm
 
+#coordinates of a pdb file without relying on RDKit chemistry perception
+def get_pdb_coords(solute_fpath: Path):
+    coords = []
+    with open(solute_fpath, 'r') as f:
+        for line in f:
+            if line.startswith(('ATOM  ', 'HETATM')):
+                coords.append([
+                    float(line[30:38]),
+                    float(line[38:46]),
+                    float(line[46:54])
+                ])
+    return np.array(coords)
+
 def _get_solute_coords(solute_fpath: Path):  # pdb or sdf file format
     """
     Return N*3 array for solute coordinates
     """
     assert solute_fpath.suffix in [".sdf", ".pdb"], f"{solute_fpath} is not supported."
     if solute_fpath.suffix == ".sdf":
-        from rdkit import Chem
         mol = Chem.SDMolSupplier(str(solute_fpath), removeHs=False)[0]
-    else:
-        coords = []
-        with open(solute_fpath, "r", encoding="utf-8", errors="ignore") as handle:
-            for line in handle:
-                if line.startswith("ATOM") or line.startswith("HETATM"):
-                    coords.append(
-                        [
-                            float(line[30:38]),
-                            float(line[38:46]),
-                            float(line[46:54]),
-                        ]
-                    )
-        return np.asarray(coords, dtype=float)
 
-    conf = mol.GetConformer()
-    coords = np.zeros((mol.GetNumAtoms(), 3))
-    for row in range(mol.GetNumAtoms()):
-        coords[row] = np.array(list(conf.GetAtomPosition(row)))
-    return coords
+        conf = mol.GetConformer()
+        N_atoms = mol.GetNumAtoms()
+        coords = np.zeros((N_atoms, 3))
+        for row in range(N_atoms):
+            coords[row] = np.array(list(conf.GetAtomPosition(row)))
+
+        return coords
+    else:
+        return get_pdb_coords(solute_fpath)
 
 #adapted Eric Chen's atm implementation https://github.com/EricChen521/atm
 def calc_displ_vec(receptor_file, ligand2_file, options):
@@ -184,55 +144,29 @@ def rbfe_prepare_args(options):
     topology = pdb.topology
     positions = pdb.positions
 
-    #LIGAND1_ATOMS (prefer residues named L1; fallback to chain L)
-    lig1resname = 'L1'
-    res1 = get_residues_by_name(topology, lig1resname)
-    if not res1:
-        res1 = get_residues_by_chain_id(topology, 'L')
-    if not res1:
-        raise ValueError("Could not identify alchemical partner 1. Expected residue name L1 or chain ID L in the prepared system.")
-    ligand1_atoms = get_indexes_from_residues(res1)
-    options['LIGAND1_ATOMS'] = ligand1_atoms
+    #CM atoms of the receptor, all C-alpha atoms except the protein partners
+    rcpt_frame_query = 'atom.residue.chain.id not in ["L","M"] and atom.name == "CA"'
+    rcpt_frame_indexes = get_indexes_from_query(topology, rcpt_frame_query)
 
-    #LIGAND2_ATOMS (prefer residues named L2; fallback to chain M)
-    lig2resname = 'L2'
-    res2 = get_residues_by_name(topology, lig2resname)
-    if not res2:
-        res2 = get_residues_by_chain_id(topology, 'M')
-    if not res2:
-        raise ValueError("Could not identify alchemical partner 2. Expected residue name L2 or chain ID M in the prepared system.")
-    ligand2_atoms = get_indexes_from_residues(res2)
-    options['LIGAND2_ATOMS'] = ligand2_atoms
+    #internal receptor frame
+    rcpt_frame = get_selected_principal_groups(topology, positions, rcpt_frame_indexes)
 
-    # In protein_mutation mode, only the mutation-site sidechains are alchemically variable.
-    if options.get('WORKFLOW_MODE') == 'protein_mutation':
-        mutation_residue = options.get('PAIR_ALIGNMENT_RESIDUE')
-        if not mutation_residue:
-            raise ValueError(
-                "protein_mutation mode requires PAIR_ALIGNMENT_RESIDUE to define variable atoms."
-            )
+    #protein-protein ligand indexes from the generated system topology
+    pp_indexes = make_pp_indexes(
+        topology = topology,
+        chainLig1 = 'L',
+        chainLig2 = 'M',
+        residLig1 = options['MUTATION_RESID'],
+        residLig2 = options['MUTATION_RESID'],
+        rcpt_cm_atoms = rcpt_frame['origin']['indices'],
+        pos_restrained_atoms = rcpt_frame['origin']['indices'])
+    options.update(pp_indexes)
 
-        res1_var = get_residue_by_id(res1, mutation_residue)
-        if res1_var is None:
-            raise ValueError(
-                f"Could not find mutation residue {mutation_residue} in alchemical partner 1."
-            )
-        res2_var = get_residue_by_id(res2, mutation_residue)
-        if res2_var is None:
-            raise ValueError(
-                f"Could not find mutation residue {mutation_residue} in alchemical partner 2."
-            )
+    #LIGAND1_ATOMS (partner chain L)
+    ligand1_atoms = options['LIGAND1_ATOMS']
 
-        options['LIGAND1_VAR_ATOMS'] = get_indexes_from_residue(
-            res1_var, query='atom.name not in PROTEIN_BACKBONE_ATOM_NAMES'
-        )
-        options['LIGAND2_VAR_ATOMS'] = get_indexes_from_residue(
-            res2_var, query='atom.name not in PROTEIN_BACKBONE_ATOM_NAMES'
-        )
-    else:
-        #the whole ligands are variable (dual topology)
-        options['LIGAND1_VAR_ATOMS'] = options['LIGAND1_ATOMS']
-        options['LIGAND2_VAR_ATOMS'] = options['LIGAND2_ATOMS']
+    #LIGAND2_ATOMS (partner chain M)
+    ligand2_atoms = options['LIGAND2_ATOMS']
 
     #ligand anchor atoms
     ligand1_ref_atoms = options['ALIGN_LIGAND1_REF_ATOMS']
@@ -254,14 +188,6 @@ def rbfe_prepare_args(options):
     displ = (lig2cm_pos - lig1cm_pos).value_in_unit(angstrom)
     options['DISPLACEMENT'] = [ displ.x , displ.y, displ.z ] 
 
-    #CM atoms of the receptor, all C-alpha atoms
-    rcpt_chain_name = options.get('RCPT_CHAIN_NAME', 'A')
-    rcpt_frame_query = f'atom.residue.chain.id == "{rcpt_chain_name}" and atom.name == "CA"'
-    rcpt_frame_indexes = get_indexes_from_query(topology, rcpt_frame_query)
-
-    #internal receptor frame
-    rcpt_frame = get_selected_principal_groups(topology, positions, rcpt_frame_indexes)
-
     #receptor CM atoms (origin of the internal frame)
     options['RCPT_CM_ATOMS'] = rcpt_frame['origin']['indices']
     options['RCPT_FRAME_ATOMS_O'] = options['RCPT_CM_ATOMS']
@@ -280,10 +206,9 @@ def rbfe_prepare_args(options):
 
     #receptor-ligand exclusion potential
     options['EXCLUSION_POT_MOL1_INDEXES'] = get_indexes_from_query(
-        topology, f'(atom.residue.chain.id == "{rcpt_chain_name}") and (atom.element.atomic_number != 1)')
-    options['EXCLUSION_POT_MOL2_INDEXES'] = get_indexes_from_residues(
-        res2, query='(atom.element.atomic_number != 1)'
-    )
+        topology, '(atom.residue.chain.id == "B") and (atom.element.atomic_number != 1)')
+    options['EXCLUSION_POT_MOL2_INDEXES'] = get_indexes_from_query(
+        topology, '(atom.residue.chain.id == "M") and (atom.element.atomic_number != 1)')
 
     #working directory
     options['WORKDIR'] = os.environ.get('PWD') 
@@ -335,36 +260,20 @@ def run_atm(options,
             receptor_file,
             lig1_file,
             lig2_file,
-            workflow_mode='ligand_rbfe',
             alignments = None,
-            pair_alignments = None,
             lig1_ref_atoms = None,
             lig2_ref_atoms = None,
-            ff_json_file = 'ff.json'):
+            ff_json_file = 'ff.json',
+            csv_datafileout_leg1 = None,
+            csv_datafileout_leg2 = None,
+            figfileout = None,
+            mutation_residue = None):
 
     #basename
     options['BASENAME'] = jobname
-    options['WORKFLOW_MODE'] = workflow_mode
 
-    #alignment atoms
-    if workflow_mode == 'protein_mutation':
-        assert(pair_alignments is not None)
-        assert(jobname in pair_alignments)
-        pair_alignment = pair_alignments[jobname]
-        lig1_ref_atoms = pair_alignment['lig1_align_atom_ids']
-        lig2_ref_atoms = pair_alignment['lig2_align_atom_ids']
-        options['PAIR_ALIGNMENT_RESIDUE'] = pair_alignment.get('residue')
-        options['PAIR_ALIGNMENT_ATOM_ORDER'] = pair_alignment.get('atom_order', ['CA', 'N', 'C'])
-    elif alignments is not None:
-        lig1_name = Path(lig1_file).stem
-        lig2_name = Path(lig2_file).stem
-        assert(lig1_name in alignments)
-        assert(lig2_name in alignments)
-        lig1_ref_atoms = alignments[lig1_name]['align_atom_ids']
-        lig2_ref_atoms = alignments[lig2_name]['align_atom_ids']
-    assert(lig1_ref_atoms is not None and lig2_ref_atoms is not None)
-    options['ALIGN_LIGAND1_REF_ATOMS'] = [i-1 for i in lig1_ref_atoms]
-    options['ALIGN_LIGAND2_REF_ATOMS'] = [i-1 for i in lig2_ref_atoms]
+    #protein-protein mutation residue used to define the common/variable split
+    options['MUTATION_RESID'] = str(mutation_residue)
 
     #figures out an optimal displacement if one is not provided
     if not options.get('DISPLACEMENT'):
@@ -407,39 +316,52 @@ def run_atm(options,
     #free eneergy analysis
     if nsamples_per_replica:
         discard = int(nsamples_per_replica/3)
-        ddG, ddG_std, uwham_data = calculate_uwham_from_rundir(
-            options['WORKDIR'],
-            options['BASENAME'],
-            mintimeid=discard,
-        )
+        ddg, ddg_std, uwham_data = calculate_uwham_from_rundir(
+            options['WORKDIR'], options['BASENAME'], mintimeid = discard)
+
         dgbind1 = uwham_data['dg_leg1']
+        dgbind1_std = uwham_data['dg_stderr_leg1']
         dgbind2 = uwham_data['dg_leg2']
+        dgbind2_std = uwham_data['dg_stderr_leg2']
         nsamples = uwham_data['nsamples']
         print(f'Relative binding free energy estimate after {nsamples+discard} perturbation energy samples per replica discarding the first {discard} samples:')
-        print('DDGb=', ddG, '+/-', ddG_std, 'kcal/mol')
-        
+        print(f"{jobname}: DG = {ddg:8.3f} +/- {ddg_std:8.3f}  DG(leg1) = {dgbind1:8.3f} +/- {dgbind1_std:8.3f}   DG(leg2) = {dgbind2:8.3f} +/- {dgbind2_std:8.3f} kcal/mol, n_samples: {nsamples}")
+
+        #creates a plot for quality assessment
+        df1 = uwham_data['df_leg1']
+        N = len(uwham_data['uwham_out_leg1']['W'][:,0])
+        df1['W'] = uwham_data['uwham_out_leg1']['W'][:,0]/float(N)
+        df2 = uwham_data['df_leg2']
+        N = len(uwham_data['uwham_out_leg2']['W'][:,0])
+        df2['W'] = uwham_data['uwham_out_leg2']['W'][:,0]/float(N)
+        if csv_datafileout_leg1:
+            df1.to_csv(csv_datafileout_leg1, index=False)
+        if csv_datafileout_leg2:
+            df2.to_csv(csv_datafileout_leg2, index=False)
+        if figfileout:
+            fig = create_quality_assessment_plot(df1, df2)
+            fig.savefig(figfileout)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
     #required arguments
-    parser.add_argument('--workflowMode',            help='Workflow mode: ligand_rbfe or protein_mutation', default='ligand_rbfe')
     parser.add_argument('--optionsYAMLinFile',        help='A YAML file with the default options (alchemical schedule, etc.)', required=True)
     parser.add_argument('--jobBasename',              help='The basename of the job', required=True)
     parser.add_argument('--receptorinFile',           help='The structure file of the receptor usually in PDB format', required=True)
-    parser.add_argument('--LIG1inFile',               help='The structure file of the first alchemical partner, usually in SDF or PDB format', required=True)
-    parser.add_argument('--LIG2inFile',               help='The structure file of the second alchemical partner, usually in SDF or PDB format', required=True)
-
-    #optional arguments.
-    #the alignment atoms can be specified explicitly or a pickle file with the alignment dictionary must be given
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument( '--alignmentsYAMLinFile',     help='The yaml file with the alignment dictionary', type=str)
-    group.add_argument( '--pairAlignmentsYAMLinFile', help='The yaml file with the pair-specific alignment dictionary', type=str)
-    group.add_argument( '--LIG1refatoms',             help='The alignment atoms of the first ligand, --LIG1refatoms "14,12,11" for example, starting with 1', type=str)
-    parser.add_argument('--LIG2refatoms',             help='The alignment atoms of the second ligand, --LIG2refatoms "14,12,12" for example, starting with 1', type=str)
+    parser.add_argument('--LIG1inFile',               help='The structure file of the first protein partner usually in PDB format', required=True)
+    parser.add_argument('--LIG2inFile',               help='The structure file of the second protein partner usually in PDB format', required=True)
+    parser.add_argument('--mutationResid',            help='The residue id of the shared mutation site in the protein partners', required=True)
 
     #optional arguments
     parser.add_argument('--forcefieldJSONCachefile', help='file to store force field information', default='ff.json')
-    
+    parser.add_argument('--leg1DataCSVoutFile', type=str,
+                        help='Saves the samples for leg1 that were processed in a CSV file, includes the WHAM weights')
+    parser.add_argument('--leg2DataCSVoutFile', type=str,
+                        help='Saves the samples for leg2 that were processed in a CSV file, includes the WHAM weights')
+    parser.add_argument('--plotOutFile', type=str,
+                        help='A png file where to save the plot for simulation quality assessment')
+
     #dictionary of arguments
     args = vars(parser.parse_args())
 
@@ -448,7 +370,6 @@ if __name__ == '__main__':
     lig2_file = args['LIG2inFile']
     receptor_file = args['receptorinFile']
     ff_json_file = args['forcefieldJSONCachefile']
-    workflow_mode = args['workflowMode']
     
     #load default settings
     options = None
@@ -456,34 +377,9 @@ if __name__ == '__main__':
         options = yaml.safe_load(file)
     assert(options)
 
-    alignments = None
-    pair_alignments = None
-    lig1_ref_atoms = None
-    lig2_ref_atoms = None
-    if workflow_mode not in ('ligand_rbfe', 'protein_mutation'):
-        parser.error("--workflowMode must be one of: ligand_rbfe, protein_mutation")
-
-    if workflow_mode == 'protein_mutation':
-        if args['pairAlignmentsYAMLinFile'] is None:
-            parser.error("--workflowMode protein_mutation requires --pairAlignmentsYAMLinFile.")
-        with open(args['pairAlignmentsYAMLinFile'], 'r') as f:
-            pair_alignments = yaml.safe_load(f)
-    elif args['pairAlignmentsYAMLinFile'] is not None:
-        parser.error("--pairAlignmentsYAMLinFile is only supported with --workflowMode protein_mutation.")
-    elif args['alignmentsYAMLinFile'] is None:
-        #check that alignment atoms for both ligands are given if one is given
-        if args['LIG1refatoms'] is not None and args['LIG2refatoms'] is None:
-            parser.error("--LIG1refatoms requires --LIG2refatoms to be specified as well.")
-        #convert reference atoms to lists
-        lig1_ref_atoms = [int(i) for i in args['LIG1refatoms'].split(',')]
-        lig2_ref_atoms = [int(i) for i in args['LIG2refatoms'].split(',')]
-    else:
-        with open(args['alignmentsYAMLinFile'], 'r')  as f:
-            alignments = yaml.safe_load(f)
-
     run_atm(options, jobname, receptor_file, lig1_file, lig2_file,
-            workflow_mode = workflow_mode,
-            alignments = alignments,
-            pair_alignments = pair_alignments,
-            lig1_ref_atoms = lig1_ref_atoms, lig2_ref_atoms = lig2_ref_atoms,
-            ff_json_file = ff_json_file)
+            ff_json_file = ff_json_file,
+            csv_datafileout_leg1 = args['leg1DataCSVoutFile'],
+            csv_datafileout_leg2 = args['leg2DataCSVoutFile'],
+            figfileout = args['plotOutFile'],
+            mutation_residue = args['mutationResid'])

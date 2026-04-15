@@ -145,7 +145,8 @@ def rbfe_prepare_args(options):
     positions = pdb.positions
 
     #CM atoms of the receptor, all C-alpha atoms except the protein partners
-    rcpt_frame_query = 'atom.residue.chain.id not in ["L","M"] and atom.name == "CA"'
+    rcpt_chain_name = options.get('RCPT_CHAIN_NAME', 'B')
+    rcpt_frame_query = f'atom.residue.chain.id == "{rcpt_chain_name}" and atom.name == "CA"'
     rcpt_frame_indexes = get_indexes_from_query(topology, rcpt_frame_query)
 
     #internal receptor frame
@@ -206,7 +207,7 @@ def rbfe_prepare_args(options):
 
     #receptor-ligand exclusion potential
     options['EXCLUSION_POT_MOL1_INDEXES'] = get_indexes_from_query(
-        topology, '(atom.residue.chain.id == "B") and (atom.element.atomic_number != 1)')
+        topology, f'(atom.residue.chain.id == "{rcpt_chain_name}") and (atom.residue.name != "HOH") and (atom.element.atomic_number != 1)')
     options['EXCLUSION_POT_MOL2_INDEXES'] = get_indexes_from_query(
         topology, '(atom.residue.chain.id == "M") and (atom.element.atomic_number != 1)')
 

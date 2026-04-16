@@ -27,7 +27,10 @@ class OMMReplica(object):
         self.mdsteps = 0
         self.outfile = None
         self.safeckpt_file = "ckpt_is_valid"
-
+        self.multisoftplus = False
+        if keywords.get('LAMBDA3'):
+            self.multisoftplus = True
+        
         state = self.context.getState(getPositions=True, getVelocities=True)
         self.positions = state.getPositions(asNumpy=True).value_in_unit(unit.nanometers)
         self.velocities = state.getVelocities(asNumpy=True).value_in_unit(unit.nanometers/unit.picoseconds)
@@ -163,24 +166,43 @@ class OMMReplicaATM(OMMReplica):
             temperature = self.par["temperature"]
             lmbd1 = self.par["lambda1"]
             lmbd2 = self.par["lambda2"]
+            lmbd3 = self.par["lambda3"]
             alpha = self.par["alpha"]
             uh = self.par["uh"]
+            uh1 = self.par["uh1"]
             w0 = self.par["w0"]
             direction = self.par["atmdirection"]
 
-            replica_state_data = (
-                self.stateid,
-                temperature / kelvin,
-                direction,
-                lmbd1,
-                lmbd2,
-                alpha * kilocalories_per_mole,
-                uh / kilocalories_per_mole,
-                w0 / kilocalories_per_mole,
-                pot_energy / kilocalories_per_mole,
-                pert_energy / kilocalories_per_mole,
-                bias_energy / kilocalories_per_mole,
-            )
+            if self.multisoftplus:
+                replica_state_data = (
+                    self.stateid,
+                    temperature / kelvin,
+                    direction,
+                    lmbd1,
+                    lmbd2,
+                    lmbd3,
+                    alpha * kilocalories_per_mole,
+                    uh / kilocalories_per_mole,
+                    uh1 / kilocalories_per_mole,
+                    w0 / kilocalories_per_mole,
+                    pot_energy / kilocalories_per_mole,
+                    pert_energy / kilocalories_per_mole,
+                    bias_energy / kilocalories_per_mole,
+                )
+            else:
+                replica_state_data = (
+                    self.stateid,
+                    temperature / kelvin,
+                    direction,
+                    lmbd1,
+                    lmbd2,
+                    alpha * kilocalories_per_mole,
+                    uh / kilocalories_per_mole,
+                    w0 / kilocalories_per_mole,
+                    pot_energy / kilocalories_per_mole,
+                    pert_energy / kilocalories_per_mole,
+                    bias_energy / kilocalories_per_mole,
+                )
 
             return replica_state_data
         else:
@@ -194,9 +216,12 @@ class OMMReplicaATM(OMMReplica):
             except ValueError:
                 self.logger.error("unable to save output")
 
+        ndata = len(data[0])
+        fmt = "%d " + "%f " * (ndata-1) + "\n"
+
         if self.outfile is not None:
             for line in data:
-                self.outfile.write("%d %f %f %f %f %f %f %f %f %f %f\n" % line)
+                self.outfile.write(fmt % line)
             self.outfile.flush()
         else:
             self.logger.warning("unable to save output")
@@ -210,8 +235,16 @@ class OMMReplicaATM(OMMReplica):
         self.par['temperature'] = self.context.getParameter(self.ommsystem.parameter['temperature'])*kelvin
         self.par['lambda1'] = self.context.getParameter(self.ommsystem.atmforce.Lambda1())
         self.par['lambda2'] = self.context.getParameter(self.ommsystem.atmforce.Lambda2())
+        if self.multisoftplus:
+            self.par['lambda3'] = self.context.getParameter('Lambda3')
+        else:
+            self.par['lambda3'] = self.par['lambda2']
         self.par['alpha'] = self.context.getParameter(self.ommsystem.atmforce.Alpha())/kilojoules_per_mole
         self.par['uh'] = self.context.getParameter(self.ommsystem.atmforce.Uh())*kilojoules_per_mole
+        if self.multisoftplus:
+            self.par['uh1'] = self.context.getParameter('Uh1')*kilojoules_per_mole
+        else:
+            self.par['uh1'] = self.par['uh']
         self.par['w0'] = self.context.getParameter(self.ommsystem.atmforce.W0())*kilojoules_per_mole
         self.par['atmdirection'] = self.context.getParameter(self.ommsystem.atmforce.Direction())
         self.par['atmintermediate'] = self.context.getParameter(self.ommsystem.parameter['atmintermediate'])
@@ -235,8 +268,12 @@ class OMMReplicaATM(OMMReplica):
             self.context.setParameter(self.ommsystem.parameter['temperature'], self.par['temperature']/kelvin)
             self.context.setParameter(self.ommsystem.atmforce.Lambda1(), self.par['lambda1'])
             self.context.setParameter(self.ommsystem.atmforce.Lambda2(), self.par['lambda2'])
+            if self.multisoftplus:
+                self.context.setParameter('Lambda3', self.par['lambda3'])
             self.context.setParameter(self.ommsystem.atmforce.Alpha(), self.par['alpha']*kilojoules_per_mole)
             self.context.setParameter(self.ommsystem.atmforce.Uh(), self.par['uh']/kilojoules_per_mole)
+            if self.multisoftplus:
+                self.context.setParameter('Uh1', self.par['uh1'])
             self.context.setParameter(self.ommsystem.atmforce.W0(), self.par['w0']/kilojoules_per_mole)
             self.context.setParameter(self.ommsystem.atmforce.Direction(), self.par['atmdirection'])
             self.context.setParameter(self.ommsystem.parameter['atmintermediate'], self.par['atmintermediate'])

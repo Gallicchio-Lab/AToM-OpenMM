@@ -5,12 +5,12 @@ authors = [{ name = "Emilio Gallicchio", email = "emilio.gallicchio@gmail.com" }
 readme = "README.md"
 requires-python = ">=3.8"
 #dynamic = ["version"]
-version = "8.4.1beta"
+version = "8.4.2beta"
 classifiers = [
   "Programming Language :: Python :: 3",
   "Operating System :: POSIX :: Linux",
 ]
-dependencies = ["configobj", "numpy", "six"]
+dependencies = ["configobj", "numpy", "six", "scipy", "pyyaml", "rdkit"]
 
 [project.urls]
 "Homepage" = "https://github.com/Gallicchio-Lab/AToM-OpenMM"

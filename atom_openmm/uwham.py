@@ -197,34 +197,72 @@ def _uwham(logQ, size=None, label=None, base=None, init=None, fisher=True):
         "base": base,
     }
 
-
-def _bias_fcn(epert, lam1, lam2, alpha, u0, w0):
+def _bias_fcn(epert, par):
     """
     Bias ilogistic potential:
     (lambda2-lambda1) ln[1+exp(-alpha (u-u0))]/alpha + lambda2 u + w0
+    or
+    Multi softplus function    
+    depending on par composition
     """
-    ebias1 = np.zeros_like(epert)
-    if alpha > 0:
-        ee = 1 + np.exp(-alpha * (epert - u0))
-        ebias1 = (lam2 - lam1) * np.log(ee) / alpha
-    return ebias1 + lam2 * epert + w0
+    lam1 = par['lambda1']
+    lam2 = par['lambda2']
+    alpha = par['alpha']
+    u0 = par['u0']
+    w0 = par['w0']
+    
+    if 'lambda3' in par.keys():
+        lam3 =  par['lambda3']
+        u1 = par['u1']
+        f3 = lam3*epert + w0
+        if alpha > 0:
+            f2 = lam2*epert + w0 + (lam3 - lam2)*u1
+            f1 = lam1*epert + w0 + (lam3 - lam2)*u1 + (lam2 - lam1)*u0
+            nn = (np.exp(alpha*f1) + np.exp(alpha*f2) + np.exp(alpha*f3))/3.0
+            return np.log(nn)/alpha
+        else:
+            return f3
+    else:
+        ebias1 = np.zeros_like(epert)
+        if alpha > 0:
+            ee = 1 + np.exp(-alpha * (epert - u0))
+            ebias1 = (lam2 - lam1) * np.log(ee) / alpha
+        return ebias1 + lam2 * epert + w0
 
 
-def _dbias_fcn(epert, lam1, lam2, alpha, u0, w0):
+def _dbias_fcn(epert, par):
     """
     Derivative of the bias ilogistic potential:
     (lambda2-lambda1)/(1+exp(-alpha (u-u0))) + lambda2
+    or the Multi softplus function    
+    depending on par composition
     """
-    ee = 1.0 + np.exp(-alpha * (epert - u0))
-    return (lam2 - lam1) / ee + lam1
+    lam1 = par['lambda1']
+    lam2 = par['lambda2']
+    alpha = par['alpha']
+    u0 = par['u0']
+    w0 = par['w0']
+    if 'lambda3' in par.keys():
+        lam3 =  par['lambda3']
+        u1 = par['u1']
+        if alpha > 0:
+            f3 = lam3*epert + w0
+            f2 = lam2*epert + w0 + (lam3 - lam2)*u1
+            f1 = lam1*epert + w0 + (lam3 - lam2)*u1 + (lam2 - lam1)*u0
+            nn = (np.exp(alpha*f1) + np.exp(alpha*f2) + np.exp(alpha*f3))/3.0
+            return ((lam1*np.exp(alpha*f1) + lam2*np.exp(alpha*f2) + lam3*np.exp(alpha*f3))/3.0)/nn
+        else:
+            return lam3*np.ones_like(epert)
+    else:
+        ee = 1.0 + np.exp(-alpha * (epert - u0))
+        return (lam2 - lam1) / ee + lam1
 
 
-def _npot_fcn(e0, epert, bet, lam1, lam2, alpha, u0, w0):
+def _npot_fcn(e0, epert, bet, par):
     """
     Negative reduced energy: -beta*(U0+bias)
     """
-    return -bet * (e0 + _bias_fcn(epert, lam1, lam2, alpha, u0, w0))
-
+    return -bet * (e0 + _bias_fcn(epert, par))
 
 def _uwham_r(label, logQ, ufactormax, ufactormin=1):
     """
@@ -253,30 +291,51 @@ def get_alchemical_schedule(df):
     
     # sort by stateid
     unique_df = unique_df.sort_values('stateid')
-    
+
     # build the alchemical schedule
-    schedule = {
-        'stateid': unique_df['stateid'].tolist(),
-        'direction': unique_df['direction'].tolist(),
-        'lambda1': unique_df['lambda1'].tolist(),
-        'lambda2': unique_df['lambda2'].tolist(),
-        'alpha':   unique_df['alpha'].tolist(),
-        'u0':      unique_df['u0'].tolist(),
-        'w0':      unique_df['w0'].tolist(),
-        'temperature': unique_df['temperature'].tolist(),
-    }
-    
+    if 'lambda3' in unique_df.keys() and 'u1' in unique_df.keys():
+        schedule = {
+            'stateid': unique_df['stateid'].tolist(),
+            'direction': unique_df['direction'].tolist(),
+            'lambda1': unique_df['lambda1'].tolist(),
+            'lambda2': unique_df['lambda2'].tolist(),
+            'lambda3': unique_df['lambda3'].tolist(),
+            'alpha':   unique_df['alpha'].tolist(),
+            'u0':      unique_df['u0'].tolist(),
+            'u1':      unique_df['u1'].tolist(),
+            'w0':      unique_df['w0'].tolist(),
+            'temperature': unique_df['temperature'].tolist(),
+        }        
+    else:
+        schedule = {
+            'stateid': unique_df['stateid'].tolist(),
+            'direction': unique_df['direction'].tolist(),
+            'lambda1': unique_df['lambda1'].tolist(),
+            'lambda2': unique_df['lambda2'].tolist(),
+            'alpha':   unique_df['alpha'].tolist(),
+            'u0':      unique_df['u0'].tolist(),
+            'w0':      unique_df['w0'].tolist(),
+            'temperature': unique_df['temperature'].tolist(),
+        }
+
     return schedule
 
     
 def calculate_uwham_leg_from_dataframe(dataf):
 
     schedule = get_alchemical_schedule(dataf)
-    lambda1 = schedule['lambda1']
-    lambda2 = schedule['lambda2']
-    alpha = schedule['alpha']
-    u0 = schedule['u0']
-    w0 = schedule['w0']
+    stateid = schedule['stateid']
+    vpar = {}
+    for lvar in [ "lambda1", "lambda2", "alpha", "u0", "w0"]:
+        vpar[lvar] = schedule[lvar]
+    do_multi = False
+    if 'lambda3' in schedule.keys():
+        do_multi = True
+        for lvar in [ "lambda3", "u1" ]:
+            vpar[lvar] = schedule[lvar]
+    else:
+        vpar['lambda3'] = schedule['lambda2']
+        vpar['u1'] = schedule['u0']
     temperature = schedule['temperature']
 
     #check that there is only one direction
@@ -299,51 +358,40 @@ def calculate_uwham_leg_from_dataframe(dataf):
     dataf["bet"] = 1.0 / (kb * dataf["temperature"])
     bet = [ 1.0 / (kb * temperature[0] ) ]
     
-    if direction > 0:
-        stateid = schedule['stateid']
-        lambda1 = schedule['lambda1']
-        lambda2 = schedule['lambda2']
-        alpha = schedule['alpha']
-        u0 = schedule['u0']
-        w0 = schedule['w0']
-        temperature = schedule['temperature']
-    else:
+    if direction < 0:
         #list states in reverse order for leg2
-        stateid = schedule['stateid'][::-1]
-        lambda1 = schedule['lambda1'][::-1]
-        lambda2 = schedule['lambda2'][::-1]
-        alpha = schedule['alpha'][::-1]
-        u0 = schedule['u0'][::-1]
-        w0 = schedule['w0'][::-1]
-        temperature = schedule['temperature'][::-1]
+        stateid = stateid[::-1]
+        for lvar in vpar.keys():
+            vpar[lvar] = vpar[lvar][::-1]
+        temperature = temperature[::-1]
 
     # Extract U0 values as U-bias
     e0 = dataf["potE"].values.copy()
     for i in range(N):
-        e0[i] -= _bias_fcn(
-            dataf["pertE"].iloc[i],
-            dataf["lambda1"].iloc[i],
-            dataf["lambda2"].iloc[i],
-            dataf["alpha"].iloc[i],
-            dataf["u0"].iloc[i],
-            dataf["w0"].iloc[i],
-        )
+        par = {}
+        for lvar in [ "lambda1", "lambda2", "alpha", "u0", "w0"]:
+            par[lvar] = dataf[lvar].iloc[i]
+        if do_multi:
+            for lvar in [ "lambda3", "u1" ]:
+                par[lvar] = dataf[lvar].iloc[i]
+        e0[i] -= _bias_fcn( dataf["pertE"].iloc[i], par)
 
     # Calculate negative potential
     neg_pot = np.zeros((N, m))
     sid = 0
     for be in range(mlam):
         for te in range(mtempt):
+            par = {}
+            for lvar in [ "lambda1", "lambda2", "alpha", "u0", "w0"]:
+                par[lvar] = vpar[lvar][be]
+            if do_multi:
+                for lvar in [ "lambda3", "u1" ]:
+                    par[lvar] = vpar[lvar][be]
             neg_pot[:, sid] = _npot_fcn(
                 e0,
                 dataf["pertE"].values,
                 bet[te],
-                lambda1[be],
-                lambda2[be],
-                alpha[be],
-                u0[be],
-                w0[be],
-            )
+                par)
             sid += 1
 
     # assign state labels from 1 to M, with 1 corresponding to lambda=0 or lambda=1 depending on direction
@@ -440,6 +488,10 @@ def create_quality_assessment_plot(df1, df2):
 
     schedule1 = get_alchemical_schedule(df1)
     schedule2 = get_alchemical_schedule(df2)
+
+    do_multi = False
+    if 'lambda3' in schedule1.keys():
+        do_multi = True
         
     axs[1, 0].set_title("Leg1 Lambda function")
     axs[1, 0].set_ylim(-0.1, 1.0)
@@ -447,26 +499,38 @@ def create_quality_assessment_plot(df1, df2):
     axs[1, 0].set_xlabel("u (kcal/mol)")
     axs[1, 0].plot(u_grid_leg1, lambdaf_leg1, color='black')
     stateid = schedule1['stateid']
-    lambda1 = schedule1['lambda1']
-    lambda2 = schedule1['lambda2']
-    alpha = schedule1['alpha']
-    u0 = schedule1['u0']
-    w0 = schedule1['w0']
+
+    vpar = {}
+    for lvar in [ "lambda1", "lambda2", "alpha", "u0", "w0"]:
+        vpar[lvar] = schedule1[lvar]
+    if do_multi:
+        for lvar in [ "lambda3", "u1" ]:
+            vpar[lvar] = schedule1[lvar]
+    
     for i in range(len(stateid)):
-        axs[1, 0].plot(u_grid_leg1, _dbias_fcn(u_grid_leg1, lambda1[i], lambda2[i], alpha[i], u0[i], w0[i]), color=default_colors[i % nc])
+        par = {}
+        for lvar in vpar.keys():
+            par[lvar] = vpar[lvar][i]
+        axs[1, 0].plot(u_grid_leg1, _dbias_fcn(u_grid_leg1, par), color=default_colors[i % nc])
 
     axs[1, 1].set_title("Leg2 Lambda function")
     axs[1, 1].set_ylim(-0.1, 1.0)
     axs[1, 1].set_xlabel("u (kcal/mol)")
     axs[1, 1].plot(u_grid_leg2, lambdaf_leg2, color='black')
     stateid = schedule2['stateid'][::-1]
-    lambda1 = schedule2['lambda1'][::-1]
-    lambda2 = schedule2['lambda2'][::-1]
-    alpha = schedule2['alpha'][::-1]
-    u0 = schedule2['u0'][::-1]
-    w0 = schedule2['w0'][::-1]
+
+    vpar = {}
+    for lvar in [ "lambda1", "lambda2", "alpha", "u0", "w0"]:
+        vpar[lvar] = schedule2[lvar][::-1]
+    if do_multi:
+        for lvar in [ "lambda3", "u1" ]:
+            vpar[lvar] = schedule2[lvar][::-1]
+
     for i in range(len(stateid)):
-        axs[1, 1].plot(u_grid_leg2, _dbias_fcn(u_grid_leg2, lambda1[i], lambda2[i], alpha[i], u0[i], w0[i]), color=default_colors[i % nc])
+        par = {}
+        for lvar in vpar.keys():
+            par[lvar] = vpar[lvar][i]
+        axs[1, 1].plot(u_grid_leg2, _dbias_fcn(u_grid_leg2, par), color=default_colors[i % nc])
 
     return fig
         
@@ -477,27 +541,53 @@ def calculate_uwham_from_rundir(
     maxtimeid=None,
 ):
 
-    # Define column names
-    columns = [
-        "stateid",
-        "temperature",
-        "direction",
-        "lambda1",
-        "lambda2",
-        "alpha",
-        "u0",
-        "w0",
-        "potE",
-        "pertE",
-        "biasE",
-    ]
-
     #count number of replicas = number of states looking for folders named r0, r1, etc.
     pattern = os.path.join(rundir, 'r[0-9]*')
     matches = glob.glob(pattern)
     directories = [d for d in matches if os.path.isdir(d)]
     nstates = len(directories)
-    
+
+    #measure the width of the data
+    with open(f'{directories[0]}/{jobname}.out', 'r') as f:
+        first_line = f.readline()
+        ncolumns = len(first_line.split())
+
+    # 11 columns = standard softplus
+    # 13 columns = 3-linear softplus
+    assert ncolumns == 11 or ncolumns == 13, f"Invalid number of columns in data file: {ncolumns}"
+        
+    if ncolumns == 11: #softplus
+        # Define column names
+        columns = [
+            "stateid",
+            "temperature",
+            "direction",
+            "lambda1",
+            "lambda2",
+            "alpha",
+            "u0",
+            "w0",
+            "potE",
+            "pertE",
+            "biasE",
+        ]
+    else:
+        columns = [
+            "stateid",
+            "temperature",
+            "direction",
+            "lambda1",
+            "lambda2",
+            "lambda3",
+            "alpha",
+            "u0",
+            "u1",
+            "w0",
+            "potE",
+            "pertE",
+            "biasE",
+        ]
+        
     # Create list of data files
     datafiles = [
         os.path.join(rundir, f"r{i}", f"{jobname}.out") for i in range(nstates)

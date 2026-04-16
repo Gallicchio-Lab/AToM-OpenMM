@@ -231,8 +231,10 @@ def do_lambda_annealing(keywords, logger):
     lmbd = 0.0
     lambda1 = lmbd
     lambda2 = lmbd
+    lambda3 = lmbd
     alpha = 0.0 / kilocalorie_per_mole
     uh = 0.0 * kilocalorie_per_mole
+    uh1 = 0.0 * kilocalorie_per_mole
     w0coeff = 0.0 * kilocalorie_per_mole
     umsc =  1000.0 * kilocalorie_per_mole
     ubcore = 500.0 * kilocalorie_per_mole
@@ -246,8 +248,12 @@ def do_lambda_annealing(keywords, logger):
     #override ATM parameters
     simulation.context.setParameter(syst.atmforce.Lambda1(), lambda1)
     simulation.context.setParameter(syst.atmforce.Lambda2(), lambda2)
+    if syst.multisoftplus:
+        simulation.context.setParameter("Lambda3", lambda3);
     simulation.context.setParameter(syst.atmforce.Alpha(), alpha *kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.Uh(), uh /kilojoules_per_mole)
+    if syst.multisoftplus:
+        simulation.context.setParameter("Uh1", uh1 /kilojoules_per_mole);
     simulation.context.setParameter(syst.atmforce.W0(), w0coeff /kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.Umax(), umsc /kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.Ubcore(), ubcore /kilojoules_per_mole)
@@ -287,16 +293,26 @@ def do_lambda_annealing(keywords, logger):
             pert_energy = syst.atm_utils.softCorePertE((u0+uoffset) - u1, umcore, ubcore, acore)
         l1 = simulation.context.getParameter(syst.atmforce.Lambda1())
         l2 = simulation.context.getParameter(syst.atmforce.Lambda2())
+        if syst.multisoftplus:
+            l3 = simulation.context.getParameter("Lambda3")
         a = simulation.context.getParameter(syst.atmforce.Alpha()) / kilojoules_per_mole
         umid = simulation.context.getParameter(syst.atmforce.Uh()) * kilojoules_per_mole
+        if syst.multisoftplus:
+            umid1 = simulation.context.getParameter("Uh1") * kilojoules_per_mole
         w0 = simulation.context.getParameter(syst.atmforce.W0()) * kilojoules_per_mole
-        print("%f %f %f %f %f %f %f %f %f" % (temperature/kelvin,lmbd, l1, l2, a*kilocalorie_per_mole, umid/kilocalorie_per_mole, w0/kilocalorie_per_mole, pot_energy/kilocalorie_per_mole, pert_energy/kilocalorie_per_mole), file=f )
+        if syst.multisoftplus:
+            print("%f %f %f %f %f %f %f %f %f %f %f" % (temperature/kelvin,lmbd, l1, l2, l3, a*kilocalorie_per_mole, umid/kilocalorie_per_mole, umid1/kilocalorie_per_mole, w0/kilocalorie_per_mole, pot_energy/kilocalorie_per_mole, pert_energy/kilocalorie_per_mole), file=f )
+        else:
+            print("%f %f %f %f %f %f %f %f %f" % (temperature/kelvin,lmbd, l1, l2, a*kilocalorie_per_mole, umid/kilocalorie_per_mole, w0/kilocalorie_per_mole, pot_energy/kilocalorie_per_mole, pert_energy/kilocalorie_per_mole), file=f )
         f.flush()
         lmbd += deltalambda
         lambda1 += deltalambda
         lambda2 += deltalambda
         simulation.context.setParameter(syst.atmforce.Lambda1(), lambda1)
         simulation.context.setParameter(syst.atmforce.Lambda2(), lambda2)
+        if syst.multisoftplus:
+            lambda3 += deltalambda
+            simulation.context.setParameter("Lambda3", lambda3)
 
     f.close()
         
@@ -342,8 +358,10 @@ def do_equil(keywords, logger):
     lmbd = 0.5
     lambda1 = lmbd
     lambda2 = lmbd
+    lambda3 = lmbd
     alpha = 0.0 / kilocalorie_per_mole
     uh = 0.0 * kilocalorie_per_mole
+    uh1 = 0.0 * kilocalorie_per_mole
     w0coeff = 0.0 * kilocalorie_per_mole
     umsc =  1000.0 * kilocalorie_per_mole
     ubcore = 500.0 * kilocalorie_per_mole
@@ -357,8 +375,12 @@ def do_equil(keywords, logger):
     #override ATM parameters
     simulation.context.setParameter(syst.atmforce.Lambda1(), lambda1)
     simulation.context.setParameter(syst.atmforce.Lambda2(), lambda2)
+    if syst.multisoftplus:
+        simulation.context.setParameter("Lambda3", lambda3);
     simulation.context.setParameter(syst.atmforce.Alpha(), alpha *kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.Uh(), uh /kilojoules_per_mole)
+    if syst.multisoftplus:
+        simulation.context.setParameter("Uh1", uh1 /kilojoules_per_mole);
     simulation.context.setParameter(syst.atmforce.W0(), w0coeff /kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.Umax(), umsc /kilojoules_per_mole)
     simulation.context.setParameter(syst.atmforce.Ubcore(), ubcore /kilojoules_per_mole)

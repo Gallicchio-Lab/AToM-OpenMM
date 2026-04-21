@@ -15,107 +15,16 @@ from openmm.unit import *
 from atom_openmm.make_atm_system_from_rcpt_lig import make_system
 from atom_openmm.rbfe_structprep import rbfe_structprep
 from atom_openmm.rbfe_production import rbfe_production
-from atom_openmm.utils.AtomUtils import AtomUtils, get_selected_principal_groups
+from atom_openmm.utils.AtomUtils import (
+    AtomUtils,
+    calc_displ_vec,
+    cm_from_indexes,
+    get_indexes_from_query,
+    make_pp_indexes,
+    get_selected_principal_groups,
+)
 from atom_openmm.uwham import calculate_uwham_from_rundir, create_quality_assessment_plot 
-from make_pp_indexes import make_pp_indexes
 #from openmm_run import openmm_run
-
-def get_indexes_from_query(topology, query):
-    indexes = [ atom.index for atom in topology.atoms() if eval(query, {"atom": atom}) ]
-    indexes.sort()
-    return indexes
-
-#get the indexes of the atoms of a residue. Optionally, filter them by a query
-def get_indexes_from_residue(residue, query = 'True'):
-    indexes = [ atom.index for atom in residue.atoms() if eval(query, {"atom": atom}) ]
-    indexes.sort()
-    return indexes
-
-#calculates the center of a set of atoms
-def cm_from_indexes(topology, positions, indexes):
-    cm = Vec3(0,0,0)*nanometer
-    n = 0
-    for atom in topology.atoms():
-        if atom.index in indexes:
-            cm += positions[atom.index]
-            n += 1
-    cm = cm/float(n)
-    return cm
-
-#coordinates of a pdb file without relying on RDKit chemistry perception
-def get_pdb_coords(solute_fpath: Path):
-    coords = []
-    with open(solute_fpath, 'r') as f:
-        for line in f:
-            if line.startswith(('ATOM  ', 'HETATM')):
-                coords.append([
-                    float(line[30:38]),
-                    float(line[38:46]),
-                    float(line[46:54])
-                ])
-    return np.array(coords)
-
-def _get_solute_coords(solute_fpath: Path):  # pdb or sdf file format
-    """
-    Return N*3 array for solute coordinates
-    """
-    assert solute_fpath.suffix in [".sdf", ".pdb"], f"{solute_fpath} is not supported."
-    if solute_fpath.suffix == ".sdf":
-        mol = Chem.SDMolSupplier(str(solute_fpath), removeHs=False)[0]
-
-        conf = mol.GetConformer()
-        N_atoms = mol.GetNumAtoms()
-        coords = np.zeros((N_atoms, 3))
-        for row in range(N_atoms):
-            coords[row] = np.array(list(conf.GetAtomPosition(row)))
-
-        return coords
-    else:
-        return get_pdb_coords(solute_fpath)
-
-#adapted Eric Chen's atm implementation https://github.com/EricChen521/atm
-def calc_displ_vec(receptor_file, ligand2_file, options):
-    """
-    Return the optimal displacement vector (x,y,z) for the second ligand.
-
-    Step 1: Find the smallest area center(point_1),
-    Step 2: Move point_1 along the third direction with 9 A to point_2,
-    Step 3: find the the smallest point in the third direction, point_3,
-    Finally, the displacement_vec is obtained point_2 - point_3
-    """
-    protein_fpath = Path(receptor_file)
-    ligand_dpath = Path(ligand2_file)
-
-    protein_coords = _get_solute_coords(solute_fpath=protein_fpath)
-    x_range = np.array([0, min(protein_coords[:, 0]), max(protein_coords[:, 0])])
-    y_range = np.array([1, min(protein_coords[:, 1]), max(protein_coords[:, 1])])
-    z_range = np.array([2, min(protein_coords[:, 2]), max(protein_coords[:, 2])])
-
-    # print(f"system size: X {x_range}, Y {y_range}, Z {z_range}")
-
-    small_area_center = np.array([0.0, 0.0, 0.0])
-
-    axes = sorted([x_range, y_range, z_range], key=lambda v: v[2] - v[1])
-    small_area_center[int(axes[0][0])] = np.mean(axes[0][1:])
-    small_area_center[int(axes[1][0])] = np.mean(axes[1][1:])
-    small_area_center[int(axes[2][0])] = axes[2][2] # max u coordinate
-    u = int(axes[2][0])
-    # point_1
-    #print(f"small_area_center coordiante: {small_area_center}, with u axis: {u}")
-    # point_2
-    small_area_center[u] += 10.0 # max u coordinate + 10
-
-    # find the smallest U in all ligands.
-    ligands_coords =_get_solute_coords(ligand_dpath)
-
-    sorted_u_index = ligands_coords[:, u].argsort()
-    sorted_u_coords = ligands_coords[sorted_u_index]
-    distant_lig_atom_coords = sorted_u_coords[0, :] # minimum u of all ligands
-    #print(f"sorted ligand atom coordiates by {u}: {sorted_u_coords}")
-
-    displ_vec = np.round((small_area_center - distant_lig_atom_coords), 2)
-    print(f"Automatic displacement vector: {displ_vec}")
-    return displ_vec
 
 def rbfe_setup(receptor_file, lig1_file, lig2_file, ff_json_file, options):
     #prepare the system, unless already done
@@ -158,9 +67,7 @@ def rbfe_prepare_args(options):
         chainLig1 = 'L',
         chainLig2 = 'M',
         residLig1 = options['MUTATION_RESID'],
-        residLig2 = options['MUTATION_RESID'],
-        rcpt_cm_atoms = rcpt_frame['origin']['indices'],
-        pos_restrained_atoms = rcpt_frame['origin']['indices'])
+        residLig2 = options['MUTATION_RESID'])
     options.update(pp_indexes)
 
     #LIGAND1_ATOMS (partner chain L)
@@ -168,18 +75,6 @@ def rbfe_prepare_args(options):
 
     #LIGAND2_ATOMS (partner chain M)
     ligand2_atoms = options['LIGAND2_ATOMS']
-
-    #ligand anchor atoms
-    ligand1_ref_atoms = options['ALIGN_LIGAND1_REF_ATOMS']
-    ligand2_ref_atoms = options['ALIGN_LIGAND2_REF_ATOMS']
-    lig1_anchor_atom = ligand1_atoms[ligand1_ref_atoms[0]]
-    lig2_anchor_atom = ligand2_atoms[ligand2_ref_atoms[0]]
-    options['LIGAND1_ATTACH_ATOM'] =  lig1_anchor_atom
-    options['LIGAND2_ATTACH_ATOM'] =  lig2_anchor_atom
-
-    #ligand CM atoms (same as anchor atoms)
-    options['LIGAND1_CM_ATOMS'] = [ ligand1_atoms[ ligand1_ref_atoms[0] ] ]
-    options['LIGAND2_CM_ATOMS'] = [ ligand2_atoms[ ligand2_ref_atoms[0] ] ]
 
     #position of CMs of the ligands
     lig1cm_pos = cm_from_indexes(topology, positions, options['LIGAND1_CM_ATOMS'] )
@@ -261,9 +156,6 @@ def run_atm(options,
             receptor_file,
             lig1_file,
             lig2_file,
-            alignments = None,
-            lig1_ref_atoms = None,
-            lig2_ref_atoms = None,
             ff_json_file = 'ff.json',
             csv_datafileout_leg1 = None,
             csv_datafileout_leg2 = None,
@@ -278,7 +170,7 @@ def run_atm(options,
 
     #figures out an optimal displacement if one is not provided
     if not options.get('DISPLACEMENT'):
-        displ = calc_displ_vec(receptor_file, lig2_file, options)
+        displ = calc_displ_vec(receptor_file, lig2_file)
         options['DISPLACEMENT'] = list(displ)
     assert(options['DISPLACEMENT'])
 

@@ -20,23 +20,16 @@ The `CUDA` OpenMM platform is assumed. Edit `asyncre_template.cntl`, and `run_te
 
 The setup creates simulation folders in the `complexes` subdirectory for each ABFE calculation. For example, `fkbp-dss` corresponds to the binding free energy calculation for the complex of FKBP with ligand dss.
 
-After the setup script completes, go to the `complexes` directory to minimize and equilibrate the systems:
-```
-cd  $HOME/examples/ABFE/fkbp/complexes
-bash ./prep.sh
-```
-This step prepares the systems in the alchemical intermediate state at λ=1/2. The resulting structures are the input of the alchemical replica exchange simulations.
-
 ### Alchemical Replica Exchange
 
-Run replica exchange in each of the simulation folders. For example:
+Run each calculation from its simulation folder. Each `run.sh` is self-contained and performs structure preparation first if `${jobname}_0.xml` is not already present, then starts ABFE production. For example:
 ```
 cd $HOME/AToM-OPenMM/examples/ABFE/fkbp/complexes
 for i in fkbp-* ; do ( cd $i ; bash ./run.sh ) ; done
 ```
 The `run.sh` shell scripts are formatted for optionally running them on a `slurm` queuing system. Edit `run_template.sh` in `$HOME/examples/ABFE/fkbp/scripts` to adapt them to your cluster.
 
-Each replica exchange calculation is set to run for 2 hours on 1 GPU. Much longer running times (24 hours or more) are needed for this system to approach convergence depending on the speed of the GPU. More GPUs can be deployed by editing the `run_template.sh` file in `$HOME/examples/ABFE/fkbp/scripts`.
+Each replica exchange calculation is configured as a 26-hour job on 1 GPU so there is time for both structure preparation and production. Much longer running times may be needed for this system to approach convergence depending on the speed of the GPU. More GPUs can be deployed by editing the `run_template.sh` file in `$HOME/examples/ABFE/fkbp/scripts`.
 
 ### Free Energy Analysis
 

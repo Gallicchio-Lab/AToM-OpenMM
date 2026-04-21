@@ -49,9 +49,6 @@ for l in `seq 0 ${nlig_m1}` ; do
     
 done
 
-#prepare prep script
-ligs=${ligands[@]}
-sed "s#<RECEPTOR>#${receptor}#;s#<LIGS>#${ligs}#g "< ${work_dir}/scripts/prep_template.sh > ${work_dir}/complexes/prep.sh
-
 #prepare free energy calculation script
+ligs=${ligands[@]}
 sed "s#<RECEPTOR>#${receptor}#;s#<LIGS>#${ligs}# " < ${work_dir}/scripts/free_energies_template.sh > ${work_dir}/complexes/free_energies.sh

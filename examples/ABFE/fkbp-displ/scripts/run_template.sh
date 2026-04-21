@@ -34,9 +34,7 @@ fi
 jobname=<JOBNAME>
 sdir=<SCRIPTS_DIR>
 
-# Activate your environment here if needed.
-# Example:
-. ${HOME}/miniconda3/bin/activate atm8.4.0
+. <CONDADIR>/../../bin/activate <CONDAENV>
 
 echo "Running on $(hostname)"
 

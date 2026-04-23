@@ -1,48 +1,32 @@
-Absolute Binding Free Energies of a Set of Complexes of the FKBP Protein Receptor with Ligand Fragments 
--------------------------------------------------------------------------------------------------------
+Absolute Binding Free Energies of FKBP Ligands with Variable Displacement
+-------------------------------------------------------------------------
 
-In this tutorial we will calculate the absolute binding free energies of the complexes of FKBP with 7 ligand fragments from the work of [A Pan, H Xu, T Palpant and DE Shaw](http://dx.doi.org/10.1021/acs.jctc.7b00172). This tutorial uses an automated workflow to prepare and run the 7 calculations.
+This workflow mirrors the maintained [`examples/RBFE/cdk2`](../../RBFE/cdk2) variable-displacement setup as closely as possible, but applies it to FKBP absolute binding free energies. Conceptually, it is RBFE variable-displacement reused for ABFE by replacing one ligand with a noninteracting ghost particle.
 
-It is highly recommended to go through the [TEMOA G1 ABFE tutorial](../temoa-g1) before attempting this one. The following assumes familiarity with the terms and procedures introduced there.
+The mapping is:
 
-We assume that the OpenMM and AToM-OpenMM packages and their dependencies are available in a `conda` environment (see the [README](../../../README.md), and that the `examples` folder is available under `$HOME/AToM-OpenMM/examples`. Adjust this pathname as needed.
+- `L1` is a one-atom ghost residue with mass and no interactions.
+- `L2` is the physical ligand.
+- `run-atm.py` builds a standard one-ligand system, translates the ligand to the displaced solvent site, appends the ghost at the original binding-site anchor position, and then feeds RBFE-style keywords into `rbfe_structprep` and `rbfe_production`.
 
-### System preparation
+The setup and launch flow intentionally follows the `cdk2` example:
 
-Setup the simulation input files. The automated setup script below reads the parameters from the `setup-settings.sh` file.
-```
-cd $HOME/AToM-OpenMM/examples/ABFE/fkbp/
+```bash
+cd $HOME/AToM-OpenMM/examples/ABFE/fkbp
 bash ./scripts/setup-atm.sh
-```
-The automated script uses OpenMM's Modeller class, openmmforcefields, and the OpenFF utilities to prepare the ligands and the receptor and to solvated them in a solution box. `setup-settings.sh` includes the list of ligands, the ATM displacement vector, and the list of residues of the receptor that define the binding site. The script assumes that the `sdf` files of the ligand are stored in the `ligands` subdirectory and the `pdb` file of the receptor is stored in the `receptor` subdirectory. It is assumed that the `pdb` file of the receptor is prepared for Amber (see the [Amber tutorials](https://ambermd.org/tutorials/)). The ligands are assumed to have been docked into the binding site.
+cd complexes
 
-The `CUDA` OpenMM platform is assumed. Edit `asyncre_template.cntl`, and `run_template.sh` under `scripts` to change the platform (OpenMM currently supports 'OpenCL', 'HIP', and 'CPU', in addition to `CUDA`).
+# run on a SLURM cluster
+for i in fkbp-* ; do ( cd $i && sbatch ./run.sh ) ; done
 
-The setup creates simulation folders in the `complexes` subdirectory for each ABFE calculation. For example, `fkbp-dss` corresponds to the binding free energy calculation for the complex of FKBP with ligand dss.
-
-### Alchemical Replica Exchange
-
-Run each calculation from its simulation folder. Each `run.sh` is self-contained and performs structure preparation first if `${jobname}_0.xml` is not already present, then starts ABFE production. For example:
-```
-cd $HOME/AToM-OPenMM/examples/ABFE/fkbp/complexes
-for i in fkbp-* ; do ( cd $i ; bash ./run.sh ) ; done
-```
-The `run.sh` shell scripts are formatted for optionally running them on a `slurm` queuing system. Edit `run_template.sh` in `$HOME/examples/ABFE/fkbp/scripts` to adapt them to your cluster.
-
-Each replica exchange calculation is configured as a 26-hour job on 1 GPU so there is time for both structure preparation and production. Much longer running times may be needed for this system to approach convergence depending on the speed of the GPU. More GPUs can be deployed by editing the `run_template.sh` file in `$HOME/examples/ABFE/fkbp/scripts`.
-
-### Free Energy Analysis
-
-The binding free energies (ΔGb) of each complex are computed by the `free_energies.sh` script in the `complexes` directory:
-```
-cd $HOME/examples/ABFE/fkbp/complexes
-bash ./free_energies.sh
+# or run locally
+# for i in fkbp-* ; do ( cd $i && bash ./run.sh > ${i}.log 2>&1 ) ; done
 ```
 
-The output would look like:
-```
-fkbp-thi DGb=  -3.18 +-   0.37  range: 20 35
-fkbo-dss DGb=  -2.99 +-   0.52  range: 20 35
-...
-```
-etc. where `DGb` is the value of the binding free energy. In this example the first 20 samples are discarded and each simulation collected 35 samples per replica. Edit the `free_energies.sh` script to change the number of samples discarded. Obviously much more data is needed to reach convergence for this system in practice. This is only an example.
+`scripts/setup-settings.sh` only lists the receptor basename and the ligand basenames. The initial displacement is determined automatically in `scripts/run-atm.py`, matching the variable-displacement behavior used by the RBFE workflow.
+
+Notes:
+
+- Positional restraints are disabled for this workflow.
+- No alignment-restraint settings are needed in `scripts/defaults.yaml`.
+- If you want a specific ligand attachment atom instead of the default first non-hydrogen atom, pass `--ligandAttachAtomIndex` to `scripts/run-atm.py`.

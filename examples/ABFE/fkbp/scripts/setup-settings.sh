@@ -1,15 +1,5 @@
-
-#basename for jobs
-basename=fkbp
-
-#basename of the receptor pdb file (processed for amber using pdb4amber)
+#basename of the receptor pdb file
 receptor=fkbp
 
-#basenames of the ligands (.sdf format expected)
+#ligands to process
 ligands=(thi prp dss dmso dapp dap but)
-
-#displacement vector
-displacement=("22.0" "22.0" "22.0")
-
-#residue ids of the receptor that define the center of the binding site
-vsite_rcpt_residues=(26 36 37 42 46 48 54 55 56 82)

@@ -4,7 +4,6 @@ import argparse
 import yaml
 from pathlib import Path
 import pandas as pd
-import openmm as mm
 from openmm import *
 from openmm.app import *
 from openmm.unit import *
@@ -13,99 +12,19 @@ from atom_openmm.rbfe_structprep import rbfe_structprep
 from atom_openmm.rbfe_production import rbfe_production
 from atom_openmm.utils.AtomUtils import (
     calc_displ_vec,
+    get_attach_atom_from_residue,
+    get_residue_by_name,
     get_indexes_from_query,
     get_indexes_from_residue,
     get_selected_principal_groups,
+    patch_system_with_ghost,
 )
 from atom_openmm.uwham import calculate_uwham_from_rundir, create_quality_assessment_plot
-
-def get_first_residue_by_name(topology, residue_name):
-    for chain in topology.chains():
-        for residue in chain.residues():
-            if residue.name == residue_name:
-                return residue
-    return None
-
-
-def get_ligand_geometric_center(positions, residue):
-    atom_indexes = get_indexes_from_residue(residue)
-    center = Vec3(0.0, 0.0, 0.0) * nanometer
-    for atom_index in atom_indexes:
-        center += positions[atom_index]
-    return center / float(len(atom_indexes))
-
-
-def squared_distance(position1, position2):
-    displacement = (position1 - position2).value_in_unit(nanometer)
-    return displacement.x ** 2 + displacement.y ** 2 + displacement.z ** 2
-
-
-def get_attach_atom_from_residue(residue, positions, attach_index=None):
-    atoms = list(residue.atoms())
-    if attach_index is not None:
-        return atoms[attach_index]
-    ligand_center = get_ligand_geometric_center(positions, residue)
-    return min(atoms, key=lambda atom: squared_distance(positions[atom.index], ligand_center))
-
 
 def system_has_ghost_pair(pdb_file):
     pdb = PDBFile(pdb_file)
     residue_names = [residue.name for residue in pdb.topology.residues()]
     return residue_names.count("L1") == 1 and residue_names.count("L2") == 1
-
-
-def patch_system_with_ghost(pdb_file, xml_file, displacement, ghost_mass, attach_index=None):
-    pdb = PDBFile(pdb_file)
-    positions_nm = [Vec3(pos.x, pos.y, pos.z) for pos in pdb.positions.value_in_unit(nanometer)]
-    topology = pdb.topology
-
-    with open(xml_file) as input:
-        system = XmlSerializer.deserialize(input.read())
-
-    ligand_residue = get_first_residue_by_name(topology, "L1")
-    assert ligand_residue is not None, "Could not find ligand residue L1 in the prepared system."
-    ligand_attach_atom = get_attach_atom_from_residue(
-        ligand_residue,
-        pdb.positions,
-        attach_index=attach_index,
-    )
-    ligand_atom_indexes = get_indexes_from_residue(ligand_residue)
-
-    bound_anchor_position = Vec3(
-        positions_nm[ligand_attach_atom.index].x,
-        positions_nm[ligand_attach_atom.index].y,
-        positions_nm[ligand_attach_atom.index].z,
-    )
-    displacement_vec = (Vec3(*displacement) * angstrom).value_in_unit(nanometer)
-
-    for atom_index in ligand_atom_indexes:
-        positions_nm[atom_index] += displacement_vec
-
-    ligand_residue.name = "L2"
-    ligand_residue.chain.id = "M"
-
-    ghost_topology = Topology()
-    ghost_chain = ghost_topology.addChain(id="L")
-    ghost_residue = ghost_topology.addResidue("L1", ghost_chain)
-    ghost_element = Element.getBySymbol("C")
-    ghost_topology.addAtom("C1", ghost_element, ghost_residue)
-
-    modeller = Modeller(topology, positions_nm * nanometer)
-    modeller.add(ghost_topology, [bound_anchor_position] * nanometer)
-
-    system.addParticle(ghost_mass * amu)
-    for force in system.getForces():
-        if isinstance(force, mm.NonbondedForce):
-            force.addParticle(0.0, 1.0 * angstrom, 0.0 * kilojoule_per_mole)
-        elif isinstance(force, mm.CustomNonbondedForce):
-            force.addParticle([0.0] * force.getNumPerParticleParameters())
-        elif isinstance(force, mm.GBSAOBCForce):
-            force.addParticle(0.0, 1.0, 0.0)
-
-    with open(xml_file, "w") as output:
-        output.write(XmlSerializer.serialize(system))
-    with open(pdb_file, "w") as output:
-        PDBFile.writeFile(modeller.topology, modeller.positions, output, keepIds=True)
 
 
 def rbfe_setup(receptor_file, lig_file, ff_json_file, options):
@@ -139,8 +58,8 @@ def rbfe_prepare_args(options):
     topology = pdb.topology
     positions = pdb.positions
 
-    ghost_residue = get_first_residue_by_name(topology, "L1")
-    ligand_residue = get_first_residue_by_name(topology, "L2")
+    ghost_residue = get_residue_by_name(topology, "L1")
+    ligand_residue = get_residue_by_name(topology, "L2")
     assert ghost_residue is not None
     assert ligand_residue is not None
 
@@ -155,7 +74,6 @@ def rbfe_prepare_args(options):
     ghost_attach_atom = list(ghost_residue.atoms())[0]
     ligand_attach_atom = get_attach_atom_from_residue(
         ligand_residue,
-        positions,
         attach_index=options.get('LIGAND_ATTACH_INDEX'),
     )
     options['LIGAND1_ATTACH_ATOM'] = ghost_attach_atom.index

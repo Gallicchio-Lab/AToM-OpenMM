@@ -65,6 +65,78 @@ def get_indexes_from_residue(residue, query = 'True'):
     indexes.sort()
     return indexes
 
+def get_residue_by_name(topology, residue_name):
+    for chain in topology.chains():
+        for residue in chain.residues():
+            if residue.name == residue_name:
+                return residue
+    return None
+
+def get_attach_atom_from_residue(residue, attach_index=None):
+    atoms = list(residue.atoms())
+    if attach_index is not None:
+        return atoms[attach_index]
+    for atom in atoms:
+        if atom.element is not None:
+            is_hydrogen = atom.element.symbol == "H"
+        else:
+            is_hydrogen = atom.name.strip().upper().startswith("H")
+        if not is_hydrogen:
+            return atom
+    raise ValueError(f"Could not find a non-hydrogen attachment atom in residue {residue.name}.")
+
+def patch_system_with_ghost(pdb_file, xml_file, displacement, ghost_mass, attach_index=None):
+    pdb = PDBFile(pdb_file)
+    positions_nm = [Vec3(pos.x, pos.y, pos.z) for pos in pdb.positions.value_in_unit(nanometer)]
+    topology = pdb.topology
+
+    with open(xml_file) as input:
+        system = XmlSerializer.deserialize(input.read())
+
+    ligand_residue = get_residue_by_name(topology, "L1")
+    assert ligand_residue is not None, "Could not find ligand residue L1 in the prepared system."
+    ligand_attach_atom = get_attach_atom_from_residue(
+        ligand_residue,
+        attach_index=attach_index,
+    )
+    ligand_atom_indexes = get_indexes_from_residue(ligand_residue)
+
+    bound_anchor_position = Vec3(
+        positions_nm[ligand_attach_atom.index].x,
+        positions_nm[ligand_attach_atom.index].y,
+        positions_nm[ligand_attach_atom.index].z,
+    )
+    displacement_vec = (Vec3(*displacement) * angstrom).value_in_unit(nanometer)
+
+    for atom_index in ligand_atom_indexes:
+        positions_nm[atom_index] += displacement_vec
+
+    ligand_residue.name = "L2"
+    ligand_residue.chain.id = "M"
+
+    ghost_topology = Topology()
+    ghost_chain = ghost_topology.addChain(id="L")
+    ghost_residue = ghost_topology.addResidue("L1", ghost_chain)
+    ghost_element = Element.getBySymbol("C")
+    ghost_topology.addAtom("C1", ghost_element, ghost_residue)
+
+    modeller = Modeller(topology, positions_nm * nanometer)
+    modeller.add(ghost_topology, [bound_anchor_position] * nanometer)
+
+    system.addParticle(ghost_mass * amu)
+    for force in system.getForces():
+        if isinstance(force, mm.NonbondedForce):
+            force.addParticle(0.0, 1.0 * angstrom, 0.0 * kilojoule_per_mole)
+        elif isinstance(force, mm.CustomNonbondedForce):
+            force.addParticle([0.0] * force.getNumPerParticleParameters())
+        elif isinstance(force, mm.GBSAOBCForce):
+            force.addParticle(0.0, 1.0, 0.0)
+
+    with open(xml_file, "w") as output:
+        output.write(XmlSerializer.serialize(system))
+    with open(pdb_file, "w") as output:
+        PDBFile.writeFile(modeller.topology, modeller.positions, output, keepIds=True)
+
 #calculates the center of a set of atoms
 def cm_from_indexes(topology, positions, indexes):
     cm = Vec3(0,0,0)*nanometer
@@ -1157,4 +1229,3 @@ class AtomUtils(object):
             zetap = np.power( zeta , a)
             usc = (umax-ub)*(zetap - 1.)/(zetap + 1.) + ub
         return usc
-

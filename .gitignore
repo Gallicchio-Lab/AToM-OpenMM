@@ -1,1 +1,12 @@
-__pycache__
+__pycache__/
+.codex
+.vscode/
+build/
+*.egg-info/
+
+# Generated example outputs
+examples/ABFE/fkbp/complexes/
+examples/ABFE/fkbp/ligands/ffdb.json
+examples/ABFE/*_vs_*.pdf
+examples/ABFE/*_vs_*.png
+examples/ABFE/*_vs_*_values.csv

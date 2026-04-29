@@ -65,6 +65,132 @@ def get_indexes_from_residue(residue, query = 'True'):
     indexes.sort()
     return indexes
 
+def _commonatoms_pp(topology, lig1_atoms, varatoms1, lig2_atoms, varatoms2):
+    ca1 = sorted(list(set(lig1_atoms) - set(varatoms1)))
+    ca2 = sorted(list(set(lig2_atoms) - set(varatoms2)))
+    commonatoms1 = []
+    commonatoms2 = []
+    atoms = list(topology.atoms())
+
+    for i in ca1:
+        found = False
+        for j in ca2:
+            if atoms[i].residue.id == atoms[j].residue.id and atoms[i].name == atoms[j].name:
+                commonatoms1.append(i)
+                commonatoms2.append(j)
+                found = True
+                break
+        if not found:
+            print(
+                "commonatoms(): error: did not find corresponding atom for atom "
+                f"{i}, name: {atoms[i].name} residue: {atoms[i].residue.id} "
+                f"chain {atoms[i].residue.chain.id}"
+            )
+            return None, None
+
+    if len(ca1) != len(commonatoms1) or len(ca2) != len(commonatoms2):
+        print("commonatoms(): error common atoms do not match")
+        return None, None
+
+    return commonatoms1, commonatoms2
+
+def make_pp_indexes(topology, chainLig1, chainLig2, residLig1, residLig2):
+    backbone = [
+        "N", "NT", "CA", "CAY", "CAT", "C", "CY", "O", "OY", "OXT", "H",
+        "H1", "H2", "H3", "HT1", "HT2", "HT3", "HNT", "HY1", "HY2", "HY3",
+        "HA", "DN", "DCA", "DC", "DO", "LPOA", "LPOB", "DOT1", "DOT2",
+        "LPT1", "LPT2", "LPT3", "LPT4",
+    ]
+
+    lig1chain = None
+    lig2chain = None
+    for chain in topology.chains():
+        if chain.id == chainLig1:
+            lig1chain = chain
+        elif chain.id == chainLig2:
+            lig2chain = chain
+
+    if lig1chain is None or lig2chain is None:
+        raise ValueError("Unable to locate one or both ligand chains in topology")
+
+    ligand1_atoms = sorted([atom.index for atom in lig1chain.atoms()])
+    ligand2_atoms = sorted([atom.index for atom in lig2chain.atoms()])
+
+    res1 = None
+    for residue in lig1chain.residues():
+        if residue.id == residLig1:
+            res1 = residue
+            break
+    if res1 is None:
+        raise ValueError(f"Unable to locate ligand 1 mutation residue {residLig1}")
+    ligand1_var_atoms = get_indexes_from_residue(res1, f"not atom.name in {backbone}")
+
+    res2 = None
+    for residue in lig2chain.residues():
+        if residue.id == residLig2:
+            res2 = residue
+            break
+    if res2 is None:
+        raise ValueError(f"Unable to locate ligand 2 mutation residue {residLig2}")
+    ligand2_var_atoms = get_indexes_from_residue(res2, f"not atom.name in {backbone}")
+
+    ligand1_common_atoms, ligand2_common_atoms = _commonatoms_pp(
+        topology, ligand1_atoms, ligand1_var_atoms, ligand2_atoms, ligand2_var_atoms
+    )
+    if not ligand1_common_atoms:
+        raise ValueError("Error in commonatoms()")
+
+    query = (
+        f" atom.residue.chain.id == '{chainLig1}' and atom.residue.id == '{residLig1}' "
+        "and atom.name == 'CA' "
+    )
+    i = get_indexes_from_query(topology, query)[0]
+    ligand1_attachment_atom = i
+    query = (
+        f" atom.residue.chain.id == '{chainLig1}' and atom.residue.id == '{residLig1}' "
+        "and atom.name == 'N' "
+    )
+    j = get_indexes_from_query(topology, query)[0]
+    query = (
+        f" atom.residue.chain.id == '{chainLig1}' and atom.residue.id == '{residLig1}' "
+        "and atom.name == 'C' "
+    )
+    k = get_indexes_from_query(topology, query)[0]
+    ligand1_ref_atoms = [i - ligand1_atoms[0], j - ligand1_atoms[0], k - ligand1_atoms[0]]
+
+    query = (
+        f" atom.residue.chain.id == '{chainLig2}' and atom.residue.id == '{residLig2}' "
+        "and atom.name == 'CA' "
+    )
+    i = get_indexes_from_query(topology, query)[0]
+    ligand2_attachment_atom = i
+    query = (
+        f" atom.residue.chain.id == '{chainLig2}' and atom.residue.id == '{residLig2}' "
+        "and atom.name == 'N' "
+    )
+    j = get_indexes_from_query(topology, query)[0]
+    query = (
+        f" atom.residue.chain.id == '{chainLig2}' and atom.residue.id == '{residLig2}' "
+        "and atom.name == 'C' "
+    )
+    k = get_indexes_from_query(topology, query)[0]
+    ligand2_ref_atoms = [i - ligand2_atoms[0], j - ligand2_atoms[0], k - ligand2_atoms[0]]
+
+    indexes = {}
+    indexes["LIGAND1_ATOMS"] = ligand1_atoms
+    indexes["LIGAND2_ATOMS"] = ligand2_atoms
+    indexes["LIGAND1_VAR_ATOMS"] = ligand1_var_atoms
+    indexes["LIGAND2_VAR_ATOMS"] = ligand2_var_atoms
+    indexes["LIGAND1_COMMON_ATOMS"] = ligand1_common_atoms
+    indexes["LIGAND2_COMMON_ATOMS"] = ligand2_common_atoms
+    indexes["LIGAND1_ATTACH_ATOM"] = ligand1_attachment_atom
+    indexes["LIGAND2_ATTACH_ATOM"] = ligand2_attachment_atom
+    indexes["ALIGN_LIGAND1_REF_ATOMS"] = ligand1_ref_atoms
+    indexes["ALIGN_LIGAND2_REF_ATOMS"] = ligand2_ref_atoms
+    indexes["LIGAND1_CM_ATOMS"] = [ligand1_attachment_atom]
+    indexes["LIGAND2_CM_ATOMS"] = [ligand2_attachment_atom]
+    return indexes
+
 #calculates the center of a set of atoms
 def cm_from_indexes(topology, positions, indexes):
     cm = Vec3(0,0,0)*nanometer
@@ -1157,4 +1283,3 @@ class AtomUtils(object):
             zetap = np.power( zeta , a)
             usc = (umax-ub)*(zetap - 1.)/(zetap + 1.) + ub
         return usc
-

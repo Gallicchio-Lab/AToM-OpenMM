@@ -12,7 +12,7 @@ We assume that the latest release of OpenMM and the latest AToM-OpenMM packages 
 Run the workflow:
 
 ```
-cd $HOME/AToM-OpenMM/examples/RBFE/protein-peptide/tiam1-protein-peptide
+cd $HOME/AToM-OpenMM/examples/RBFE/protein-peptide/tiam1
 bash ./scripts/setup-atm.sh
 cd complexes
 

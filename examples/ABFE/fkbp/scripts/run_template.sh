@@ -8,7 +8,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=2
 #SBATCH --chdir=<WORKDIR>
-#SBATCH -t 26:00:00
+#SBATCH -t 10:00:00
 
 # term handler
 # the function is executed once the job gets the SIGTERM signal

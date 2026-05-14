@@ -23,6 +23,13 @@ for i in fkbp-* ; do ( cd $i && sbatch ./run.sh ) ; done
 # for i in fkbp-* ; do ( cd $i && bash ./run.sh > ${i}.log 2>&1 ) ; done
 ```
 
+Collect the results once the simulations have completed:
+
+```bash
+cd $HOME/AToM-OpenMM/examples/ABFE/fkbp/complexes
+for i in *; do tail -2 ${i}/${i}.log; done
+```
+
 `scripts/setup-settings.sh` only lists the receptor basename and the ligand basenames. The initial displacement is determined automatically in `scripts/run-atm.py`, matching the variable-displacement behavior used by the RBFE workflow.
 
 Notes:

@@ -24,7 +24,7 @@ term_handler()
     fi
 
     echo "Waiting 200 secs for the signal to take effect"
-    sleep 200
+    sleep 60
 }
 # declare the function handling the TERM signal
 if [ -n "$SLURM_JOB_ID" ]; then

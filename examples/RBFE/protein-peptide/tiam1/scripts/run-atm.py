@@ -61,13 +61,14 @@ def rbfe_prepare_args(options):
     #internal receptor frame
     rcpt_frame = get_selected_principal_groups(topology, positions, rcpt_frame_indexes)
 
-    #protein-protein ligand indexes from the generated system topology
+    #peptide indexes from the generated system topology
     pp_indexes = make_pp_indexes(
         topology = topology,
         chainLig1 = 'L',
         chainLig2 = 'M',
         residLig1 = options['MUTATION_RESID'],
-        residLig2 = options['MUTATION_RESID'])
+        residLig2 = options['MUTATION_RESID'],
+        backbone = options.get('PP_BACKBONE'))
     options.update(pp_indexes)
 
     #LIGAND1_ATOMS (partner chain L)

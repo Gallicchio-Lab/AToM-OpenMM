@@ -23,8 +23,8 @@ term_handler()
 	kill -SIGTERM $ATOMPID
     fi
 
-    echo "Waiting 200 secs for the signal to take effect"
-    sleep 200
+    echo "Waiting 60 secs for the signal to take effect"
+    sleep 60
 }
 # declare the function handling the TERM signal
 if [ -n "$SLURM_JOB_ID" ]; then

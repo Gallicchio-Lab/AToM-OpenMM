@@ -94,13 +94,11 @@ def _commonatoms_pp(topology, lig1_atoms, varatoms1, lig2_atoms, varatoms2):
 
     return commonatoms1, commonatoms2
 
-def make_pp_indexes(topology, chainLig1, chainLig2, residLig1, residLig2):
-    backbone = [
-        "N", "NT", "CA", "CAY", "CAT", "C", "CY", "O", "OY", "OXT", "H",
-        "H1", "H2", "H3", "HT1", "HT2", "HT3", "HNT", "HY1", "HY2", "HY3",
-        "HA", "DN", "DCA", "DC", "DO", "LPOA", "LPOB", "DOT1", "DOT2",
-        "LPT1", "LPT2", "LPT3", "LPT4",
-    ]
+def make_pp_indexes(topology, chainLig1, chainLig2, residLig1, residLig2, backbone=None):
+    if backbone is None:
+        backbone = ["N", "CA", "C", "O", "H"]
+    elif not isinstance(backbone, (list, tuple)):
+        raise TypeError("backbone must be a list or tuple of atom names")
 
     lig1chain = None
     lig2chain = None

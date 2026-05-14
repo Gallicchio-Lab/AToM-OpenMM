@@ -23,8 +23,13 @@ from atom_openmm.uwham import calculate_uwham_from_rundir, create_quality_assess
 
 def system_has_ghost_pair(pdb_file):
     pdb = PDBFile(pdb_file)
-    residue_names = [residue.name for residue in pdb.topology.residues()]
-    return residue_names.count("L1") == 1 and residue_names.count("L2") == 1
+    l1_residues = [residue for residue in pdb.topology.residues() if residue.name == "L1"]
+    l2_residues = [residue for residue in pdb.topology.residues() if residue.name == "L2"]
+    return (
+        len(l1_residues) == 1
+        and len(l2_residues) == 1
+        and len(list(l2_residues[0].atoms())) == 1
+    )
 
 
 def rbfe_setup(receptor_file, lig_file, ff_json_file, options):
@@ -58,32 +63,32 @@ def rbfe_prepare_args(options):
     topology = pdb.topology
     positions = pdb.positions
 
-    ghost_residue = get_residue_by_name(topology, "L1")
-    ligand_residue = get_residue_by_name(topology, "L2")
-    assert ghost_residue is not None
+    ligand_residue = get_residue_by_name(topology, "L1")
+    ghost_residue = get_residue_by_name(topology, "L2")
     assert ligand_residue is not None
+    assert ghost_residue is not None
 
-    ligand1_atoms = get_indexes_from_residue(ghost_residue)
-    ligand2_atoms = get_indexes_from_residue(ligand_residue)
+    ligand1_atoms = get_indexes_from_residue(ligand_residue)
+    ligand2_atoms = get_indexes_from_residue(ghost_residue)
     options['LIGAND1_ATOMS'] = ligand1_atoms
     options['LIGAND2_ATOMS'] = ligand2_atoms
 
     options['LIGAND1_VAR_ATOMS'] = options['LIGAND1_ATOMS']
     options['LIGAND2_VAR_ATOMS'] = options['LIGAND2_ATOMS']
 
-    ghost_attach_atom = list(ghost_residue.atoms())[0]
     ligand_attach_atom = get_attach_atom_from_residue(
         ligand_residue,
         attach_index=options.get('LIGAND_ATTACH_INDEX'),
     )
-    options['LIGAND1_ATTACH_ATOM'] = ghost_attach_atom.index
-    options['LIGAND2_ATTACH_ATOM'] = ligand_attach_atom.index
+    ghost_attach_atom = list(ghost_residue.atoms())[0]
+    options['LIGAND1_ATTACH_ATOM'] = ligand_attach_atom.index
+    options['LIGAND2_ATTACH_ATOM'] = ghost_attach_atom.index
 
-    options['LIGAND1_CM_ATOMS'] = [ghost_attach_atom.index]
-    options['LIGAND2_CM_ATOMS'] = [ligand_attach_atom.index]
+    options['LIGAND1_CM_ATOMS'] = [ligand_attach_atom.index]
+    options['LIGAND2_CM_ATOMS'] = [ghost_attach_atom.index]
 
-    lig1cm_pos = positions[ghost_attach_atom.index]
-    lig2cm_pos = positions[ligand_attach_atom.index]
+    lig1cm_pos = positions[ligand_attach_atom.index]
+    lig2cm_pos = positions[ghost_attach_atom.index]
     displ = (lig2cm_pos - lig1cm_pos).value_in_unit(angstrom)
     options['DISPLACEMENT'] = [ displ.x , displ.y, displ.z ] 
 
@@ -111,7 +116,7 @@ def rbfe_prepare_args(options):
         f'(atom.residue.chain.id == "{rcpt_chain_name}") and (atom.element.atomic_number != 1)',
     )
     options['EXCLUSION_POT_MOL2_INDEXES'] = get_indexes_from_residue(
-        ligand_residue, query="(atom.element.atomic_number != 1)"
+        ghost_residue, query="(atom.element.atomic_number != 1)"
     )
     options['WORKDIR'] = os.environ.get("PWD")
 
@@ -202,10 +207,10 @@ def run_atm(options,
             options['WORKDIR'], options['BASENAME'], mintimeid=discard
         )
 
-        dg_ghost = uwham_data['dg_leg1']
-        dg_ghost_std = uwham_data['dg_stderr_leg1']
-        dg_ligand = uwham_data['dg_leg2']
-        dg_ligand_std = uwham_data['dg_stderr_leg2']
+        dg_ligand = uwham_data['dg_leg1']
+        dg_ligand_std = uwham_data['dg_stderr_leg1']
+        dg_ghost = uwham_data['dg_leg2']
+        dg_ghost_std = uwham_data['dg_stderr_leg2']
         nsamples = uwham_data['nsamples']
         print(
             f"Binding free energy estimate after {nsamples + discard} perturbation energy samples "
@@ -213,8 +218,8 @@ def run_atm(options,
         )
         print(
             f"{jobname}: DGb = {dgb:8.3f} +/- {dgb_std:8.3f}  "
-            f"DG(ghost leg) = {dg_ghost:8.3f} +/- {dg_ghost_std:8.3f}  "
-            f"DG(ligand leg) = {dg_ligand:8.3f} +/- {dg_ligand_std:8.3f} "
+            f"DG(ligand leg) = {dg_ligand:8.3f} +/- {dg_ligand_std:8.3f}  "
+            f"DG(ghost leg) = {dg_ghost:8.3f} +/- {dg_ghost_std:8.3f} "
             f"kcal/mol, n_samples: {nsamples}"
         )
 

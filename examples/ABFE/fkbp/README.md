@@ -5,9 +5,9 @@ This workflow mirrors the maintained [`examples/RBFE/cdk2`](../../RBFE/cdk2) var
 
 The mapping is:
 
-- `L1` is a one-atom ghost residue with mass and no interactions.
-- `L2` is the physical ligand.
-- `run-atm.py` builds a standard one-ligand system, translates the ligand to the displaced solvent site, appends the ghost at the original binding-site anchor position, and then feeds RBFE-style keywords into `rbfe_structprep` and `rbfe_production`.
+- `L1` is the physical ligand in the binding pocket.
+- `L2` is a one-atom ghost residue with mass and no interactions.
+- `run-atm.py` builds a standard one-ligand system, leaves the ligand in the binding pocket, appends the ghost at the displaced solvent position, and then feeds RBFE-style keywords into `rbfe_structprep` and `rbfe_production`.
 
 The setup and launch flow intentionally follows the `cdk2` example:
 

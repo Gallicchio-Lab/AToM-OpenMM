@@ -99,7 +99,6 @@ def patch_system_with_ghost(pdb_file, xml_file, displacement, ghost_mass, attach
         ligand_residue,
         attach_index=attach_index,
     )
-    ligand_atom_indexes = get_indexes_from_residue(ligand_residue)
 
     bound_anchor_position = Vec3(
         positions_nm[ligand_attach_atom.index].x,
@@ -107,21 +106,19 @@ def patch_system_with_ghost(pdb_file, xml_file, displacement, ghost_mass, attach
         positions_nm[ligand_attach_atom.index].z,
     )
     displacement_vec = (Vec3(*displacement) * angstrom).value_in_unit(nanometer)
+    ghost_position = bound_anchor_position + displacement_vec
 
-    for atom_index in ligand_atom_indexes:
-        positions_nm[atom_index] += displacement_vec
-
-    ligand_residue.name = "L2"
-    ligand_residue.chain.id = "M"
+    ligand_residue.name = "L1"
+    ligand_residue.chain.id = "L"
 
     ghost_topology = Topology()
-    ghost_chain = ghost_topology.addChain(id="L")
-    ghost_residue = ghost_topology.addResidue("L1", ghost_chain)
+    ghost_chain = ghost_topology.addChain(id="M")
+    ghost_residue = ghost_topology.addResidue("L2", ghost_chain)
     ghost_element = Element.getBySymbol("C")
     ghost_topology.addAtom("C1", ghost_element, ghost_residue)
 
     modeller = Modeller(topology, positions_nm * nanometer)
-    modeller.add(ghost_topology, [bound_anchor_position] * nanometer)
+    modeller.add(ghost_topology, [ghost_position] * nanometer)
 
     system.addParticle(ghost_mass * amu)
     for force in system.getForces():

@@ -19,6 +19,7 @@
  CM_TOL: 7.5                  #tolerance of flat-bottom binding site restraint, radius in Ang
  POSRE_FORCE_CONSTANT: 25  #force constant of position restraint, in kcal/mol/Ang^2
  POSRE_TOLERANCE: 2.5       #tolerance of position restraint, radius in Ang
+ RCPT_CHAIN_NAMES: ['B']    #ids of the chains of the receptor, ['A'] if not specified 
  ALIGN_KF_SEP: 0.0          #force constant of separation component of the ligand alignment restraint, in kcal/mol/Ang^2 (zero for variable displacement mode)
  ALIGN_K_THETA: 25.0        #force constant of orientation component of the ligand alignment restraint, in kcal/mol
  ALIGN_K_PSI:   25.0        #force constant of roll component of the ligand alignment restraint, in kcal/mol

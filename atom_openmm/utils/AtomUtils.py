@@ -72,17 +72,33 @@ def get_residue_by_name(topology, residue_name):
                 return residue
     return None
 
-def get_attach_atom_from_residue(residue, attach_index=None):
+def get_attach_atom_from_residue(residue, attach_index=None, positions=None):
     atoms = list(residue.atoms())
     if attach_index is not None:
         return atoms[attach_index]
+
+    heavy_atoms = []
     for atom in atoms:
         if atom.element is not None:
             is_hydrogen = atom.element.symbol == "H"
         else:
             is_hydrogen = atom.name.strip().upper().startswith("H")
         if not is_hydrogen:
-            return atom
+            heavy_atoms.append(atom)
+    if positions is not None and heavy_atoms:
+        heavy_atom_positions = []
+        for atom in heavy_atoms:
+            pos = positions[atom.index]
+            if hasattr(pos, "value_in_unit"):
+                pos = pos.value_in_unit(nanometer)
+            heavy_atom_positions.append(np.array([pos.x, pos.y, pos.z]))
+        centroid = np.mean(heavy_atom_positions, axis=0)
+        nearest_atom_index = int(
+            np.argmin([np.linalg.norm(pos - centroid) for pos in heavy_atom_positions])
+        )
+        return heavy_atoms[nearest_atom_index]
+    if heavy_atoms:
+        return heavy_atoms[0]
     raise ValueError(f"Could not find a non-hydrogen attachment atom in residue {residue.name}.")
 
 def patch_system_with_ghost(pdb_file, xml_file, displacement, ghost_mass, attach_index=None):
@@ -98,6 +114,7 @@ def patch_system_with_ghost(pdb_file, xml_file, displacement, ghost_mass, attach
     ligand_attach_atom = get_attach_atom_from_residue(
         ligand_residue,
         attach_index=attach_index,
+        positions=pdb.positions,
     )
 
     bound_anchor_position = Vec3(

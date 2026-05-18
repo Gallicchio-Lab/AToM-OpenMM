@@ -79,6 +79,7 @@ def rbfe_prepare_args(options):
     ligand_attach_atom = get_attach_atom_from_residue(
         ligand_residue,
         attach_index=options.get('LIGAND_ATTACH_INDEX'),
+        positions=positions,
     )
     ghost_attach_atom = list(ghost_residue.atoms())[0]
     options['LIGAND1_ATTACH_ATOM'] = ligand_attach_atom.index
@@ -92,8 +93,9 @@ def rbfe_prepare_args(options):
     displ = (lig2cm_pos - lig1cm_pos).value_in_unit(angstrom)
     options['DISPLACEMENT'] = [ displ.x , displ.y, displ.z ] 
 
-    rcpt_chain_name = options.get('RCPT_CHAIN_NAME', 'A')
-    rcpt_frame_query = f'atom.residue.chain.id == "{rcpt_chain_name}" and atom.name == "CA"'
+    rcpt_chain_names = options.get('RCPT_CHAIN_NAMES', ['A'])
+    rcpt_chain_query = f'atom.residue.chain.id in {rcpt_chain_names}'
+    rcpt_frame_query = rcpt_chain_query + ' and atom.name == "CA"'
     rcpt_frame_indexes = get_indexes_from_query(topology, rcpt_frame_query)
     rcpt_frame = get_selected_principal_groups(topology, positions, rcpt_frame_indexes)
 
@@ -113,7 +115,7 @@ def rbfe_prepare_args(options):
     options['POS_RESTRAINED_ATOMS'] = None
     options['EXCLUSION_POT_MOL1_INDEXES'] = get_indexes_from_query(
         topology,
-        f'(atom.residue.chain.id == "{rcpt_chain_name}") and (atom.element.atomic_number != 1)',
+        f'({rcpt_chain_query}) and (atom.element.atomic_number != 1)',
     )
     options['EXCLUSION_POT_MOL2_INDEXES'] = get_indexes_from_residue(
         ghost_residue, query="(atom.element.atomic_number != 1)"

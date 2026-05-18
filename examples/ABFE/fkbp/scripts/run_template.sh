@@ -8,7 +8,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=2
 #SBATCH --chdir=<WORKDIR>
-#SBATCH -t 10:00:00
+#SBATCH -t 02:00:00
 
 # term handler
 # the function is executed once the job gets the SIGTERM signal
@@ -23,8 +23,8 @@ term_handler()
         kill -SIGTERM $ATOMPID
     fi
 
-    echo "Waiting 200 secs for the signal to take effect"
-    sleep 60
+    echo "Waiting 30 secs for the signal to take effect"
+    sleep 30
 }
 # declare the function handling the TERM signal
 if [ -n "$SLURM_JOB_ID" ]; then

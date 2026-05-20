@@ -65,6 +65,92 @@ def get_indexes_from_residue(residue, query = 'True'):
     indexes.sort()
     return indexes
 
+def get_residue_by_name(topology, residue_name):
+    for chain in topology.chains():
+        for residue in chain.residues():
+            if residue.name == residue_name:
+                return residue
+    return None
+
+def get_attach_atom_from_residue(residue, attach_index=None, positions=None):
+    atoms = list(residue.atoms())
+    if attach_index is not None:
+        return atoms[attach_index]
+
+    heavy_atoms = []
+    for atom in atoms:
+        if atom.element is not None:
+            is_hydrogen = atom.element.symbol == "H"
+        else:
+            is_hydrogen = atom.name.strip().upper().startswith("H")
+        if not is_hydrogen:
+            heavy_atoms.append(atom)
+    if positions is not None and heavy_atoms:
+        heavy_atom_positions = []
+        for atom in heavy_atoms:
+            pos = positions[atom.index]
+            if hasattr(pos, "value_in_unit"):
+                pos = pos.value_in_unit(nanometer)
+            heavy_atom_positions.append(np.array([pos.x, pos.y, pos.z]))
+        centroid = np.mean(heavy_atom_positions, axis=0)
+        nearest_atom_index = int(
+            np.argmin([np.linalg.norm(pos - centroid) for pos in heavy_atom_positions])
+        )
+        return heavy_atoms[nearest_atom_index]
+    if heavy_atoms:
+        return heavy_atoms[0]
+    raise ValueError(f"Could not find a non-hydrogen attachment atom in residue {residue.name}.")
+
+def patch_system_with_ghost(pdb_file, xml_file, displacement, ghost_mass, attach_index=None):
+    pdb = PDBFile(pdb_file)
+    positions_nm = [Vec3(pos.x, pos.y, pos.z) for pos in pdb.positions.value_in_unit(nanometer)]
+    topology = pdb.topology
+
+    with open(xml_file) as input:
+        system = XmlSerializer.deserialize(input.read())
+
+    ligand_residue = get_residue_by_name(topology, "L1")
+    assert ligand_residue is not None, "Could not find ligand residue L1 in the prepared system."
+    ligand_attach_atom = get_attach_atom_from_residue(
+        ligand_residue,
+        attach_index=attach_index,
+        positions=pdb.positions,
+    )
+
+    bound_anchor_position = Vec3(
+        positions_nm[ligand_attach_atom.index].x,
+        positions_nm[ligand_attach_atom.index].y,
+        positions_nm[ligand_attach_atom.index].z,
+    )
+    displacement_vec = (Vec3(*displacement) * angstrom).value_in_unit(nanometer)
+    ghost_position = bound_anchor_position + displacement_vec
+
+    ligand_residue.name = "L1"
+    ligand_residue.chain.id = "L"
+
+    ghost_topology = Topology()
+    ghost_chain = ghost_topology.addChain(id="M")
+    ghost_residue = ghost_topology.addResidue("L2", ghost_chain)
+    ghost_element = Element.getBySymbol("C")
+    ghost_topology.addAtom("C1", ghost_element, ghost_residue)
+
+    modeller = Modeller(topology, positions_nm * nanometer)
+    modeller.add(ghost_topology, [ghost_position] * nanometer)
+
+    system.addParticle(ghost_mass * amu)
+    for force in system.getForces():
+        if isinstance(force, mm.NonbondedForce):
+            force.addParticle(0.0, 1.0 * angstrom, 0.0 * kilojoule_per_mole)
+        elif isinstance(force, mm.CustomNonbondedForce):
+            force.addParticle([0.0] * force.getNumPerParticleParameters())
+        elif isinstance(force, mm.GBSAOBCForce):
+            force.addParticle(0.0, 1.0, 0.0)
+
+    with open(xml_file, "w") as output:
+        output.write(XmlSerializer.serialize(system))
+    with open(pdb_file, "w") as output:
+        PDBFile.writeFile(modeller.topology, modeller.positions, output, keepIds=True)
+
 def _commonatoms_pp(topology, lig1_atoms, varatoms1, lig2_atoms, varatoms2):
     ca1 = sorted(list(set(lig1_atoms) - set(varatoms1)))
     ca2 = sorted(list(set(lig2_atoms) - set(varatoms2)))

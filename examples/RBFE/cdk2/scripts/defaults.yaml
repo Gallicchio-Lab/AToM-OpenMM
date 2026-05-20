@@ -29,4 +29,4 @@
  HMASS: 1.5                 #hydrogen mass for mass repartitioning
  TIME_STEP: 0.004           #MD time-step in ps
  VERBOSE: False             #verbosity
- LIGAND_FORCE_FIELD: gaff   #force field for ligands and cofactors. Use defaults for protein etc.
+ LIGAND_FORCE_FIELD: gaff-2.2.20 #force field for ligands and cofactors. Use defaults for protein etc.

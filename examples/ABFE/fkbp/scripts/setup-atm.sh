@@ -3,55 +3,29 @@
 #load settings
 work_dir=$(pwd)
 scripts_dir=${work_dir}/scripts
-source ${scripts_dir}/setup-settings.sh
+. ${scripts_dir}/setup-settings.sh || exit 1
 
 cd ${work_dir} || exit 1
 
 #process each ligand
-nligands=${#ligands[@]}
-nlig_m1=$(expr ${#ligands[@]} - 1)
+n=$(expr ${#ligands[@]} - 1)
+for l in `seq 0 $n` ; do
 
-cd ${work_dir} || exit 1
-for l in `seq 0 ${nlig_m1}` ; do
+    #return to main work directory for each ligand pair
+    cd ${work_dir} || exit 1
 
     lig=${ligands[$l]}
 
-    echo "Processing ligand  $lig..."
+    echo "Processing ligand ${lig} ..."
 
-    #creates system in complexes folder
+    #create system in complexes folder
     jobname=${receptor}-${lig}
-    mkdir -p ${work_dir}/complexes/${jobname} || exit 1
+    jobwdir=${work_dir}/complexes/${jobname}
+    mkdir -p ${jobwdir} || exit 1
+    cd ${jobwdir} || exit 1
+
+    #slurm/bash batch script
+    sed "s#<JOBNAME>#${jobname}#g ; s#<WORKDIR>#${jobwdir}# ; s#<SCRIPTS_DIR>#${scripts_dir}# ; s#<CONDADIR>#${CONDA_PREFIX}# ; s#<CONDAENV>#${CONDA_DEFAULT_ENV}# ; s#<RCPT>#${receptor}# ; s#<LIG1>#${lig}# " < ${scripts_dir}/run_template.sh > ${jobwdir}/run.sh || exit 1
     
-    cd ${work_dir}/complexes/${jobname}    || exit 1
-
-    rcptpdb=${work_dir}/receptor/${receptor}.pdb
-    ligsdf=${work_dir}/ligands/${lig}.sdf
-
-    displs=""
-    count=0
-    for d in ${displacement[@]}; do
-	displs="$displs $d"
-    done
-    make_atm_system_from_rcpt_lig --receptorinFile "${rcptpdb}" --LIG1SDFinFile "${ligsdf}" --displacement "${displs}" --systemXMLoutFile "${jobname}_sys.xml" --systemPDBoutFile "${jobname}.pdb" --forcefieldJSONCachefile "${work_dir}/ligands/ffdb.json" || exit 1
-
-    #residue ligand name
-    lig1resname=L1
-
-    vres=${vsite_rcpt_residues[@]}
-
-    echo "python $scripts_dir/create_cntlfile_from_template.py --systemPDBFile "${jobname}.pdb" --templatein ${work_dir}/scripts/asyncre_template.cntl --jobname "${jobname}" --displacement "${displs}" --lig1resname "${lig1resname}" --vsiteResidues "${vres}" "
-    
-    python $scripts_dir/create_cntlfile_from_template_abfe.py --systemPDBFile "${jobname}.pdb" --templatein ${work_dir}/scripts/asyncre_template.cntl --jobname "${jobname}" --displacement "${displs}" --lig1resname "${lig1resname}" --vsiteResidues "${vres}" --cntlfileout ${jobname}_asyncre.cntl || exit 1
-
-    #copy slurm files, etc
-    sed "s#<JOBNAME>#${jobname}#" < ${work_dir}/scripts/run_template.sh > ${work_dir}/complexes/${jobname}/run.sh
-    cp ${work_dir}/scripts/analyze.sh ${work_dir}/scripts/uwham_analysis.R ${work_dir}/complexes/${jobname}/
-    
+    cp ${scripts_dir}/vmd_template.in ${jobwdir}/
 done
-
-#prepare prep script
-ligs=${ligands[@]}
-sed "s#<RECEPTOR>#${receptor}#;s#<LIGS>#${ligs}#g "< ${work_dir}/scripts/prep_template.sh > ${work_dir}/complexes/prep.sh
-
-#prepare free energy calculation script
-sed "s#<RECEPTOR>#${receptor}#;s#<LIGS>#${ligs}# " < ${work_dir}/scripts/free_energies_template.sh > ${work_dir}/complexes/free_energies.sh

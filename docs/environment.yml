@@ -1,0 +1,7 @@
+name: atom-openmm-docs
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - mkdocs
+  - mkdocs-material

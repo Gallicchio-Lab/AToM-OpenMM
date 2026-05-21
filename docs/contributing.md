@@ -1,35 +1,38 @@
 # Contributing
 
-Documentation changes use the same pull request workflow as code changes.
+Contributions to AToM-OpenMM are welcome. Useful contributions include bug reports, fixes, new examples, clearer documentation, tests, and workflow improvements for ABFE and RBFE calculations.
 
-## Docs Workflow
+## Before You Start
 
-1. Create the docs environment:
+- Check the [issue tracker](https://github.com/Gallicchio-Lab/AToM-OpenMM/issues) for related reports or ongoing work.
+- Open an issue for larger changes so the approach can be discussed before implementation.
+- Keep changes focused and describe the scientific or workflow motivation clearly.
 
-    ```bash
-    conda env create -f docs/environment.yml
-    ```
+## Development Setup
 
-2. Activate it:
+Use an isolated conda or mamba environment with the runtime dependencies described in [Installation](installation.md), then install the repository from source:
 
-    ```bash
-    conda activate atom-openmm-docs
-    ```
+```bash
+git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
+cd AToM-OpenMM
+pip install .
+```
 
-3. Preview the site:
+For changes to package code, run the relevant tests or a small representative example before opening a pull request:
 
-    ```bash
-    mkdocs serve
-    ```
+```bash
+pytest
+```
 
-4. Edit Markdown files under `docs/`.
+Some tests and examples may require OpenMM-compatible hardware and the full runtime environment.
 
-5. Store images under `docs/assets/images/` and reference them with relative Markdown links.
+## Pull Requests
 
-6. Before opening a pull request, run:
+- Create a feature branch from the current upstream branch.
+- Include a concise summary of the change and any tests or examples you ran.
+- Avoid mixing unrelated refactors with behavior changes.
+- Update examples or user-facing documentation when behavior, inputs, or outputs change.
 
-    ```bash
-    mkdocs build --strict
-    ```
+## Research Software Note
 
-7. Open a pull request. The docs workflow will check the strict MkDocs build automatically.
+AToM-OpenMM is research software under active development. Please include enough detail in issues and pull requests for maintainers to reproduce and review the scientific workflow affected by the change.

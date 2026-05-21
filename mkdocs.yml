@@ -4,6 +4,8 @@ repo_name: Gallicchio-Lab/AToM-OpenMM
 
 theme:
   name: material
+  logo: assets/images/atom-logo.png
+  favicon: assets/images/atom-logo.png
   features:
     - navigation.sections
     - search.highlight
@@ -14,14 +16,14 @@ theme:
 nav:
   - Home: index.md
   - Installation: installation.md
-  - Quickstart: quickstart.md
+  - Tutorials: tutorials/index.md
   - User Guide:
       - Overview: user-guide/index.md
+      - Configuration Files: user-guide/configuration.md
       - Absolute Binding Free Energy: user-guide/abfe.md
       - Relative Binding Free Energy: user-guide/rbfe.md
-  - Examples: examples/index.md
   - Theory: theory/index.md
-  - Reference: reference/index.md
+  - API Reference: api-reference/index.md
   - Troubleshooting: troubleshooting.md
   - Contributing: contributing.md
 

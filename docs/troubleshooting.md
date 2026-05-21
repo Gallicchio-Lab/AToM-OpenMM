@@ -1,24 +1,29 @@
 # Troubleshooting
 
-## MkDocs Command Not Found
+## Environment Problems
 
-Create and activate the docs conda environment:
-
-```bash
-conda env create -f docs/environment.yml
-conda activate atom-openmm-docs
-```
-
-## Strict Build Fails
-
-Run the build from the repository root:
+AToM-OpenMM should be installed in an isolated conda or mamba environment. If imports fail, first confirm that the environment is active and that OpenMM is at least version 8.4.0:
 
 ```bash
-mkdocs build --strict
+python -c "import openmm; print(openmm.version.version)"
 ```
 
-Common issues include broken Markdown links, missing pages listed in `mkdocs.yml`, or invalid YAML indentation.
+## OpenMM or GPU Issues
 
-## Images Do Not Appear
+If OpenMM cannot find a GPU platform, check the CUDA drivers, the OpenMM installation, and the platform selected by your input files. On shared clusters, make sure the job has actually been assigned a GPU before starting production.
 
-Store image files under `docs/assets/images/` and reference them from Markdown with relative links from the page that uses them.
+## UWHAM Is Missing
+
+Free energy analysis uses the UWHAM R package. If analysis fails because UWHAM is unavailable, install it in the active environment:
+
+```bash
+Rscript -e 'install.packages("UWHAM", repos = "http://cran.us.r-project.org")'
+```
+
+## Example Paths
+
+Many examples assume that the repository is available under `$HOME/AToM-OpenMM`. If your checkout lives elsewhere, adjust the paths in the tutorial commands and run scripts before submitting jobs.
+
+## Reporting Issues
+
+When reporting a problem, include the command you ran, the input files or configuration section involved, the relevant log output, and the OpenMM and AToM-OpenMM versions.

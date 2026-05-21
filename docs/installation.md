@@ -1,23 +1,36 @@
 # Installation
 
-This page covers the documentation environment only. It does not install the AToM-OpenMM runtime dependencies used for molecular simulations.
+Install AToM-OpenMM in a personal Python environment such as Miniforge, Miniconda, conda, or mamba.
 
-Create the docs environment from the repository root:
+## Runtime Environment
+
+AToM-OpenMM requires OpenMM 8.4.0 or later, along with Python dependencies such as `configobj` and `numpy`. A typical conda-forge environment can be created with:
 
 ```bash
-conda env create -f docs/environment.yml
+mamba create -n atm8.4.0 -c conda-forge "openmm>=8.4" ambertools openmmforcefields configobj setproctitle r-base espaloma
+mamba activate atm8.4.0
 ```
 
-Activate it:
+`setproctitle` is optional, but useful for tracking AToM-OpenMM processes. The `ambertools`, `openmmforcefields`, and `espaloma` packages are used to prepare molecular systems and assign force field parameters. `r-base` is used for installing the UWHAM R package used in free energy analysis.
+
+## Install AToM-OpenMM
+
+Install the latest release:
 
 ```bash
-conda activate atom-openmm-docs
+pip install atom-openmm
 ```
 
-The environment installs MkDocs and Material for MkDocs from `conda-forge`, so a global MkDocs installation is not required.
-
-To check the site:
+Or install from source:
 
 ```bash
-mkdocs build --strict
+git clone https://github.com/Gallicchio-Lab/AToM-OpenMM.git
+cd AToM-OpenMM
+pip install .
+```
+
+Install UWHAM for free energy estimation:
+
+```bash
+Rscript -e 'install.packages("UWHAM", repos = "http://cran.us.r-project.org")'
 ```

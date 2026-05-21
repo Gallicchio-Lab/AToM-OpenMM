@@ -16,7 +16,7 @@ The repository tutorials are more detailed and are intended for local or cluster
 
 ### ABFE
 
-ABFE tutorials estimate the binding free energy of one ligand or molecular partner against a receptor or host. The most up-to-date local ABFE workflow is the FKBP fragments example, which uses the newer YAML setup and ghost-ligand pattern described in the user guide.
+ABFE tutorials estimate the binding free energy of one ligand or molecular partner against a receptor or host. The most up-to-date local ABFE workflow is the FKBP fragments example, which uses the newer YAML setup and variable displacement pattern described in the user guide.
 
 - [ABFE FKBP fragments](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/ABFE/fkbp): absolute binding free energies for FKBP ligand fragment complexes using the newer YAML workflow.
 - [ABFE TEMOA-G1](https://github.com/Gallicchio-Lab/AToM-OpenMM/tree/master/examples/ABFE/temoa-g1): absolute binding free energy between the TEMOA host and the G1 guest from the SAMPL8 GDCC challenge.

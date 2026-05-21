@@ -6,7 +6,7 @@ In this workflow, `L1` is the physical ligand in the binding site and `L2` is a 
 
 ## When to Use ABFE
 
-Use ABFE when each ligand can be treated independently against the same receptor or host. This is useful when there is no clean relative perturbation network, when ligands are structurally diverse, or when you want an absolute binding estimate for a single complex.
+Use ABFE when each ligand can be treated independently against the same receptor or host. This is useful when ligands are structurally diverse, or when you want an absolute binding estimate for a single complex.
 
 Use RBFE instead when the main scientific question is a difference between two related ligands, peptides, or variants. RBFE is usually the more direct choice for ranking a congeneric series.
 

@@ -4,6 +4,8 @@ repo_name: Gallicchio-Lab/AToM-OpenMM
 
 theme:
   name: material
+  palette:
+    primary: white
   logo: assets/images/atom-logo.png
   favicon: assets/images/atom-logo.png
   features:

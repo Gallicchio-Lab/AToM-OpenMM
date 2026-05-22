@@ -34,7 +34,7 @@ The asynchronous replica exchange method was first implemented in the [AsyncRE](
 
 ## Citations
 
-Please [cite AToM-OpenMM](http://www.compmolbiophysbc.org/publications) if you use this software in your research.
+Please cite [AToM-OpenMM](http://www.compmolbiophysbc.org/publications) if you use this software in your research.
 
 - [Relative Binding Free Energy Calculations for Ligands with Diverse Scaffolds with the Alchemical Transfer Method](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129)
 - [Relative Binding Free Energy Estimation of Congeneric Ligands and Macromolecular Mutants with the Alchemical Transfer with Coordinate Swapping Method](https://arxiv.org/abs/2412.19971)

@@ -3,5 +3,6 @@ channels:
   - conda-forge
 dependencies:
   - python=3.12
-  - mkdocs
-  - mkdocs-material
+  # Keep the current MkDocs/Material stack until the MkDocs 2.x ecosystem settles.
+  - "mkdocs>=1.6,<2"
+  - "mkdocs-material>=9.5,<10"

@@ -66,7 +66,7 @@ The tables below explain the main keywords used by the newer `defaults.yaml` fil
 | `MAX_SAMPLES` | Target maximum number of perturbation-energy samples per replica. Tutorial values are intentionally small. |
 | `CYCLE_TIME` | Time interval between replica-exchange scheduling cycles, in seconds. |
 | `CHECKPOINT_TIME` | Time interval between checkpoint writes, in seconds. |
-| `SUBJOBS_BUFFER_SIZE` | Size of the fast execution queue, expressed relative to the number of GPU devices. |
+| `SUBJOBS_BUFFER_SIZE` | Size of the fast execution queue, expressed as a fractional number relative to the number of GPU devices. |
 | `PRODUCTION_STEPS` | Number of MD steps each replica runs per production segment. |
 
 **Output frequency**
@@ -84,6 +84,7 @@ The tables below explain the main keywords used by the newer `defaults.yaml` fil
 | `FRICTION_COEFF` | Langevin friction coefficient. |
 | `HMASS` | Hydrogen mass used for hydrogen mass repartitioning. |
 | `TIME_STEP` | MD time step, in ps. |
+| `LIGAND_FORCE_FIELD` | Force field used for the physical ligand. |
 
 **Binding-site and positional restraints**
 
@@ -102,7 +103,6 @@ ABFE with a ghost ligand:
 | Keyword | Meaning |
 | --- | --- |
 | `GHOST_MASS` | Mass assigned to the one-atom noninteracting ghost ligand. |
-| `LIGAND_FORCE_FIELD` | Force field used for the physical ligand. |
 
 Small-molecule RBFE:
 
@@ -123,7 +123,9 @@ Protein-peptide RBFE:
 | `PP_BACKBONE` | Optional peptide backbone atom names used by the protein-peptide helper. |
 | `ALIGN_KF_SEP`, `ALIGN_K_THETA`, `ALIGN_K_PSI` | Alignment restraint settings used by the RBFE production workflow. |
 
-**Generated system-specific keywords**
+**System Specific keywords**
+
+These settings regulate in detail the nature of the alchemical transformations. They are usually generated automatically by the workflow scripts.
 
 | Keyword | Meaning |
 | --- | --- |

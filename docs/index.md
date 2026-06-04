@@ -11,7 +11,7 @@ This version uses [ATMForce](https://github.com/openmm/openmm/pull/4110), availa
 - [Installation](installation.md): install AToM-OpenMM and its runtime dependencies.
 - [Tutorials](tutorials/index.md): start with Colab notebooks or local repository tutorials.
 - [User guide](user-guide/index.md): learn the high-level ABFE and RBFE workflow layout.
-- [Theory](theory/index.md): review method notes and equations.
+- [Theory](theory/index.md): introduces the theory of the Alchemical Transfer approach
 - [API reference](api-reference/index.md): find command-line entry points, workflow modules, and utility modules.
 
 ## Credits
@@ -24,6 +24,9 @@ Maintainer and author:
 
 Contributors:
 
+- Elian Tiudic
+- Sylvester Sakyi
+- Stefan Doerr
 - Sheenam Khuttan
 - Joe Z Wu
 - Solmaz Azimi
@@ -37,7 +40,7 @@ The asynchronous replica exchange method was first implemented in the [AsyncRE](
 Please cite [AToM-OpenMM](http://www.compmolbiophysbc.org/publications) if you use this software in your research.
 
 - [Relative Binding Free Energy Calculations for Ligands with Diverse Scaffolds with the Alchemical Transfer Method](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129)
-- [Relative Binding Free Energy Estimation of Congeneric Ligands and Macromolecular Mutants with the Alchemical Transfer with Coordinate Swapping Method](https://arxiv.org/abs/2412.19971)
+- [Relative Binding Free Energy Estimation of Congeneric Ligands and Macromolecular Mutants with the Alchemical Transfer with Coordinate Swapping Method](https://doi.org/10.1021/acs.jcim.5c00207)
 - [Alchemical Transfer Approach to Absolute Binding Free Energy Estimation](https://pubs.acs.org/doi/10.1021/acs.jctc.1c00266)
 - [Asynchronous Replica Exchange Software for Grid and Heterogeneous Computing](http://www.compmolbiophysbc.org/publications#asyncre_software_2015)
 

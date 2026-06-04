@@ -32,7 +32,7 @@ u(x) = U_0(Tx) - U_0(x).
 
 The same idea extends to RBFE. One ligand is placed in solution and another in the binding site, and the alchemical coordinate transformation swaps their positions. ABFE and RBFE therefore use the same underlying idea: the physical meaning changes from translation of one ligand to coordinate swapping of two molecular partners.
 
-Because the transformation is applied to coordinates, ATM can use standard molecular topologies and standard OpenMM energy functions. This is one of the central advantages of the method: the molecular mechanics potential does not need custom alchemical pair potentials to represent the endpoint states.
+Because the transformation is applied to coordinates, ATM can use standard molecular topologies and standard OpenMM energy functions. This is one of the central advantages of the method: it can be applied with any potential energy function &mdash; fixed-charge and polarizable potentials, neural network potentials, implicit solvent models, etc.&mdash; without any customization and with standard chemical topologies. 
 
 ## Perturbation Function
 
@@ -65,7 +65,7 @@ W_\lambda(u) =
 + \lambda_2 u + w_0.
 \]
 
-The schedule keywords `LAMBDA1`, `LAMBDA2`, `ALPHA`, `U0`, and `W0COEFF` define these parameters at each alchemical state. The softplus form behaves linearly at low and high perturbation energies, but it can use different slopes in those regimes. The linear perturbation is recovered when \(\lambda_1=\lambda_2=\lambda\).
+The parameters `LAMBDA1`, `LAMBDA2`, `ALPHA`, `U0`, and `W0COEFF` are functions of \(\lambda\) and define the achemical schedule. The softplus form behaves linearly at low and high perturbation energies, but it can use different slopes in those regimes. The linear perturbation is recovered when \(\lambda_1=\lambda_2=\lambda\).
 
 This extra flexibility helps build smoother alchemical paths and improves overlap between neighboring states.
 
@@ -83,7 +83,7 @@ AToM instead applies a soft-core mapping to the perturbation energy itself. The 
 
 For \(u \le U_\mathrm{bcore}\), the mapping leaves \(u\) unchanged. For larger values, it smoothly compresses the high-energy tail toward \(U_\mathrm{max}\). This preserves ordinary perturbation energies while preventing rare atomic-overlap samples from dominating averages.
 
-The important conceptual point is that the soft-core transformation is applied to the scalar perturbation energy, not to every pair interaction in the force field. This keeps the method compatible with standard OpenMM potentials and avoids the need to re-evaluate stored configurations with a different lambda-dependent force field.
+The important conceptual point is that the soft-core transformation is applied to the scalar perturbation energy, not to every pair interaction in the force field. This keeps the method compatible with standard OpenMM potentials and avoids the need to re-evaluate stored configurations with a different lambda-dependent force field for multi-state free energy estimation.
 
 ## Two Legs in Explicit Solvent
 

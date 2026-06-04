@@ -6,7 +6,7 @@ For workflow-level background, start with the [User Guide](../user-guide/index.m
 
 **Command summary**
 
-| Command | Use it when you want to... | Main input | Main output |
+| <span style="display: inline-block; min-width: 10rem;">Command</span> | Use it when you want to... | Main input | Main output |
 | --- | --- | --- | --- |
 | [`abfe_structprep`](#abfe_structprep) | Prepare an ABFE system for production. | ABFE YAML, JSON, or CNTL file. | Equilibrated `_0.xml` and `_0.pdb` files. |
 | [`rbfe_structprep`](#rbfe_structprep) | Prepare an RBFE system for production. | RBFE YAML, JSON, or CNTL file. | Equilibrated `_0.xml` and `_0.pdb` files. |
@@ -15,7 +15,7 @@ For workflow-level background, start with the [User Guide](../user-guide/index.m
 | [`make_atm_system_from_pdb`](#make_atm_system_from_pdb) | Build an OpenMM system from a prepared system PDB and ligand SDF data. | System PDB plus ligand/cofactor SDF. | OpenMM System XML and topology PDB. |
 | [`make_atm_system_from_rcpt_lig`](#make_atm_system_from_rcpt_lig) | Build and solvate a system from separate receptor and ligand files. | Receptor file, ligand file(s), displacement. | OpenMM System XML and topology PDB. |
 | [`make_atm_system_from_amber`](#make_atm_system_from_amber) | Convert Amber topology/coordinates to OpenMM files. | Amber `prmtop` and `inpcrd`. | OpenMM System XML and topology PDB. |
-| [`uwham`](#uwham) | Recompute free energy estimates from production output. | Production run directory and job basename. | Free energy estimate, optional CSV files and plot. |
+| [`uwham`](#uwham) | Computes free energy estimates from production output. | Production run directory and job basename. | Free energy estimate, optional CSV files and plot. |
 
 ## `abfe_structprep`
 
@@ -316,7 +316,7 @@ uwham \
 
 **Arguments**
 
-| Argument | Required | Meaning |
+| <span style="display: inline-block; min-width: 10rem;">Argument</span> | Required | Meaning |
 | --- | --- | --- |
 | `--jobname` | Yes | Basename of the production run. |
 | `--rundir` | No | Directory containing the replica folders; defaults to the current directory. |

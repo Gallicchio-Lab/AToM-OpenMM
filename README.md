@@ -18,6 +18,9 @@ Maintainer/Author:
 
 Contributors:
 
+- Elian Tiudic
+- Sylvester Sakyi
+- Stefan Doerr
 - Sheenam Khuttan <sheenam@sandboxquantum.com>
 - Joe Z Wu <jwu1@gradcenter.cuny.edu>
 - Solmaz Azimi <sazimi@gradcenter.cuny.edu>

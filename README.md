@@ -1,11 +1,11 @@
-AToM-OpenMM v8.4
+AToM-OpenMM v8.5
 ====================
 
 ![AToM logo](AToM-logo.png)
 
 The Alchemical Transfer Method for OpenMM (AToM-OpenMM) is an extensible Python package for the estimation of absolute and relative binding free energies of molecular complexes. It implements the [Alchemical Transfer Method (ATM)](https://pubs.acs.org/doi/10.1021/acs.jcim.1c01129) with  asynchronous parallel replica exchange molecular dynamics with the [OpenMM](https://github.com/openmm) library. The AToM software can be deployed on workstations or cluster nodes with one or more GPUs.
 
-This version of AToM uses [ATMForce](https://github.com/openmm/openmm/pull/4110) in the 8.4.0 or later versions of [OpenMM](https://github.com/openmm/openmm). 
+This version of AToM-OpenMM has been tested with OpenMM 8.5 and 8.4; it uses [ATMForce](https://github.com/openmm/openmm/pull/4110) in the 8.4.0 or later versions of [OpenMM](https://github.com/openmm/openmm).
 
 Credits
 -------
@@ -21,16 +21,16 @@ Contributors:
 - Elian Tiudic
 - Sylvester Sakyi
 - Stefan Doerr
-- Sheenam Khuttan <sheenam@sandboxquantum.com>
-- Joe Z Wu <jwu1@gradcenter.cuny.edu>
-- Solmaz Azimi <sazimi@gradcenter.cuny.edu>
-- Baofeng Zhang <BZhang@brooklyn.cuny.edu>
-- Rajat Pal <rajatfor2014@gmail.com>
+- Sheenam Khuttan 
+- Joe Z Wu
+- Solmaz Azimi
+- Baofeng Zhang 
+- Rajat Pal
 
 The asynchronous replica exchange method was first implemented in the [AsyncRE](https://github.com/ComputationalBiophysicsCollaborative/AsyncRE) package for the IMPACT program.
 
-Citations
----------
+Bibliography
+------------
 
 Please [cite us](http://www.compmolbiophysbc.org/publications) if you use this software in your research:
 
@@ -45,14 +45,14 @@ Please [cite us](http://www.compmolbiophysbc.org/publications) if you use this s
 Installation & Usage
 --------------------
 
-It is recommended that the installation is performed in a personal python environment (`miniforge`, `miniconda`, `conda`, or similar). AToM-OpenMM requires the `openmm`, `configobj` and `numpy` python modules. 
+It is recommended that the installation is performed in a personal Python environment (`miniforge`, `miniconda`, `conda`, or similar). AToM-OpenMM requires the `openmm` and other Python modules. 
 
 This version of AToM-OpenMM requires OpenMM 8.4.0 or later. This conda command installs the necessary requirements:
 ```
-mamba create -n atm8.4.0 -c conda-forge 'openmm>=8.4' ambertools openmmforcefields configobj setproctitle r-base espaloma
-mamba activate atm8.4.0
+mamba create -n atm8.5.0 -c conda-forge 'openmm>=8.4' ambertools openmmforcefields configobj setproctitle r-base espaloma
+mamba activate atm8.5.0
 ```
-`setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools`, `openmmforcefields`, and `espaloma` packages are not actual dependencies; they are used to setup the molecular systems. `openmmforcefields`, in particular, is used to assign force field parameters using OpenFF, GAFF, or `espaloma`. [`espaloma`](https://github.com/choderalab/espaloma) is a machine-learning system by the Chodera lab to assign force field parameters.  `r-base` with the `UWHAM R package` (see below) is required for free energy estimation. See [examples](examples/) for examples and tutorials.
+`setproctitle` above is optional but useful to track the names of the processes started by AToM-OpenMM. The `ambertools`, `openmmforcefields`, and `espaloma` packages are not actual dependencies; they are used to prepare the molecular systems. `openmmforcefields`, in particular, is used to assign force field parameters using OpenFF, GAFF, or `espaloma`. [`espaloma`](https://github.com/choderalab/espaloma) is a machine-learning system by the Chodera lab to assign force field parameters.  The `r-base` dependency with the `UWHAM R package` (see below) is required for free energy estimation in legacy workflows and will be removed in later versions. See [examples](examples/) for examples and tutorials.
 
 Finally, install AToM-OpenMM:
 
@@ -78,9 +78,13 @@ While we strive to develop and distribute high-quality and bug-free software, ke
 Documentation
 -------------
 
-[AToM-OpenMM User Guide](https://www.compmolbiophysbc.org/atom-openmm)
+[AToM-OpenMM User Guide](http://gallicchio-lab.github.io/AToM-OpenMM)
 
-See [examples](examples/) for examples and tutorials.
+[AToM-OpenMM Theory Introduction](https://www.compmolbiophysbc.org/atom-openmm)
+
+See [examples](examples/) for examples, workflows, and tutorials.
+
+See [example-notebooks](example-notebooks/) for example Notebooks.
 
 Licensing
 ---------

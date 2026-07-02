@@ -12,6 +12,7 @@ import openmm as mm
 from openmm import *
 from openmm.unit import *
 from openmm.app import *
+from collections.abc import Sequence
 
 @contextmanager
 def set_directory(path: Path):
@@ -510,6 +511,26 @@ def get_selected_principal_groups(topology, positions, atom_indices, cutoff= 30.
         "y_axis": {"indices": y_indices, "com": y_com},
         "axes": principal_axes
     }
+
+def is_list(arg):
+    if not arg:
+        return False
+    # Strings are sequences, but we usually treat them as scalars
+    if isinstance(arg, str):
+        return False
+    # Check if it's a list, tuple, range, or ndarray
+    elif isinstance(arg, Sequence):
+        return True
+    else:
+        return False
+
+def is_list_of_lists(arg):
+    if not arg:
+        return False
+    if not is_list(arg):
+        return False
+    # Check if the elements inside are also sequences (excluding strings)
+    return all(is_list(element) for element in arg)
 
 class AtomUtils(object):
     """

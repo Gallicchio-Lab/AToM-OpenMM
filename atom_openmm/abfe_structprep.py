@@ -417,24 +417,44 @@ def do_equil(keywords, logger):
     simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_0.pdb', 'w') as output:
         PDBFile.writeFile(simulation.topology, positions, output, keepIds=True)
+
+def get_solute_atom_indexes(keywords):
+    #get indexes of the solute atoms
+    basename = keywords.get('BASENAME')
+    pdbtopfile = basename + ".pdb"
+    pdb = PDBFile(pdbtopfile)
+    non_ion_wat_atoms = []
+    for res in pdb.topology.residues():
+        if not residue_is_solvent(res):
+            for atom in res.atoms():
+                non_ion_wat_atoms.append(atom.index)
+    return non_ion_wat_atoms
+
+def massage_keywords(keywords, stage, restrain_solutes=True):
+    #updates the keywords dict with time step and restraints based on stage
+    #stages are : prep, equil; prep includes min,therm,NPT, NVT, mdlambda
+
+    #copy keywords dict
+    opts = copy.deepcopy(keywords)
+
+    #all prep stages including equilibration uses time-step of 1fs
+    #During all structure preparation stages , use
+    #structure preparation restraint force constant, 25 kcal/mol/A^2
+    #only min,therm, NPT, NVT, mdlambda uses temporary restraints
+    if stage in ("prep","equil"):
+        opts['TIME_STEP'] = float(opts.get('MINTHERM_TIME_STEP',0.001))
+        if restrain_solutes:
+            if opts['POSRE_FORCE_CONSTANT'] == 0.0:
+                opts["POSRE_FORCE_CONSTANT"] = 25.0
+
+    #Only early stages temporarily restrain all solute atoms
+    if stage in ("prep") and restrain_solutes:
+        opts["POS_RESTRAINED_ATOMS"] = get_solute_atom_indexes(opts)
         
-def massage_keywords(keywords, restrain_solutes = True):
-
-    #use 1 fs time step
-    keywords['TIME_STEP'] = 0.001
-
-    #temporarily restrain all non-solvent atoms
-    if restrain_solutes:
-        basename = keywords.get('BASENAME')
-        pdbtopfile = basename + ".pdb"
-        pdb = PDBFile(pdbtopfile)
-        non_ion_wat_atoms = []
-        for res in pdb.topology.residues():
-            if not residue_is_solvent(res):
-                for atom in res.atoms():
-                    non_ion_wat_atoms.append(atom.index)
-        keywords['POS_RESTRAINED_ATOMS'] = non_ion_wat_atoms
-
+    #for final equilibration
+    # POS_RESTRAINED_ATOMS remains exactly as supplied by the user
+    #return updated dictionary
+    return opts
 
 def abfe_structprep(config_file=None, options=None):
     from atom_openmm.utils.AtomUtils import set_directory
@@ -475,16 +495,21 @@ def abfe_structprep(config_file=None, options=None):
 
     restrain_solutes = keywords.get('MINTHERM_RESTRAIN_SOLUTES', 'YES').upper() == "YES"
 
-    old_keywords = keywords.copy()
-    massage_keywords(keywords, restrain_solutes)
-    do_mintherm(keywords, logger)
-    do_lambda_annealing(keywords, logger)
-    
-    #reestablish the restrained atoms
-    if restrain_solutes:
-        keywords['POS_RESTRAINED_ATOMS'] = old_keywords.get('POS_RESTRAINED_ATOMS') 
+    #update time-step and restraints based on stage of structure preparation
+    stage_names = ["prep","equil"]
+    #prep_keywords : 1fs time-step, temporary all solute restraints, force constant assigned
+    #equil_keywords : 1fs time-step, force constant assigned, orginal positional restraints assigned by user
+    prep_keywords = massage_keywords(keywords,stage_names[0],restrain_solutes=restrain_solutes)
+    equil_keywords = massage_keywords(keywords,stage_names[1],restrain_solutes=restrain_solutes)
 
-    do_equil(keywords, logger)
+    #Run minimization, thermalization, NPT, NVT
+    do_mintherm(prep_keywords, logger)
+
+    #Run lambda_annealing
+    do_lambda_annealing(prep_keywords, logger)
+    
+    #Run final equilibration with 1fs time-step + original POS_RESTRAINED_ATOMS
+    do_equil(equil_keywords, logger)
 
 if __name__ == "__main__":
     assert len(sys.argv) == 2, "Specify ONE input file"

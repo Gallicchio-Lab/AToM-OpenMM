@@ -943,6 +943,20 @@ class OMMSystemRBFE(OMMSystem):
             if lig2_var_atoms:
                 for i in range(len(lig2_var_atoms)):
                     self.atmforce.setParticleTransformation(lig2_var_atoms[i], ParticleOffsetDisplacement(lig1_attach_atom, lig2_attach_atom))
+            if self.keywords.get('VAR_ATOMS_MASS_SCALE') is not None:
+                mass_scale = float(self.keywords.get('VAR_ATOMS_MASS_SCALE'))
+                self.logger.info(f"Scaling masses of variable and attachment atoms by a factor of {mass_scale}.")
+                scaled_atoms = set()
+                for atom_list in [lig1_var_atoms, lig2_var_atoms, [lig1_attach_atom], [lig2_attach_atom]]:
+                    if atom_list:
+                        if is_list_of_lists(atom_list):
+                            for sublist in atom_list:
+                                scaled_atoms.update(sublist)
+                        else:
+                            scaled_atoms.update(atom_list)
+                for atom_idx in sorted(scaled_atoms):
+                    orig_mass = self.system.getParticleMass(atom_idx)
+                    self.system.setParticleMass(atom_idx, orig_mass * mass_scale)
         elif self.keywords.get('ALIGN_LIGAND1_REF_ATOMS') is not None:
             #frame-based variable displacements
             refatoms1_cntl = self.keywords.get('ALIGN_LIGAND1_REF_ATOMS')
@@ -983,6 +997,20 @@ class OMMSystemRBFE(OMMSystem):
                 else:                
                     for i in range(len(lig2_var_atoms)):
                         self.atmforce.setParticleTransformation(lig2_var_atoms[i], ParticleFrameDisplacement(lig1_ref_atoms[0], lig1_ref_atoms[1], lig1_ref_atoms[2], lig2_ref_atoms[0], lig2_ref_atoms[1], lig2_ref_atoms[2]))
+            if self.keywords.get('VAR_ATOMS_MASS_SCALE') is not None:
+                mass_scale = float(self.keywords.get('VAR_ATOMS_MASS_SCALE'))
+                self.logger.info(f"Scaling masses of variable and reference atoms by a factor of {mass_scale}.")
+                scaled_atoms = set()
+                for atom_list in [lig1_var_atoms, lig2_var_atoms, lig1_ref_atoms, lig2_ref_atoms]:
+                    if atom_list:
+                        if is_list_of_lists(atom_list):
+                            for sublist in atom_list:
+                                scaled_atoms.update(sublist)
+                        else:
+                            scaled_atoms.update(atom_list)
+                for atom_idx in sorted(scaled_atoms):
+                    orig_mass = self.system.getParticleMass(atom_idx)
+                    self.system.setParticleMass(atom_idx, orig_mass * mass_scale)
         else:
             self._exit("Variable displacements requires either LIGAND1_ATTACH_ATOM or ALIGN_LIGAND1_REF_ATOMS settings")
 

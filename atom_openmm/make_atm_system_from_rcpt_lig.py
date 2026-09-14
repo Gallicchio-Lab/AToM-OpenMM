@@ -106,6 +106,7 @@ def make_system(
         implsolv=None,
         hmass=1.0,
         ionicstrength=0.15,
+        padding = 1.0,
         flagverbose=False
     ):
     print('Generate ATM RBFE OpenMM System')
@@ -332,13 +333,11 @@ def make_system(
     else:
         bbox = boundingBoxSizes(rcpt_positions + lig1_positions + lig2_positions)
     bboxsizes = [ bbox[i][1]-bbox[i][0] for i in range(3) ]
-    padding = 2. * 1.0*nanometer
-    xBoxvec = Vec3((bboxsizes[0]+padding)/nanometer, 0., 0.)*nanometer
-    yBoxvec = Vec3(0.0, (bboxsizes[1]+padding)/nanometer, 0.)*nanometer
-    zBoxvec = Vec3(0.0, 0.0, (bboxsizes[2]+padding)/nanometer)*nanometer
+    pad = padding * nanometer
+    xBoxvec = Vec3((bboxsizes[0]+pad)/nanometer, 0., 0.)*nanometer
+    yBoxvec = Vec3(0.0, (bboxsizes[1]+pad)/nanometer, 0.)*nanometer
+    zBoxvec = Vec3(0.0, 0.0, (bboxsizes[2]+pad)/nanometer)*nanometer
     print("boxVectors:", (xBoxvec,yBoxvec,zBoxvec ))
-
-
 
     #bboxfaces = [ bboxsizes[2]*bboxsizes[1], bboxsizes[2]*bboxsizes[0],  bboxsizes[1]*bboxsizes[0] ]
     #print("Areas of faces", bboxfaces)
@@ -465,7 +464,9 @@ def main():
     parser.add_argument('--ionicStrength', required=False, type=float, dest='ionicstrength',
                         default=0.15,
                         help='Total concentration of monoatomic ions to add')
-    
+    parser.add_argument('--padding', required=False, type=float, dest='padding',
+                        default=1.0,
+                        help='Solvent padding in nm')
     # Arguments that are flags
     parser.add_argument('--verbose', required=False, action='store_true', dest='flagverbose',
                         help='Get more output with this flag')

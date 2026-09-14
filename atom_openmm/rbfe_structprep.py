@@ -64,6 +64,7 @@ class OMMSystemRBFEnoATM(OMMSystemRBFE):
         self.atm_utils = AtomUtils(self.system)
         self.set_ligand_atoms()
         self.set_displacement()
+        self.set_ligand_receptor_exclusion_potentials()
         self.set_vsite_restraints()
         #set orientation restraints
         self.set_orientation_restraints()
@@ -125,8 +126,9 @@ def do_mintherm(keywords, logger):
     simulation.saveState(jobname + '_min.xml')
     #saves a pdb file
     positions = simulation.context.getState(getPositions=True).getPositions()
-    boxsize = simulation.context.getState().getPeriodicBoxVectors()
-    simulation.topology.setPeriodicBoxVectors(boxsize)
+    if syst.boxvectors is not None:
+        boxsize = simulation.context.getState().getPeriodicBoxVectors()
+        simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_min.pdb', 'w') as output:
         PDBFile.writeFile(simulation.topology, positions, output, keepIds=True)
 
@@ -162,24 +164,27 @@ def do_mintherm(keywords, logger):
     simulation.saveState(jobname + '_therm.xml')
     #saves a pdb file
     positions = simulation.context.getState(getPositions=True).getPositions()
-    boxsize = simulation.context.getState().getPeriodicBoxVectors()
-    simulation.topology.setPeriodicBoxVectors(boxsize)
+    if syst.boxvectors is not None:
+        boxsize = simulation.context.getState().getPeriodicBoxVectors()
+        simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_therm.pdb', 'w') as output:
         PDBFile.writeFile(simulation.topology, positions, output, keepIds=True)
 
-    print("NPT equilibration ...")
+    if syst.boxvectors is not None:
+        print("NPT equilibration ...")
     
-    syst.barostat.setFrequency(25)
+        syst.barostat.setFrequency(25)
 
-    for i in range(number_of_cycles):
-        simulation.step(steps_per_cycle)
+        for i in range(number_of_cycles):
+            simulation.step(steps_per_cycle)
 
     #saves checkpoint
     simulation.saveState(jobname + '_npt.xml')
     #saves a pdb file
     positions = simulation.context.getState(getPositions=True).getPositions()
-    boxsize = simulation.context.getState().getPeriodicBoxVectors()
-    simulation.topology.setPeriodicBoxVectors(boxsize)
+    if syst.boxvectors is not None:
+        boxsize = simulation.context.getState().getPeriodicBoxVectors()
+        simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_npt.pdb', 'w') as output:
         PDBFile.writeFile(simulation.topology, positions, output, keepIds=True)
 
@@ -194,8 +199,9 @@ def do_mintherm(keywords, logger):
     simulation.saveState(jobname + '_equil.xml')
     #saves a pdb file
     positions = simulation.context.getState(getPositions=True).getPositions()
-    boxsize = simulation.context.getState().getPeriodicBoxVectors()
-    simulation.topology.setPeriodicBoxVectors(boxsize)
+    if syst.boxvectors is not None:
+        boxsize = simulation.context.getState().getPeriodicBoxVectors()
+        simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_equil.pdb', 'w') as output:
         PDBFile.writeFile(simulation.topology, positions, output, keepIds=True)
 
@@ -321,8 +327,9 @@ def do_lambda_annealing(keywords, logger):
 
     #saves a pdb file
     positions = simulation.context.getState(getPositions=True).getPositions()
-    boxsize = simulation.context.getState().getPeriodicBoxVectors()
-    simulation.topology.setPeriodicBoxVectors(boxsize)
+    if syst.boxvectors is not None:
+        boxsize = simulation.context.getState().getPeriodicBoxVectors()
+        simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_mdlambda.pdb', 'w') as output:
         PDBFile.writeFile(simulation.topology, positions, output, keepIds=True)
 
@@ -407,8 +414,9 @@ def do_equil(keywords, logger):
 
     #saves a pdb file
     positions = simulation.context.getState(getPositions=True).getPositions()
-    boxsize = simulation.context.getState().getPeriodicBoxVectors()
-    simulation.topology.setPeriodicBoxVectors(boxsize)
+    if syst.boxvectors is not None:
+        boxsize = simulation.context.getState().getPeriodicBoxVectors()
+        simulation.topology.setPeriodicBoxVectors(boxsize)
     with open(jobname + '_0.pdb', 'w') as output:
         PDBFile.writeFile(simulation.topology, positions, output, keepIds=True)
 

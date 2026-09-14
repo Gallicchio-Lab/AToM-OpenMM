@@ -15,7 +15,7 @@ from openmm import *
 from openmm.unit import *
 from datetime import datetime
 
-from atom_openmm.utils.AtomUtils import AtomUtils, separate14
+from atom_openmm.utils.AtomUtils import AtomUtils, separate14, is_list_of_lists
 
 # OpenMM's MTSLangevinIntegrator does not have a setTemperature method
 class ATMMTSLangevinIntegrator(MTSLangevinIntegrator):
@@ -156,13 +156,24 @@ class OMMSystem(object):
                 self._exit("Error: EXCLUSION_POT_MOL2_INDEXES is required when EXCLUSION_POT_MOL1_INDEXES is set.")
             sigma = float(self.keywords.get('EXCLUSION_POT_SIGMA', 6.0)) * angstrom
             epsi = float(self.keywords.get('EXCLUSION_POT_EPSILON', 1.0)) * kilocalorie_per_mole
-            cutoff = float(self.keywords.get('EXCLUSION_POT_CUTOFF', 10.0)) * angstrom
+            # find the system's main nonbonded force to retrieve the cutoff distance, etc.
+            cutoff = 0.0*angstrom
+            switch_cutoff = 0.0*angstrom
+            nonbonded_force = None
+            for f in self.system.getForces():
+                if isinstance(f, NonbondedForce):
+                    nonbonded_force = f
+                    break
+            assert nonbonded_force is not None, "Unable to locate the system's NonBondedForce"
+            nbmethod = nonbonded_force.getNonbondedMethod()
+            if not nbmethod == f.NoCutoff:
+                cutoff = nonbonded_force.getCutoffDistance()
+                switch_cutoff = cutoff - 2.0*angstrom
+                assert (cutoff > 0.0*angstrom and switch_cutoff > 0.0*angstrom)
             nexponent = int(self.keywords.get('EXCLUSION_POT_EXPONENT', 6))
             assert nexponent > 0, "EXCLUSION_POT_EXPONENT must be a positive integer"
             assert nexponent%2 == 0, "EXCLUSION_POT_EXPONENT must be an even number"
-            switch_cutoff = float(self.keywords.get('EXCLUSION_POT_SWITCH_CUTOFF', 8.0)) * angstrom
-            assert(sigma > 0.0*angstrom and epsi >= 0.0*kilocalorie_per_mole and cutoff > 0.0*angstrom and switch_cutoff > 0.0*angstrom)
-            assert(cutoff > switch_cutoff)
+            assert(sigma > 0.0*angstrom and epsi >= 0.0*kilocalorie_per_mole)
             n_mol1 = len(mol1_indexes)
             n_mol2 = len(mol2_indexes)
             self.logger.info(f"Creating receptor/ligand exclusion potential with {n_mol1} atoms for MOL1 and {n_mol2} atoms for MOL2.")
@@ -175,13 +186,28 @@ class OMMSystem(object):
             force.setName("ExclusionForce")
             force.addGlobalParameter("epsilonexcl", epsi)
             force.addGlobalParameter("sigmaexcl", sigma)
-            force.setNonbondedMethod(force.CutoffPeriodic)
-            force.setCutoffDistance(cutoff)
-            force.setUseSwitchingFunction(True)
-            force.setSwitchingDistance(switch_cutoff)
+            if nbmethod in (nonbonded_force.CutoffPeriodic,nonbonded_force.Ewald,nonbonded_force.PME,nonbonded_force.LJPME):
+                force.setNonbondedMethod(f.CutoffPeriodic)
+                force.setCutoffDistance(cutoff)
+                force.setUseSwitchingFunction(True)
+                force.setSwitchingDistance(switch_cutoff)
+            elif nbmethod in (CutoffNonPeriodic):
+                force.setNonbondedMethod(nbmethod)
+                force.setCutoffDistance(cutoff)
+                force.setUseSwitchingFunction(True)
+                force.setSwitchingDistance(switch_cutoff)
+            else:
+                force.setNonbondedMethod(nbmethod)
             for atom in self.topology.atoms():
                 force.addParticle([])
             force.addInteractionGroup(mol1_indexes, mol2_indexes)
+            # copies exclusions from an existing NonbondedForce
+            if nonbonded_force is not None:
+                num_exceptions = nonbonded_force.getNumExceptions()
+                for i in range(num_exceptions):
+                    p1, p2, chargeProd, sigma, epsilon = nonbonded_force.getExceptionParameters(i)
+                    force.addExclusion(p1, p2)
+
             self.lig_exclusion_force = force
             self.system.addForce(self.lig_exclusion_force)
             self.do_excl_pot = True
@@ -806,9 +832,15 @@ class OMMSystemRBFE(OMMSystem):
         if refatoms1_cntl is None or refatoms2_cntl is None:
             return
 
-        self.refatoms1 = refatoms1_cntl
+        if is_list_of_lists(refatoms1_cntl):
+            self.refatoms1 = refatoms1_cntl[0]
+        else:
+            self.refatoms1 = refatoms1_cntl
         lig1_ref_atoms  = [ self.refatoms1[i]+self.lig1_atoms[0] for i in range(3)]
-        self.refatoms2 = refatoms2_cntl
+        if is_list_of_lists(refatoms2_cntl):
+            self.refatoms2 = refatoms2_cntl[0]
+        else:
+            self.refatoms2 = refatoms2_cntl
         lig2_ref_atoms  = [ self.refatoms2[i]+self.lig2_atoms[0] for i in range(3)]
 
         #add alignment force
@@ -844,34 +876,64 @@ class OMMSystemRBFE(OMMSystem):
         for i in range(self.topology.getNumAtoms()):
             self.atmforce.addParticle( )
 
-        lig1_attach_atom = int(self.keywords.get('LIGAND1_ATTACH_ATOM'))
-        lig2_attach_atom = int(self.keywords.get('LIGAND2_ATTACH_ATOM'))
-        if [lig1_attach_atom, lig2_attach_atom].count(None) == 2:
-            return
-        if [lig1_attach_atom, lig2_attach_atom].count(None) == 1:
-            self._exit("Two attachment atoms are required.")
+        if self.keywords.get('LIGAND1_ATTACH_ATOM') is not None:
+            #particle-based variable displacements 
+            lig1_attach_atom = int(self.keywords.get('LIGAND1_ATTACH_ATOM'))
+            lig2_attach_atom = int(self.keywords.get('LIGAND2_ATTACH_ATOM'))
+            if [lig1_attach_atom, lig2_attach_atom].count(None) == 2:
+                return
+            if [lig1_attach_atom, lig2_attach_atom].count(None) == 1:
+                self._exit("Two attachment atoms are required.")
 
         lig1_var_atoms = self.keywords.get('LIGAND1_VAR_ATOMS')
         lig2_var_atoms = self.keywords.get('LIGAND2_VAR_ATOMS')
 
+        multi_var_regions = False
+        multi_var_regions_count = 0
+        if is_list_of_lists(lig1_var_atoms):
+            multi_var_regions = True
+            assert is_list_of_lists(lig2_var_atoms), "Multiple VAR_ATOMS must apply to both ligands"
+            assert len(lig1_var_atoms) == len(lig2_var_atoms), "The VAR_ATOM lists must be of the same length"
+            multi_var_regions_count = len(lig1_var_atoms)
+            assert self.keywords.get('ALIGN_LIGAND1_REF_ATOMS'), "Multiple VAR regions require multiple REF atom sets"
+            assert self.keywords.get('ALIGN_LIGAND2_REF_ATOMS'), "Multiple VAR regions require multiple REF atom sets"
+            assert is_list_of_lists(self.keywords.get('ALIGN_LIGAND1_REF_ATOMS'))
+            assert is_list_of_lists(self.keywords.get('ALIGN_LIGAND2_REF_ATOMS'))
+            assert len(self.keywords.get('ALIGN_LIGAND1_REF_ATOMS')) == multi_var_regions_count
+            assert len(self.keywords.get('ALIGN_LIGAND2_REF_ATOMS')) == multi_var_regions_count
+
         lig1_common_atoms = self.keywords.get('LIGAND1_COMMON_ATOMS')
         lig2_common_atoms = self.keywords.get('LIGAND2_COMMON_ATOMS')
 
-        if not lig1_common_atoms:
-            lig1_common_atoms = sorted([i for i in self.lig1_atoms if i not in lig1_var_atoms ])
-        if not lig2_common_atoms:
-            lig2_common_atoms = sorted([i for i in self.lig2_atoms if i not in lig2_var_atoms ])
+        if multi_var_regions:
+            if not lig1_common_atoms:
+                all_var_atoms = [ i for l in lig1_var_atoms  for i in l]
+                lig1_common_atoms = sorted([i for i in self.lig1_atoms if i not in all_var_atoms ])
+            if not lig2_common_atoms:
+                all_var_atoms = [ i for l in lig2_var_atoms  for i in l]
+                lig2_common_atoms = sorted([i for i in self.lig2_atoms if i not in lig2_var_atoms ])
+        else:
+            if not lig1_common_atoms:
+                lig1_common_atoms = sorted([i for i in self.lig1_atoms if i not in lig1_var_atoms ])
+            if not lig2_common_atoms:
+                lig2_common_atoms = sorted([i for i in self.lig2_atoms if i not in lig2_var_atoms ])
 
         if lig1_common_atoms and lig2_common_atoms:
             if not len(lig1_common_atoms) == len(lig2_common_atoms):
                 msg = "Error: the number of common atoms of lig1 (%d) and lig2 (%d) differ" % (len(lig1_common_atoms),len(lig2_common_atoms))
                 self._exit(msg)
 
-        try:
-            # try official OpenMM>=8.4 ATMForce API
-            if lig1_common_atoms:
-                for i in range(len(lig1_common_atoms)):
-                    self.atmforce.setParticleTransformation(lig1_common_atoms[i], ParticleOffsetDisplacement(lig2_common_atoms[i], lig1_common_atoms[i]))
+        if self.keywords.get('LIGAND1_ATTACH_ATOM') is not None:
+            #particle-based variable displacements
+            self.logger.info("Using particle-based displacements.")
+            lig1_attach_atom = int(self.keywords.get('LIGAND1_ATTACH_ATOM'))
+            lig2_attach_atom = int(self.keywords.get('LIGAND2_ATTACH_ATOM'))
+            if [lig1_attach_atom, lig2_attach_atom].count(None) == 2:
+                return
+            if [lig1_attach_atom, lig2_attach_atom].count(None) == 1:
+                self._exit("Two attachment atoms are required.")
+            for i in range(len(lig1_common_atoms)):
+                self.atmforce.setParticleTransformation(lig1_common_atoms[i], ParticleOffsetDisplacement(lig2_common_atoms[i], lig1_common_atoms[i]))
             if lig2_common_atoms:
                 for i in range(len(lig2_common_atoms)):
                     self.atmforce.setParticleTransformation(lig2_common_atoms[i], ParticleOffsetDisplacement(lig1_common_atoms[i], lig2_common_atoms[i]))
@@ -881,23 +943,77 @@ class OMMSystemRBFE(OMMSystem):
             if lig2_var_atoms:
                 for i in range(len(lig2_var_atoms)):
                     self.atmforce.setParticleTransformation(lig2_var_atoms[i], ParticleOffsetDisplacement(lig1_attach_atom, lig2_attach_atom))
-        except:
-            try:
-                # try unofficial Gallicchio-Lab atm-coordinate-swap branch OpenMM 8.2 ATMForce API
-                if lig1_common_atoms:
-                    for i in range(len(lig1_common_atoms)):
-                        self.atmforce.setParticleParameters(lig1_common_atoms[i], lig2_common_atoms[i], lig1_common_atoms[i], -1, -1)
-                if lig2_common_atoms:
-                    for i in range(len(lig2_common_atoms)):
-                        self.atmforce.setParticleParameters(lig2_common_atoms[i], lig1_common_atoms[i], lig2_common_atoms[i], -1, -1)
-                if lig1_var_atoms:
+            if self.keywords.get('VAR_ATOMS_MASS_SCALE') is not None:
+                mass_scale = float(self.keywords.get('VAR_ATOMS_MASS_SCALE'))
+                self.logger.info(f"Scaling masses of variable and attachment atoms by a factor of {mass_scale}.")
+                scaled_atoms = set()
+                for atom_list in [lig1_var_atoms, lig2_var_atoms, [lig1_attach_atom], [lig2_attach_atom]]:
+                    if atom_list:
+                        if is_list_of_lists(atom_list):
+                            for sublist in atom_list:
+                                scaled_atoms.update(sublist)
+                        else:
+                            scaled_atoms.update(atom_list)
+                for atom_idx in sorted(scaled_atoms):
+                    orig_mass = self.system.getParticleMass(atom_idx)
+                    self.system.setParticleMass(atom_idx, orig_mass * mass_scale)
+        elif self.keywords.get('ALIGN_LIGAND1_REF_ATOMS') is not None:
+            #frame-based variable displacements
+            refatoms1_cntl = self.keywords.get('ALIGN_LIGAND1_REF_ATOMS')
+            refatoms2_cntl = self.keywords.get('ALIGN_LIGAND2_REF_ATOMS')
+
+            if refatoms1_cntl is None or refatoms2_cntl is None:
+                self._exit("Frame-based variable displacements requires ALIGN_LIGAND1_REF_ATOMS settings")
+
+            self.logger.info("Using frame-based displacements.")
+            self.refatoms1 = refatoms1_cntl
+            self.refatoms2 = refatoms2_cntl
+            if multi_var_regions:
+                lig1_ref_atoms  = [ [rl[i]+self.lig1_atoms[0] for i in range(3)] for rl in  self.refatoms1]
+                lig2_ref_atoms  = [ [rl[i]+self.lig2_atoms[0] for i in range(3)] for rl in  self.refatoms2]
+            else:
+                lig1_ref_atoms  = [ self.refatoms1[i]+self.lig1_atoms[0] for i in range(3)]
+                lig2_ref_atoms  = [ self.refatoms2[i]+self.lig2_atoms[0] for i in range(3)]
+            for i in range(len(lig1_common_atoms)):
+                self.atmforce.setParticleTransformation(lig1_common_atoms[i], ParticleOffsetDisplacement(lig2_common_atoms[i], lig1_common_atoms[i]))
+            if lig2_common_atoms:
+                for i in range(len(lig2_common_atoms)):
+                    self.atmforce.setParticleTransformation(lig2_common_atoms[i], ParticleOffsetDisplacement(lig1_common_atoms[i], lig2_common_atoms[i]))
+            if lig1_var_atoms:
+                if multi_var_regions:
+                    for vl, rl2, rl1 in zip(lig1_var_atoms,lig2_ref_atoms,lig1_ref_atoms):
+                        for i in range(len(vl)):
+                            print("LIG1:", vl[i], rl2[0], rl2[1], rl2[2], rl1[0], rl1[1], rl1[2])
+                            self.atmforce.setParticleTransformation(vl[i], ParticleFrameDisplacement(rl2[0], rl2[1], rl2[2], rl1[0], rl1[1], rl1[2])) 
+                else:
                     for i in range(len(lig1_var_atoms)):
-                        self.atmforce.setParticleParameters(lig1_var_atoms[i], lig2_attach_atom, lig1_attach_atom, -1, -1)
-                if lig2_var_atoms:
+                        self.atmforce.setParticleTransformation(lig1_var_atoms[i], ParticleFrameDisplacement(lig2_ref_atoms[0], lig2_ref_atoms[1], lig2_ref_atoms[2], lig1_ref_atoms[0], lig1_ref_atoms[1], lig1_ref_atoms[2]))        
+            if lig2_var_atoms:
+                if multi_var_regions:
+                    for vl, rl1, rl2 in zip(lig2_var_atoms,lig1_ref_atoms,lig2_ref_atoms):
+                        for i in range(len(vl)):
+                            print("LIG2:", vl[i], rl1[0], rl1[1], rl1[2], rl2[0], rl2[1], rl2[2])
+                            self.atmforce.setParticleTransformation(vl[i], ParticleFrameDisplacement(rl1[0], rl1[1], rl1[2], rl2[0], rl2[1], rl2[2])) 
+                else:                
                     for i in range(len(lig2_var_atoms)):
-                        self.atmforce.setParticleParameters(lig2_var_atoms[i], lig1_attach_atom, lig2_attach_atom, -1, -1)
-            except:
-                self._exit("Variable displacements are not supported by the OpenMM backend")
+                        self.atmforce.setParticleTransformation(lig2_var_atoms[i], ParticleFrameDisplacement(lig1_ref_atoms[0], lig1_ref_atoms[1], lig1_ref_atoms[2], lig2_ref_atoms[0], lig2_ref_atoms[1], lig2_ref_atoms[2]))
+            if self.keywords.get('VAR_ATOMS_MASS_SCALE') is not None:
+                mass_scale = float(self.keywords.get('VAR_ATOMS_MASS_SCALE'))
+                self.logger.info(f"Scaling masses of variable and reference atoms by a factor of {mass_scale}.")
+                scaled_atoms = set()
+                for atom_list in [lig1_var_atoms, lig2_var_atoms, lig1_ref_atoms, lig2_ref_atoms]:
+                    if atom_list:
+                        if is_list_of_lists(atom_list):
+                            for sublist in atom_list:
+                                scaled_atoms.update(sublist)
+                        else:
+                            scaled_atoms.update(atom_list)
+                for atom_idx in sorted(scaled_atoms):
+                    orig_mass = self.system.getParticleMass(atom_idx)
+                    self.system.setParticleMass(atom_idx, orig_mass * mass_scale)
+        else:
+            self._exit("Variable displacements requires either LIGAND1_ATTACH_ATOM or ALIGN_LIGAND1_REF_ATOMS settings")
+
 
     def set_atmforce(self):
         #these define the state and will be overriden in set_state()
@@ -927,7 +1043,6 @@ class OMMSystemRBFE(OMMSystem):
             uoffset = float(self.keywords.get('PERTE_OFFSET')) * kilocalorie_per_mole
 
         #create ATM Force
-                #create ATM Force
         referencePotExpression = "select(step(Direction), u0, u1) + "
 
         if self.multisoftplus:
@@ -963,21 +1078,16 @@ class OMMSystemRBFE(OMMSystem):
         self.system.addForce(self.atmforce)
         self.nonbondedforcegroup = self.free_force_group()
 
-        #displacements based on position of attachment atoms
-        self.pos_displacement = False
-        if self.keywords.get('LIGAND1_ATTACH_ATOM') is not None:
-            self.pos_displacement = True
-
         #common and variable regions protocol
         self.var_regions = False
         if self.keywords.get('LIGAND1_VAR_ATOMS') is not None:
             self.var_regions = True
-            
+
         #adds Forces of the given group to ATMForce
         self.add_forces_to_atmforce()
 
         #adds atoms to ATMForce
-        if self.pos_displacement:
+        if self.var_regions:
             #use common/variable regions
             self.add_common_var_atoms_to_atmforce()
         else:
